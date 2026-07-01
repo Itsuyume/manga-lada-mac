@@ -10,6 +10,8 @@ struct MangaLadaCoreChecks {
         try checkCacheRoundTripsTranslationByFingerprint()
         try checkGoogleTranslatorParsesNestedResponseText()
         try checkGoogleTranslatorRejectsEmptyParsedText()
+        try checkKoreanTranslationRefinerFixesKnownMistranslations()
+        try checkKoreanTranslationRefinerLeavesUnrelatedTextAlone()
         try await checkPassthroughTranslatorRejectsBlankInput()
         print("MangaLadaCoreChecks passed")
     }
@@ -122,6 +124,43 @@ struct MangaLadaCoreChecks {
         } catch TranslationError.missingTranslatedText {
             return
         }
+    }
+
+    private static func checkKoreanTranslationRefinerFixesKnownMistranslations() throws {
+        let refiner = KoreanTranslationRefiner()
+
+        let explicitTerm = refiner.refine(
+            originalText: "天王寺さんのまんこっと",
+            translatedText: "텐 노지\n씨의 만화"
+        )
+        try require(explicitTerm == "텐노지\n씨의 보지", "Refiner did not fix the known explicit-term mistranslation.")
+
+        let seedTerm = refiner.refine(
+            originalText: "子種を注がれる",
+            translatedText: "자종을 부어 넣는다"
+        )
+        try require(seedTerm == "정액을 부어 넣는다", "Refiner did not fix 子種 mistranslation.")
+
+        let honorificTerm = refiner.refine(
+            originalText: "殿方の劣情",
+            translatedText: "전방의 열정"
+        )
+        try require(honorificTerm == "남성분의 욕정", "Refiner did not fix source-aware adult context terms.")
+
+        let seedAction = refiner.refine(
+            originalText: "子種をこすりつけてきますのよ",
+            translatedText: "자종을\n문지릅니다."
+        )
+        try require(seedAction == "정액을 문질러 묻힙니다.", "Refiner did not fix line-broken seed action text.")
+    }
+
+    private static func checkKoreanTranslationRefinerLeavesUnrelatedTextAlone() throws {
+        let refiner = KoreanTranslationRefiner()
+        let unrelated = refiner.refine(
+            originalText: "漫画を読みます",
+            translatedText: "만화를 읽습니다"
+        )
+        try require(unrelated == "만화를 읽습니다", "Refiner changed unrelated manga text.")
     }
 
     private static func checkPassthroughTranslatorRejectsBlankInput() async throws {

@@ -14,6 +14,7 @@ public struct RenderedImageFile: Equatable, Sendable {
 
 public enum TranslationTextBackgroundStyle: Equatable, Sendable {
     case redactionBubble
+    case readabilityBubble
     case none
 }
 
@@ -122,12 +123,21 @@ public struct TranslatedImageRenderer {
             yRadius: min(10, bubbleRect.height * 0.18)
         )
 
-        if backgroundStyle == .redactionBubble {
+        switch backgroundStyle {
+        case .redactionBubble:
             NSColor.white.setFill()
             bubblePath.fill()
             NSColor.black.withAlphaComponent(0.25).setStroke()
             bubblePath.lineWidth = 1
             bubblePath.stroke()
+        case .readabilityBubble:
+            NSColor.white.withAlphaComponent(0.86).setFill()
+            bubblePath.fill()
+            NSColor.black.withAlphaComponent(0.14).setStroke()
+            bubblePath.lineWidth = 1
+            bubblePath.stroke()
+        case .none:
+            break
         }
 
         let paragraph = NSMutableParagraphStyle()

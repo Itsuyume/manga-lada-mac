@@ -223,6 +223,7 @@ public struct BallonsTranslatorEngine: Sendable {
     ) throws -> PageTranslation {
         let project = try JSONDecoder().decode(BallonsProject.self, from: Data(contentsOf: projectURL))
         let ballonsBlocks = project.pages[Self.inputImageName] ?? []
+        let refiner = KoreanTranslationRefiner()
         let blocks = ballonsBlocks.compactMap { block -> TextBlock? in
             guard block.xyxy.count == 4 else {
                 return nil
@@ -240,6 +241,7 @@ public struct BallonsTranslatorEngine: Sendable {
             guard !original.isEmpty || !translated.isEmpty else {
                 return nil
             }
+            let refined = refiner.refine(originalText: original, translatedText: translated)
 
             return TextBlock(
                 box: TextBox(
@@ -249,7 +251,7 @@ public struct BallonsTranslatorEngine: Sendable {
                     height: (y2 - y1) / Double(imageSize.height)
                 ),
                 originalText: original,
-                translatedText: translated,
+                translatedText: refined,
                 confidence: 1
             )
         }

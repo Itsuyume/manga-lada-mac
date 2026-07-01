@@ -12,6 +12,7 @@ struct MangaLadaRenderingChecks {
         let inpaintedSourceURL = root.appendingPathComponent("inpainted-source.png")
         let outputURL = root.appendingPathComponent("translated.png")
         let textOnlyOutputURL = root.appendingPathComponent("translated-text-only.png")
+        let readabilityOutputURL = root.appendingPathComponent("translated-readable.png")
         try makeSourceImage(at: sourceURL)
         try makeInpaintedSourceImage(at: inpaintedSourceURL)
 
@@ -80,6 +81,25 @@ struct MangaLadaRenderingChecks {
         try require(
             containsTintedPixel(image: textOnlyImage, normalizedArea: CGRect(x: 0.10, y: 0.10, width: 0.10, height: 0.10)),
             "Text-only renderer unexpectedly replaced untouched background."
+        )
+
+        let readabilityResult = try TranslatedImageRenderer().writePNG(
+            sourceImageURL: inpaintedSourceURL,
+            translation: translation,
+            destinationURL: readabilityOutputURL,
+            backgroundStyle: .readabilityBubble
+        )
+        try require(readabilityResult.blockCount == 2, "Readability renderer wrote wrong block count.")
+        guard let readabilityImage = NSImage(contentsOf: readabilityOutputURL) else {
+            throw CheckError.failed("Readability PNG could not be loaded for inspection.")
+        }
+        try require(
+            containsPalePixel(image: readabilityImage, normalizedArea: CGRect(x: 0.75, y: 0.16, width: 0.12, height: 0.50)),
+            "Readability renderer did not add a light backing behind text."
+        )
+        try require(
+            containsTintedPixel(image: readabilityImage, normalizedArea: CGRect(x: 0.10, y: 0.10, width: 0.10, height: 0.10)),
+            "Readability renderer unexpectedly replaced untouched background."
         )
         print("MangaLadaRenderingChecks passed: \(outputURL.path)")
     }
@@ -195,6 +215,40 @@ struct MangaLadaRenderingChecks {
                 if color.blueComponent > color.redComponent,
                    color.blueComponent > 0.75,
                    color.redComponent > 0.70 {
+                    return true
+                }
+            }
+        }
+
+        return false
+    }
+
+    private static func containsPalePixel(image: NSImage, normalizedArea: CGRect) -> Bool {
+        guard let tiffData = image.tiffRepresentation,
+              let bitmap = NSBitmapImageRep(data: tiffData) else {
+            return false
+        }
+
+        let area = NSRect(
+            x: normalizedArea.minX * Double(bitmap.pixelsWide),
+            y: normalizedArea.minY * Double(bitmap.pixelsHigh),
+            width: normalizedArea.width * Double(bitmap.pixelsWide),
+            height: normalizedArea.height * Double(bitmap.pixelsHigh)
+        )
+        let minX = max(0, Int(area.minX))
+        let maxX = min(bitmap.pixelsWide - 1, Int(area.maxX))
+        let minY = max(0, Int(area.minY))
+        let maxY = min(bitmap.pixelsHigh - 1, Int(area.maxY))
+
+        for y in minY...maxY {
+            for x in minX...maxX {
+                guard let color = bitmap.colorAt(x: x, y: y)?.usingColorSpace(.deviceRGB) else {
+                    continue
+                }
+
+                if color.redComponent > 0.95,
+                   color.greenComponent > 0.95,
+                   color.blueComponent > 0.95 {
                     return true
                 }
             }

@@ -30,6 +30,7 @@ final class AppState: ObservableObject {
     private let translatedImageRenderer: TranslatedImageRenderer
     private let ocrService: VisionOCRService
     private let translator: TextTranslating
+    private let translationRefiner: KoreanTranslationRefiner
     private var renderedTranslationImageURL: URL?
     private var preferredExportDirectory: URL?
 
@@ -43,7 +44,8 @@ final class AppState: ObservableObject {
         ),
         translatedImageRenderer: TranslatedImageRenderer = TranslatedImageRenderer(),
         ocrService: VisionOCRService = VisionOCRService(),
-        translator: TextTranslating = GoogleWebTranslator()
+        translator: TextTranslating = GoogleWebTranslator(),
+        translationRefiner: KoreanTranslationRefiner = KoreanTranslationRefiner()
     ) {
         self.scanner = scanner
         self.fingerprintMaker = fingerprintMaker
@@ -53,6 +55,7 @@ final class AppState: ObservableObject {
         self.translatedImageRenderer = translatedImageRenderer
         self.ocrService = ocrService
         self.translator = translator
+        self.translationRefiner = translationRefiner
     }
 
     var currentPage: ImagePage? {
@@ -401,7 +404,7 @@ final class AppState: ObservableObject {
             translation: result.pageTranslation,
             destinationURL: ballonsEngine.mangaLadaRenderedImageURL(runID: fingerprint),
             fontScale: overlayFontScale,
-            backgroundStyle: .none
+            backgroundStyle: .readabilityBubble
         )
 
         guard let renderedImage = NSImage(contentsOf: renderedFile.url) else {
@@ -458,7 +461,7 @@ final class AppState: ObservableObject {
     }
 
     private func cacheFingerprint(baseFingerprint: String) -> String {
-        let engineVersion = ballonsEngine.isInstalled ? "ballons-v3" : "vision-v2"
+        let engineVersion = ballonsEngine.isInstalled ? "ballons-v4" : "vision-v3"
         return "\(baseFingerprint)-\(engineVersion)"
     }
 
@@ -474,7 +477,10 @@ final class AppState: ObservableObject {
                 target: targetLanguage
             )
             var translatedBlock = block
-            translatedBlock.translatedText = translatedText
+            translatedBlock.translatedText = translationRefiner.refine(
+                originalText: block.originalText,
+                translatedText: translatedText
+            )
             translatedBlocks.append(translatedBlock)
         }
 
