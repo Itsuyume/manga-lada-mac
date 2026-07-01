@@ -49,7 +49,7 @@ let package = Package(
         ),
         .executableTarget(
             name: "MangaLadaBallonsChecks",
-            dependencies: ["MangaLadaCore", "MangaLadaBallons"]
+            dependencies: ["MangaLadaCore", "MangaLadaBallons", "MangaLadaRendering"]
         )
     ]
 )

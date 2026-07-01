@@ -6,6 +6,7 @@ import MangaLadaCore
 public struct BallonsTranslationResult: Sendable {
     public let pageTranslation: PageTranslation
     public let renderedImageURL: URL
+    public let inpaintedImageURL: URL
     public let sourceTextURL: URL?
     public let translationTextURL: URL?
 }
@@ -16,6 +17,7 @@ public enum BallonsTranslatorEngineError: LocalizedError, Equatable {
     case processFailed(Int32, String)
     case projectFileMissing(URL)
     case resultImageMissing(URL)
+    case inpaintedImageMissing(URL)
     case invalidImageSize(URL)
     case noTextBlocks
 
@@ -31,6 +33,8 @@ public enum BallonsTranslatorEngineError: LocalizedError, Equatable {
             return "Ballons 결과 JSON을 찾지 못했습니다: \(url.path)"
         case .resultImageMissing(let url):
             return "Ballons 결과 PNG를 찾지 못했습니다: \(url.path)"
+        case .inpaintedImageMissing(let url):
+            return "Ballons 원문 제거 PNG를 찾지 못했습니다: \(url.path)"
         case .invalidImageSize(let url):
             return "이미지 크기를 읽지 못했습니다: \(url.lastPathComponent)"
         case .noTextBlocks:
@@ -76,6 +80,16 @@ public struct BallonsTranslatorEngine: Sendable {
             .appendingPathComponent(Self.inputImageName)
     }
 
+    public func inpaintedImageURL(runID: String) -> URL {
+        runDirectoryURL(runID: runID)
+            .appendingPathComponent("inpainted", isDirectory: true)
+            .appendingPathComponent(Self.inputImageName)
+    }
+
+    public func mangaLadaRenderedImageURL(runID: String) -> URL {
+        runDirectoryURL(runID: runID).appendingPathComponent("manga-lada-rendered.png")
+    }
+
     public func clearRun(runID: String) throws {
         let runDirectory = runDirectoryURL(runID: runID)
         guard FileManager.default.fileExists(atPath: runDirectory.path) else {
@@ -104,6 +118,10 @@ public struct BallonsTranslatorEngine: Sendable {
         guard FileManager.default.fileExists(atPath: resultURL.path) else {
             throw BallonsTranslatorEngineError.resultImageMissing(resultURL)
         }
+        let inpaintedURL = inpaintedImageURL(runID: runID)
+        guard FileManager.default.fileExists(atPath: inpaintedURL.path) else {
+            throw BallonsTranslatorEngineError.inpaintedImageMissing(inpaintedURL)
+        }
 
         let projectURL = runDirectory.appendingPathComponent("imgtrans_\(runDirectory.lastPathComponent).json")
         guard FileManager.default.fileExists(atPath: projectURL.path) else {
@@ -120,6 +138,7 @@ public struct BallonsTranslatorEngine: Sendable {
         return BallonsTranslationResult(
             pageTranslation: pageTranslation,
             renderedImageURL: resultURL,
+            inpaintedImageURL: inpaintedURL,
             sourceTextURL: optionalFile(in: runDirectory, suffix: "_source.txt"),
             translationTextURL: optionalFile(in: runDirectory, suffix: "_translation.txt")
         )
@@ -275,17 +294,25 @@ public struct BallonsTranslatorEngine: Sendable {
         #endif
     }
 
+    private static var inpaintDevice: String {
+        #if arch(arm64)
+        "mps"
+        #else
+        "cpu"
+        #endif
+    }
+
     private static var configJSON: String {
         """
     {
       "module": {
         "textdetector": "ctd",
         "ocr": "manga_ocr",
-        "inpainter": "opencv-tela",
+        "inpainter": "lama_large_512px",
         "translator": "google",
         "enable_detect": true,
         "keep_exist_textlines": false,
-        "filter_mask_by_bboxes": false,
+        "filter_mask_by_bboxes": true,
         "enable_ocr": true,
         "enable_translate": true,
         "enable_inpaint": true,
@@ -311,7 +338,13 @@ public struct BallonsTranslatorEngine: Sendable {
             "delay": 0.0
           }
         },
-        "inpainter_params": {},
+        "inpainter_params": {
+          "lama_large_512px": {
+            "inpaint_size": 1536,
+            "device": "\(inpaintDevice)",
+            "precision": "fp32"
+          }
+        },
         "translate_source": "日本語",
         "translate_target": "한국어",
         "translate_by_textblock": false,

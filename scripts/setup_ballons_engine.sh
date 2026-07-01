@@ -107,5 +107,5 @@ BallonsTranslator engine is ready.
 Source: $SOURCE_DIR
 Python: $VENV_DIR/bin/python
 
-First translation can take longer while text detection and OCR models download.
+First translation can take longer while text detection, OCR, and LaMa inpaint models download.
 EOF

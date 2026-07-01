@@ -356,7 +356,7 @@ final class AppState: ObservableObject {
         if translation != nil {
             statusMessage = "캐시 있음: \(page.url.lastPathComponent)"
             if ballonsEngine.isInstalled {
-                let renderedURL = ballonsEngine.renderedImageURL(runID: fingerprint)
+                let renderedURL = ballonsEngine.mangaLadaRenderedImageURL(runID: fingerprint)
                 if let renderedImage = NSImage(contentsOf: renderedURL) {
                     renderedTranslationImage = renderedImage
                     renderedTranslationImageURL = renderedURL
@@ -375,7 +375,7 @@ final class AppState: ObservableObject {
         renderedTranslationImageURL = nil
 
         if !force, let cached = try cache.load(fingerprint: fingerprint) {
-            let renderedURL = ballonsEngine.renderedImageURL(runID: fingerprint)
+            let renderedURL = ballonsEngine.mangaLadaRenderedImageURL(runID: fingerprint)
             if let renderedImage = NSImage(contentsOf: renderedURL) {
                 translation = cached
                 renderedTranslationImage = renderedImage
@@ -396,16 +396,24 @@ final class AppState: ObservableObject {
             )
         }.value
 
-        guard let renderedImage = NSImage(contentsOf: result.renderedImageURL) else {
-            throw AppStateError.imageLoadFailed(result.renderedImageURL)
+        let renderedFile = try translatedImageRenderer.writePNG(
+            sourceImageURL: result.inpaintedImageURL,
+            translation: result.pageTranslation,
+            destinationURL: ballonsEngine.mangaLadaRenderedImageURL(runID: fingerprint),
+            fontScale: overlayFontScale,
+            backgroundStyle: .none
+        )
+
+        guard let renderedImage = NSImage(contentsOf: renderedFile.url) else {
+            throw AppStateError.imageLoadFailed(renderedFile.url)
         }
 
         try cache.save(result.pageTranslation)
         translation = result.pageTranslation
         renderedTranslationImage = renderedImage
-        renderedTranslationImageURL = result.renderedImageURL
+        renderedTranslationImageURL = renderedFile.url
         mode = .translated
-        statusMessage = "고품질 번역 완료: \(result.pageTranslation.blocks.count)개 텍스트 블록"
+        statusMessage = "고품질 번역 완료: \(renderedFile.blockCount)개 텍스트 블록"
     }
 
     private func translateWithVision(page: ImagePage, fingerprint: String, force: Bool) async throws {
@@ -450,7 +458,7 @@ final class AppState: ObservableObject {
     }
 
     private func cacheFingerprint(baseFingerprint: String) -> String {
-        let engineVersion = ballonsEngine.isInstalled ? "ballons-v1" : "vision-v2"
+        let engineVersion = ballonsEngine.isInstalled ? "ballons-v2" : "vision-v2"
         return "\(baseFingerprint)-\(engineVersion)"
     }
 

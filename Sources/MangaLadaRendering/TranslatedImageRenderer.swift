@@ -12,6 +12,11 @@ public struct RenderedImageFile: Equatable, Sendable {
     }
 }
 
+public enum TranslationTextBackgroundStyle: Equatable, Sendable {
+    case redactionBubble
+    case none
+}
+
 public enum TranslatedImageRenderError: LocalizedError, Equatable {
     case imageLoadFailed(URL)
     case noTranslationBlocks
@@ -37,7 +42,8 @@ public struct TranslatedImageRenderer {
         sourceImageURL: URL,
         translation: PageTranslation,
         destinationURL: URL,
-        fontScale: Double = 1.0
+        fontScale: Double = 1.0,
+        backgroundStyle: TranslationTextBackgroundStyle = .redactionBubble
     ) throws -> RenderedImageFile {
         guard let image = NSImage(contentsOf: sourceImageURL) else {
             throw TranslatedImageRenderError.imageLoadFailed(sourceImageURL)
@@ -50,7 +56,12 @@ public struct TranslatedImageRenderer {
             throw TranslatedImageRenderError.noTranslationBlocks
         }
 
-        let output = render(image: image, blocks: drawableBlocks, fontScale: fontScale)
+        let output = render(
+            image: image,
+            blocks: drawableBlocks,
+            fontScale: fontScale,
+            backgroundStyle: backgroundStyle
+        )
         guard let pngData = pngData(from: output) else {
             throw TranslatedImageRenderError.pngEncodingFailed
         }
@@ -66,7 +77,8 @@ public struct TranslatedImageRenderer {
     public func render(
         image: NSImage,
         blocks: [TextBlock],
-        fontScale: Double = 1.0
+        fontScale: Double = 1.0,
+        backgroundStyle: TranslationTextBackgroundStyle = .redactionBubble
     ) -> NSImage {
         let size = pixelBackedSize(for: image)
         let output = NSImage(size: size)
@@ -85,13 +97,18 @@ public struct TranslatedImageRenderer {
         )
 
         for block in blocks {
-            draw(block: block, imageSize: size, fontScale: fontScale)
+            draw(block: block, imageSize: size, fontScale: fontScale, backgroundStyle: backgroundStyle)
         }
 
         return output
     }
 
-    private func draw(block: TextBlock, imageSize: NSSize, fontScale: Double) {
+    private func draw(
+        block: TextBlock,
+        imageSize: NSSize,
+        fontScale: Double,
+        backgroundStyle: TranslationTextBackgroundStyle
+    ) {
         let text = displayText(for: block)
         guard !text.isEmpty else {
             return
@@ -105,11 +122,13 @@ public struct TranslatedImageRenderer {
             yRadius: min(10, bubbleRect.height * 0.18)
         )
 
-        NSColor.white.setFill()
-        bubblePath.fill()
-        NSColor.black.withAlphaComponent(0.25).setStroke()
-        bubblePath.lineWidth = 1
-        bubblePath.stroke()
+        if backgroundStyle == .redactionBubble {
+            NSColor.white.setFill()
+            bubblePath.fill()
+            NSColor.black.withAlphaComponent(0.25).setStroke()
+            bubblePath.lineWidth = 1
+            bubblePath.stroke()
+        }
 
         let paragraph = NSMutableParagraphStyle()
         paragraph.alignment = .center
@@ -117,7 +136,7 @@ public struct TranslatedImageRenderer {
 
         let fontSize = fittedFontSize(for: text, in: bubbleRect, scale: fontScale)
         let attributes: [NSAttributedString.Key: Any] = [
-            .font: NSFont.systemFont(ofSize: fontSize, weight: .semibold),
+            .font: preferredTextFont(ofSize: fontSize, backgroundStyle: backgroundStyle),
             .foregroundColor: NSColor.black,
             .paragraphStyle: paragraph
         ]
@@ -156,7 +175,11 @@ public struct TranslatedImageRenderer {
     private func fittedFontSize(for text: String, in rect: NSRect, scale: Double) -> CGFloat {
         let width = max(1, rect.width - 12)
         let height = max(1, rect.height - 8)
-        let maxSize = min(max(rect.height * 0.34, 12), 42) * scale
+        let explicitLineCount = max(1, text.components(separatedBy: .newlines).count)
+        let narrowVerticalBox = rect.width < rect.height * 0.75
+        let geometryLimit = narrowVerticalBox ? rect.width * 0.20 : min(rect.height * 0.34, 42)
+        let lineHeightLimit = height / CGFloat(explicitLineCount) * 0.68
+        let maxSize = min(max(geometryLimit, 10), lineHeightLimit, 34) * scale
         let minSize: CGFloat = 8
 
         var size = maxSize
@@ -175,6 +198,13 @@ public struct TranslatedImageRenderer {
         }
 
         return minSize
+    }
+
+    private func preferredTextFont(ofSize size: CGFloat, backgroundStyle: TranslationTextBackgroundStyle) -> NSFont {
+        let fontName = backgroundStyle == .none ? "AppleSDGothicNeo-Medium" : "AppleSDGothicNeo-SemiBold"
+        let fallbackWeight: NSFont.Weight = backgroundStyle == .none ? .medium : .semibold
+        return NSFont(name: fontName, size: size)
+            ?? NSFont.systemFont(ofSize: size, weight: fallbackWeight)
     }
 
     private func verticallyCenteredTextRect(

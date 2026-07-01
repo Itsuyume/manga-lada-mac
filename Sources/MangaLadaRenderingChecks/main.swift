@@ -9,8 +9,11 @@ struct MangaLadaRenderingChecks {
     static func main() throws {
         let root = try temporaryDirectory()
         let sourceURL = root.appendingPathComponent("source.png")
+        let inpaintedSourceURL = root.appendingPathComponent("inpainted-source.png")
         let outputURL = root.appendingPathComponent("translated.png")
+        let textOnlyOutputURL = root.appendingPathComponent("translated-text-only.png")
         try makeSourceImage(at: sourceURL)
+        try makeInpaintedSourceImage(at: inpaintedSourceURL)
 
         let translation = PageTranslation(
             imageURL: sourceURL,
@@ -49,6 +52,25 @@ struct MangaLadaRenderingChecks {
             !containsDarkPixel(image: outputImage, normalizedArea: CGRect(x: 0.25, y: 0.43, width: 0.08, height: 0.12)),
             "Original text still appears through the redacted area."
         )
+
+        let textOnlyResult = try TranslatedImageRenderer().writePNG(
+            sourceImageURL: inpaintedSourceURL,
+            translation: translation,
+            destinationURL: textOnlyOutputURL,
+            backgroundStyle: .none
+        )
+        try require(textOnlyResult.blockCount == 1, "Text-only renderer wrote wrong block count.")
+        guard let textOnlyImage = NSImage(contentsOf: textOnlyOutputURL) else {
+            throw CheckError.failed("Text-only PNG could not be loaded for inspection.")
+        }
+        try require(
+            containsDarkPixel(image: textOnlyImage, normalizedArea: CGRect(x: 0.30, y: 0.38, width: 0.40, height: 0.18)),
+            "Text-only translation area appears blank."
+        )
+        try require(
+            containsTintedPixel(image: textOnlyImage, normalizedArea: CGRect(x: 0.10, y: 0.10, width: 0.10, height: 0.10)),
+            "Text-only renderer unexpectedly replaced untouched background."
+        )
         print("MangaLadaRenderingChecks passed: \(outputURL.path)")
     }
 
@@ -82,6 +104,27 @@ struct MangaLadaRenderingChecks {
         try pngData.write(to: url, options: .atomic)
     }
 
+    private static func makeInpaintedSourceImage(at url: URL) throws {
+        let size = NSSize(width: 640, height: 360)
+        let image = NSImage(size: size)
+
+        image.lockFocus()
+        NSColor(calibratedRed: 0.82, green: 0.88, blue: 0.94, alpha: 1).setFill()
+        NSRect(origin: .zero, size: size).fill()
+        NSColor(calibratedWhite: 0.95, alpha: 1).setFill()
+        NSBezierPath(roundedRect: NSRect(x: 110, y: 120, width: 420, height: 120), xRadius: 28, yRadius: 28).fill()
+        image.unlockFocus()
+
+        guard let tiffData = image.tiffRepresentation,
+              let bitmap = NSBitmapImageRep(data: tiffData),
+              let pngData = bitmap.representation(using: .png, properties: [:]) else {
+            throw CheckError.failed("Failed to create inpainted source PNG.")
+        }
+
+        try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try pngData.write(to: url, options: .atomic)
+    }
+
     private static func containsDarkPixel(image: NSImage, normalizedArea: CGRect) -> Bool {
         guard let tiffData = image.tiffRepresentation,
               let bitmap = NSBitmapImageRep(data: tiffData) else {
@@ -108,6 +151,40 @@ struct MangaLadaRenderingChecks {
                 if color.redComponent < 0.35,
                    color.greenComponent < 0.35,
                    color.blueComponent < 0.35 {
+                    return true
+                }
+            }
+        }
+
+        return false
+    }
+
+    private static func containsTintedPixel(image: NSImage, normalizedArea: CGRect) -> Bool {
+        guard let tiffData = image.tiffRepresentation,
+              let bitmap = NSBitmapImageRep(data: tiffData) else {
+            return false
+        }
+
+        let area = NSRect(
+            x: normalizedArea.minX * Double(bitmap.pixelsWide),
+            y: normalizedArea.minY * Double(bitmap.pixelsHigh),
+            width: normalizedArea.width * Double(bitmap.pixelsWide),
+            height: normalizedArea.height * Double(bitmap.pixelsHigh)
+        )
+        let minX = max(0, Int(area.minX))
+        let maxX = min(bitmap.pixelsWide - 1, Int(area.maxX))
+        let minY = max(0, Int(area.minY))
+        let maxY = min(bitmap.pixelsHigh - 1, Int(area.maxY))
+
+        for y in minY...maxY {
+            for x in minX...maxX {
+                guard let color = bitmap.colorAt(x: x, y: y)?.usingColorSpace(.deviceRGB) else {
+                    continue
+                }
+
+                if color.blueComponent > color.redComponent,
+                   color.blueComponent > 0.75,
+                   color.redComponent > 0.70 {
                     return true
                 }
             }
