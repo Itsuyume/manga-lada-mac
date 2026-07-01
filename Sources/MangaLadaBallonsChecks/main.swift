@@ -18,11 +18,13 @@ struct MangaLadaBallonsChecks {
 
     @MainActor
     private static func runCheck() throws -> (blockCount: Int, renderedURL: URL) {
-        guard CommandLine.arguments.count == 2 else {
+        guard CommandLine.arguments.count == 2 || CommandLine.arguments.count == 3 else {
             throw BallonsCheckError.missingImageArgument
         }
 
-        let imageURL = URL(fileURLWithPath: CommandLine.arguments[1])
+        let ocrOnly = CommandLine.arguments.contains("--ocr-only")
+        let imagePath = CommandLine.arguments.first { $0 != CommandLine.arguments[0] && $0 != "--ocr-only" } ?? ""
+        let imageURL = URL(fileURLWithPath: imagePath)
         guard FileManager.default.fileExists(atPath: imageURL.path) else {
             throw BallonsCheckError.imageMissing(imageURL)
         }
@@ -37,7 +39,8 @@ struct MangaLadaBallonsChecks {
         let result = try engine.translate(
             sourceImageURL: imageURL,
             runID: fingerprint,
-            imageFingerprint: fingerprint
+            imageFingerprint: fingerprint,
+            enableTranslation: !ocrOnly
         )
 
         guard !result.pageTranslation.blocks.isEmpty else {
@@ -49,7 +52,7 @@ struct MangaLadaBallonsChecks {
 
         let rendered = try TranslatedImageRenderer().writePNG(
             sourceImageURL: result.inpaintedImageURL,
-            translation: result.pageTranslation,
+            translation: ocrOnly ? passthroughTranslation(result.pageTranslation) : result.pageTranslation,
             destinationURL: engine.mangaLadaRenderedImageURL(runID: fingerprint),
             backgroundStyle: .readabilityBubble
         )
@@ -58,6 +61,21 @@ struct MangaLadaBallonsChecks {
         }
 
         return (rendered.blockCount, rendered.url)
+    }
+
+    private static func passthroughTranslation(_ translation: PageTranslation) -> PageTranslation {
+        PageTranslation(
+            imageURL: translation.imageURL,
+            imageFingerprint: translation.imageFingerprint,
+            sourceLanguage: translation.sourceLanguage,
+            targetLanguage: translation.targetLanguage,
+            createdAt: translation.createdAt,
+            blocks: translation.blocks.map { block in
+                var passthroughBlock = block
+                passthroughBlock.translatedText = block.originalText
+                return passthroughBlock
+            }
+        )
     }
 
     private static func applicationSupportDirectory() -> URL {
@@ -78,7 +96,7 @@ private enum BallonsCheckError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .missingImageArgument:
-            return "Usage: swift run MangaLadaBallonsChecks /path/to/page.png"
+            return "Usage: swift run MangaLadaBallonsChecks [--ocr-only] /path/to/page.png"
         case .imageMissing(let url):
             return "Image does not exist: \(url.path)"
         case .engineMissing(let url):

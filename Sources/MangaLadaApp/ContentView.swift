@@ -112,6 +112,16 @@ private struct HeaderBar: View {
 
             Spacer(minLength: 12)
 
+            Picker("번역기", selection: $appState.translationProvider) {
+                ForEach(TranslationProvider.allCases) { provider in
+                    Text(provider.displayName).tag(provider)
+                }
+            }
+            .labelsHidden()
+            .pickerStyle(.menu)
+            .frame(width: 132)
+            .help("API 키와 로컬 LLM 설정: \(appState.translatorConfigPath)")
+
             Toggle("자동", isOn: $appState.autoTranslate)
                 .toggleStyle(.switch)
                 .controlSize(.small)

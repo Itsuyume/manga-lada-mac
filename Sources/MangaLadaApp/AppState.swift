@@ -21,6 +21,11 @@ final class AppState: ObservableObject {
     @Published var targetLanguage: LanguageCode = .korean
     @Published var overlayFontScale: Double = 1.0
     @Published var autoTranslate = false
+    @Published var translationProvider: TranslationProvider {
+        didSet {
+            UserDefaults.standard.set(translationProvider.rawValue, forKey: Self.translationProviderDefaultsKey)
+        }
+    }
 
     private let scanner: ImageFileScanner
     private let fingerprintMaker: ImageFingerprint
@@ -44,9 +49,14 @@ final class AppState: ObservableObject {
         ),
         translatedImageRenderer: TranslatedImageRenderer = TranslatedImageRenderer(),
         ocrService: VisionOCRService = VisionOCRService(),
-        translator: TextTranslating = GoogleWebTranslator(),
+        translator: TextTranslating? = nil,
         translationRefiner: KoreanTranslationRefiner = KoreanTranslationRefiner()
     ) {
+        let localConfiguration = (try? LocalTranslatorConfiguration.load(configURL: AppPaths.translatorConfigURL))
+            ?? LocalTranslatorConfiguration()
+        let savedProvider = UserDefaults.standard.string(forKey: Self.translationProviderDefaultsKey)
+            .flatMap(TranslationProvider.init(rawValue:))
+
         self.scanner = scanner
         self.fingerprintMaker = fingerprintMaker
         self.cache = cache
@@ -54,8 +64,9 @@ final class AppState: ObservableObject {
         self.ballonsEngine = ballonsEngine
         self.translatedImageRenderer = translatedImageRenderer
         self.ocrService = ocrService
-        self.translator = translator
+        self.translator = translator ?? GoogleWebTranslator()
         self.translationRefiner = translationRefiner
+        self.translationProvider = savedProvider ?? localConfiguration.defaultProvider ?? .ballonsGoogle
     }
 
     var currentPage: ImagePage? {
@@ -83,6 +94,10 @@ final class AppState: ObservableObject {
         return translation.blocks.contains { block in
             !block.translatedText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         }
+    }
+
+    var translatorConfigPath: String {
+        AppPaths.translatorConfigURL.path
     }
 
     func openFileFromPanel() async {
@@ -389,19 +404,35 @@ final class AppState: ObservableObject {
             }
         }
 
-        statusMessage = "BallonsTranslator로 텍스트 검출/OCR/번역/식자 중..."
+        let configuration = try LocalTranslatorConfiguration.load(configURL: AppPaths.translatorConfigURL)
+        let provider = translationProvider
+        let useBallonsTranslator = provider.usesBallonsTranslator
+        statusMessage = useBallonsTranslator
+            ? "BallonsTranslator로 텍스트 검출/OCR/번역/식자 중..."
+            : "BallonsTranslator로 텍스트 검출/OCR/원문 제거 중..."
         let engine = ballonsEngine
         let result = try await Task.detached(priority: .userInitiated) {
             try engine.translate(
                 sourceImageURL: page.url,
                 runID: fingerprint,
-                imageFingerprint: fingerprint
+                imageFingerprint: fingerprint,
+                enableTranslation: useBallonsTranslator
             )
         }.value
+        let pageTranslation = useBallonsTranslator
+            ? result.pageTranslation
+            : PageTranslation(
+                imageURL: result.pageTranslation.imageURL,
+                imageFingerprint: result.pageTranslation.imageFingerprint,
+                sourceLanguage: result.pageTranslation.sourceLanguage,
+                targetLanguage: result.pageTranslation.targetLanguage,
+                createdAt: result.pageTranslation.createdAt,
+                blocks: try await translate(result.pageTranslation.blocks, provider: provider, configuration: configuration)
+            )
 
         let renderedFile = try translatedImageRenderer.writePNG(
             sourceImageURL: result.inpaintedImageURL,
-            translation: result.pageTranslation,
+            translation: pageTranslation,
             destinationURL: ballonsEngine.mangaLadaRenderedImageURL(runID: fingerprint),
             fontScale: overlayFontScale,
             backgroundStyle: .readabilityBubble
@@ -411,8 +442,8 @@ final class AppState: ObservableObject {
             throw AppStateError.imageLoadFailed(renderedFile.url)
         }
 
-        try cache.save(result.pageTranslation)
-        translation = result.pageTranslation
+        try cache.save(pageTranslation)
+        translation = pageTranslation
         renderedTranslationImage = renderedImage
         renderedTranslationImageURL = renderedFile.url
         mode = .translated
@@ -445,8 +476,12 @@ final class AppState: ObservableObject {
             return
         }
 
-        statusMessage = "한국어 번역 중..."
-        let translatedBlocks = try await translate(blocks)
+        statusMessage = "\(translationProvider.displayName)로 한국어 번역 중..."
+        let translatedBlocks = try await translate(
+            blocks,
+            provider: translationProvider,
+            configuration: LocalTranslatorConfiguration.load(configURL: AppPaths.translatorConfigURL)
+        )
         let pageTranslation = PageTranslation(
             imageURL: page.url,
             imageFingerprint: fingerprint,
@@ -461,30 +496,120 @@ final class AppState: ObservableObject {
     }
 
     private func cacheFingerprint(baseFingerprint: String) -> String {
-        let engineVersion = ballonsEngine.isInstalled ? "ballons-v4" : "vision-v3"
-        return "\(baseFingerprint)-\(engineVersion)"
+        let engineVersion = ballonsEngine.isInstalled ? "ballons-v5" : "vision-v4"
+        let configuration = try? LocalTranslatorConfiguration.load(configURL: AppPaths.translatorConfigURL)
+        let providerKey = configuration?.cacheKey(for: translationProvider) ?? translationProvider.cacheKey
+        return "\(baseFingerprint)-\(engineVersion)-\(providerKey)"
     }
 
-    private func translate(_ blocks: [TextBlock]) async throws -> [TextBlock] {
-        var translatedBlocks: [TextBlock] = []
-        translatedBlocks.reserveCapacity(blocks.count)
+    private func translate(
+        _ blocks: [TextBlock],
+        provider: TranslationProvider,
+        configuration: LocalTranslatorConfiguration
+    ) async throws -> [TextBlock] {
+        let translator = try makeTranslator(provider: provider, configuration: configuration)
+        let translatedTexts = try await translatedTexts(
+            for: blocks,
+            translator: translator,
+            provider: provider,
+            maxConcurrentRequests: configuration.maxConcurrentRequests
+        )
 
-        for (index, block) in blocks.enumerated() {
-            statusMessage = "한국어 번역 중... \(index + 1) / \(blocks.count)"
-            let translatedText = try await translator.translate(
-                block.originalText,
-                source: sourceLanguage,
-                target: targetLanguage
-            )
+        return zip(blocks, translatedTexts).map { block, translatedText in
             var translatedBlock = block
             translatedBlock.translatedText = translationRefiner.refine(
                 originalText: block.originalText,
                 translatedText: translatedText
             )
-            translatedBlocks.append(translatedBlock)
+            return translatedBlock
+        }
+    }
+
+    private func translatedTexts(
+        for blocks: [TextBlock],
+        translator: TextTranslating,
+        provider: TranslationProvider,
+        maxConcurrentRequests: Int
+    ) async throws -> [String] {
+        if let batchTranslator = translator as? BatchTextTranslating {
+            statusMessage = "\(provider.displayName) 배치 번역 중... \(blocks.count)개"
+            return try await batchTranslator.translate(
+                blocks.map(\.originalText),
+                source: sourceLanguage,
+                target: targetLanguage
+            )
         }
 
-        return translatedBlocks
+        let concurrency = min(max(maxConcurrentRequests, 1), max(blocks.count, 1))
+        var translatedTexts = Array(repeating: "", count: blocks.count)
+        var completedCount = 0
+
+        for chunkStart in stride(from: 0, to: blocks.count, by: concurrency) {
+            let chunkEnd = min(chunkStart + concurrency, blocks.count)
+            try await withThrowingTaskGroup(of: (Int, String).self) { group in
+                for index in chunkStart..<chunkEnd {
+                    let block = blocks[index]
+                    let source = sourceLanguage
+                    let target = targetLanguage
+                    group.addTask {
+                        let translated = try await translator.translate(
+                            block.originalText,
+                            source: source,
+                            target: target
+                        )
+                        return (index, translated)
+                    }
+                }
+
+                for try await (index, translated) in group {
+                    translatedTexts[index] = translated
+                    completedCount += 1
+                    statusMessage = "\(provider.displayName) 번역 중... \(completedCount) / \(blocks.count)"
+                }
+            }
+        }
+
+        return translatedTexts
+    }
+
+    private func makeTranslator(
+        provider: TranslationProvider,
+        configuration: LocalTranslatorConfiguration
+    ) throws -> TextTranslating {
+        switch provider {
+        case .ballonsGoogle, .googleWeb:
+            return translator
+        case .deepl:
+            guard let apiKey = configuration.deepl.apiKey else {
+                throw TranslationError.missingConfiguration("DeepL API 키가 없습니다: \(AppPaths.translatorConfigURL.path)")
+            }
+            return DeepLTranslator(
+                apiKey: apiKey,
+                endpoint: configuration.deepl.endpoint,
+                context: configuration.deepl.context
+            )
+        case .papago:
+            guard let clientID = configuration.papago.clientID,
+                  let clientSecret = configuration.papago.clientSecret else {
+                throw TranslationError.missingConfiguration("Papago clientId/clientSecret이 없습니다: \(AppPaths.translatorConfigURL.path)")
+            }
+            return PapagoTranslator(
+                clientID: clientID,
+                clientSecret: clientSecret,
+                endpoint: configuration.papago.endpoint
+            )
+        case .llm:
+            return OpenAICompatibleTranslator(
+                apiKey: configuration.llm.apiKey,
+                endpoint: configuration.llm.endpoint,
+                model: configuration.llm.model
+            )
+        case .ollama:
+            return OllamaTranslator(
+                endpoint: configuration.ollama.endpoint,
+                model: configuration.ollama.model
+            )
+        }
     }
 
     private func show(_ error: Error, prefix: String) {
@@ -540,9 +665,16 @@ private enum AppPaths {
         applicationSupportDirectory
             .appendingPathComponent("Archives", isDirectory: true)
     }
+
+    static var translatorConfigURL: URL {
+        applicationSupportDirectory
+            .appendingPathComponent("translator.local.json")
+    }
 }
 
 private extension AppState {
+    static let translationProviderDefaultsKey = "translationProvider"
+
     static var openableContentTypes: [UTType] {
         var types: [UTType] = [.image]
         if let zip = UTType(filenameExtension: "zip") {

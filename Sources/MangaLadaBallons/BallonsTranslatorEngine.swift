@@ -98,7 +98,12 @@ public struct BallonsTranslatorEngine: Sendable {
         try FileManager.default.removeItem(at: runDirectory)
     }
 
-    public func translate(sourceImageURL: URL, runID: String, imageFingerprint: String) throws -> BallonsTranslationResult {
+    public func translate(
+        sourceImageURL: URL,
+        runID: String,
+        imageFingerprint: String,
+        enableTranslation: Bool = true
+    ) throws -> BallonsTranslationResult {
         guard isInstalled else {
             throw BallonsTranslatorEngineError.engineNotInstalled
         }
@@ -110,7 +115,7 @@ public struct BallonsTranslatorEngine: Sendable {
         try convertToPNG(sourceImageURL: sourceImageURL, destinationURL: inputURL)
 
         let configURL = runDirectory.appendingPathComponent("manga-lada-ballons-config.json")
-        try Self.configJSON.write(to: configURL, atomically: true, encoding: .utf8)
+        try Self.configJSON(enableTranslation: enableTranslation).write(to: configURL, atomically: true, encoding: .utf8)
 
         try runBallons(runDirectory: runDirectory, configURL: configURL)
 
@@ -304,7 +309,7 @@ public struct BallonsTranslatorEngine: Sendable {
         #endif
     }
 
-    private static var configJSON: String {
+    private static func configJSON(enableTranslation: Bool) -> String {
         """
     {
       "module": {
@@ -316,7 +321,7 @@ public struct BallonsTranslatorEngine: Sendable {
         "keep_exist_textlines": false,
         "filter_mask_by_bboxes": true,
         "enable_ocr": true,
-        "enable_translate": true,
+        "enable_translate": \(enableTranslation ? "true" : "false"),
         "enable_inpaint": true,
         "ocr_font_detect": false,
         "textdetector_params": {

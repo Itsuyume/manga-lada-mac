@@ -10,6 +10,8 @@ struct MangaLadaCoreChecks {
         try checkCacheRoundTripsTranslationByFingerprint()
         try checkGoogleTranslatorParsesNestedResponseText()
         try checkGoogleTranslatorRejectsEmptyParsedText()
+        try checkLocalTranslatorConfigurationLoadsFileAndEnvironmentOverrides()
+        try checkAPITranslatorResponseParsers()
         try checkKoreanTranslationRefinerFixesKnownMistranslations()
         try checkKoreanTranslationRefinerLeavesUnrelatedTextAlone()
         try await checkPassthroughTranslatorRejectsBlankInput()
@@ -124,6 +126,71 @@ struct MangaLadaCoreChecks {
         } catch TranslationError.missingTranslatedText {
             return
         }
+    }
+
+    private static func checkLocalTranslatorConfigurationLoadsFileAndEnvironmentOverrides() throws {
+        let root = try temporaryDirectory()
+        let configURL = root.appendingPathComponent("translator.local.json")
+        let json = """
+        {
+          "provider": "deepl",
+          "maxConcurrentRequests": 3,
+          "deepl": {
+            "apiKey": "file-deepl-key",
+            "endpoint": "https://api-free.deepl.com/v2/translate",
+            "context": "manga dialogue"
+          },
+          "papago": {
+            "clientId": "file-client-id",
+            "clientSecret": "file-client-credential"
+          },
+          "llm": {
+            "endpoint": "https://example.test/v1",
+            "model": "file-model"
+          },
+          "ollama": {
+            "endpoint": "http://127.0.0.1:11434",
+            "model": "file-ollama"
+          }
+        }
+        """
+        try json.write(to: configURL, atomically: true, encoding: .utf8)
+
+        let configuration = try LocalTranslatorConfiguration.load(
+            configURL: configURL,
+            environment: [
+                "MANGA_LADA_TRANSLATOR": "papago",
+                "MANGA_LADA_MAX_CONCURRENT_TRANSLATIONS": "6",
+                "MANGA_LADA_DEEPL_API_KEY": "env-deepl-key",
+                "MANGA_LADA_LLM_MODEL": "env-model"
+            ]
+        )
+
+        try require(configuration.defaultProvider == .papago, "Environment did not override provider.")
+        try require(configuration.maxConcurrentRequests == 6, "Environment did not override concurrency.")
+        try require(configuration.deepl.apiKey == "env-deepl-key", "Environment did not override DeepL key.")
+        try require(configuration.deepl.context == "manga dialogue", "DeepL context was not loaded from file.")
+        try require(configuration.papago.clientID == "file-client-id", "Papago client ID was not loaded.")
+        try require(configuration.llm.model == "env-model", "Environment did not override LLM model.")
+        try require(configuration.cacheKey(for: .llm) == "llm-env-model", "LLM cache key did not include model.")
+    }
+
+    private static func checkAPITranslatorResponseParsers() throws {
+        let deeplJSON = #"{"translations":[{"text":"안녕"},{"text":"세계"}]}"#
+        let deepl = try DeepLTranslator.parseTranslationResponse(Data(deeplJSON.utf8))
+        try require(deepl == ["안녕", "세계"], "DeepL response parser returned wrong texts.")
+
+        let papagoJSON = #"{"message":{"result":{"translatedText":"안녕하세요"}}}"#
+        let papago = try PapagoTranslator.parseTranslationResponse(Data(papagoJSON.utf8))
+        try require(papago == "안녕하세요", "Papago response parser returned wrong text.")
+
+        let chatJSON = #"{"choices":[{"message":{"role":"assistant","content":"\"좋아요\""}}]}"#
+        let chat = try OpenAICompatibleTranslator.parseTranslationResponse(Data(chatJSON.utf8))
+        try require(chat == "좋아요", "OpenAI-compatible response parser returned wrong text.")
+
+        let ollamaJSON = #"{"message":{"role":"assistant","content":"```ko\n좋습니다\n```"}}"#
+        let ollama = try OllamaTranslator.parseTranslationResponse(Data(ollamaJSON.utf8))
+        try require(ollama == "좋습니다", "Ollama response parser returned wrong text.")
     }
 
     private static func checkKoreanTranslationRefinerFixesKnownMistranslations() throws {

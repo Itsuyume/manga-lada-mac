@@ -5,6 +5,7 @@ public enum TranslationError: LocalizedError, Equatable {
     case invalidResponse
     case httpStatus(Int)
     case missingTranslatedText
+    case missingConfiguration(String)
 
     public var errorDescription: String? {
         switch self {
@@ -16,6 +17,8 @@ public enum TranslationError: LocalizedError, Equatable {
             return "번역 서버가 HTTP \(status)를 반환했습니다."
         case .missingTranslatedText:
             return "번역 결과 텍스트가 없습니다."
+        case .missingConfiguration(let message):
+            return message
         }
     }
 }
@@ -26,6 +29,28 @@ public protocol TextTranslating: Sendable {
         source: LanguageCode,
         target: LanguageCode
     ) async throws -> String
+}
+
+public protocol BatchTextTranslating: TextTranslating {
+    func translate(
+        _ texts: [String],
+        source: LanguageCode,
+        target: LanguageCode
+    ) async throws -> [String]
+}
+
+public extension BatchTextTranslating {
+    func translate(
+        _ text: String,
+        source: LanguageCode,
+        target: LanguageCode
+    ) async throws -> String {
+        let translated = try await translate([text], source: source, target: target)
+        guard let first = translated.first else {
+            throw TranslationError.missingTranslatedText
+        }
+        return first
+    }
 }
 
 public struct PassthroughTranslator: TextTranslating {
