@@ -458,7 +458,7 @@ final class AppState: ObservableObject {
     }
 
     private func cacheFingerprint(baseFingerprint: String) -> String {
-        let engineVersion = ballonsEngine.isInstalled ? "ballons-v2" : "vision-v2"
+        let engineVersion = ballonsEngine.isInstalled ? "ballons-v3" : "vision-v2"
         return "\(baseFingerprint)-\(engineVersion)"
     }
 

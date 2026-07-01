@@ -26,6 +26,12 @@ struct MangaLadaRenderingChecks {
                     originalText: "こんにちは 世界",
                     translatedText: "안녕하세요 세상",
                     confidence: 0.99
+                ),
+                TextBlock(
+                    box: TextBox(x: 0.76, y: 0.12, width: 0.10, height: 0.58),
+                    originalText: "縦書きの長い台詞",
+                    translatedText: "긴 한국어 문장을 좁은 세로 말풍선 안에 읽기 좋게 배치합니다",
+                    confidence: 0.98
                 )
             ]
         )
@@ -36,7 +42,7 @@ struct MangaLadaRenderingChecks {
             destinationURL: outputURL
         )
 
-        try require(result.blockCount == 1, "Renderer wrote wrong block count.")
+        try require(result.blockCount == 2, "Renderer wrote wrong block count.")
         let outputData = try Data(contentsOf: outputURL)
         try require(outputData.count > 10_000, "Rendered PNG is unexpectedly small.")
 
@@ -59,13 +65,17 @@ struct MangaLadaRenderingChecks {
             destinationURL: textOnlyOutputURL,
             backgroundStyle: .none
         )
-        try require(textOnlyResult.blockCount == 1, "Text-only renderer wrote wrong block count.")
+        try require(textOnlyResult.blockCount == 2, "Text-only renderer wrote wrong block count.")
         guard let textOnlyImage = NSImage(contentsOf: textOnlyOutputURL) else {
             throw CheckError.failed("Text-only PNG could not be loaded for inspection.")
         }
         try require(
             containsDarkPixel(image: textOnlyImage, normalizedArea: CGRect(x: 0.30, y: 0.38, width: 0.40, height: 0.18)),
             "Text-only translation area appears blank."
+        )
+        try require(
+            containsDarkPixel(image: textOnlyImage, normalizedArea: CGRect(x: 0.75, y: 0.16, width: 0.12, height: 0.50)),
+            "Narrow vertical translation area appears blank."
         )
         try require(
             containsTintedPixel(image: textOnlyImage, normalizedArea: CGRect(x: 0.10, y: 0.10, width: 0.10, height: 0.10)),

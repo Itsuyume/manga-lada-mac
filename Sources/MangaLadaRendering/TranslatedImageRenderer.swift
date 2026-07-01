@@ -134,19 +134,24 @@ public struct TranslatedImageRenderer {
         paragraph.alignment = .center
         paragraph.lineBreakMode = .byWordWrapping
 
-        let fontSize = fittedFontSize(for: text, in: bubbleRect, scale: fontScale)
-        let attributes: [NSAttributedString.Key: Any] = [
-            .font: preferredTextFont(ofSize: fontSize, backgroundStyle: backgroundStyle),
+        let textRect = bubbleRect.insetBy(dx: max(6, bubbleRect.width * 0.03), dy: max(4, bubbleRect.height * 0.08))
+        let layout = fittedTextLayout(
+            for: text,
+            in: textRect,
+            scale: fontScale,
+            backgroundStyle: backgroundStyle
+        )
+        var attributes: [NSAttributedString.Key: Any] = [
+            .font: preferredTextFont(ofSize: layout.fontSize, backgroundStyle: backgroundStyle),
             .foregroundColor: NSColor.black,
             .paragraphStyle: paragraph
         ]
+        if backgroundStyle == .none {
+            attributes[.strokeColor] = NSColor.white.withAlphaComponent(0.64)
+            attributes[.strokeWidth] = -1.0
+        }
 
-        let textRect = bubbleRect.insetBy(dx: max(6, bubbleRect.width * 0.03), dy: max(4, bubbleRect.height * 0.08))
-        attributedText(text, attributes: attributes).draw(in: verticallyCenteredTextRect(
-            text,
-            attributes: attributes,
-            bounds: textRect
-        ))
+        draw(layout: layout, attributes: attributes, in: textRect)
     }
 
     private func pixelBackedSize(for image: NSImage) -> NSSize {
@@ -172,32 +177,40 @@ public struct TranslatedImageRenderer {
         return rect.insetBy(dx: -horizontalPadding, dy: -verticalPadding)
     }
 
-    private func fittedFontSize(for text: String, in rect: NSRect, scale: Double) -> CGFloat {
+    private func fittedTextLayout(
+        for text: String,
+        in rect: NSRect,
+        scale: Double,
+        backgroundStyle: TranslationTextBackgroundStyle
+    ) -> TextLayout {
         let width = max(1, rect.width - 12)
         let height = max(1, rect.height - 8)
-        let explicitLineCount = max(1, text.components(separatedBy: .newlines).count)
-        let narrowVerticalBox = rect.width < rect.height * 0.75
-        let geometryLimit = narrowVerticalBox ? rect.width * 0.20 : min(rect.height * 0.34, 42)
-        let lineHeightLimit = height / CGFloat(explicitLineCount) * 0.68
-        let maxSize = min(max(geometryLimit, 10), lineHeightLimit, 34) * scale
-        let minSize: CGFloat = 8
+        let normalizedText = normalizedRenderableText(text)
+        let narrowVerticalBox = rect.width < rect.height * 0.70
+        let geometryLimit = narrowVerticalBox ? rect.width * 0.34 : min(rect.height * 0.36, 42)
+        let maxSize = min(max(geometryLimit, 13), 38) * scale
+        let minSize: CGFloat = backgroundStyle == .none ? 10 : 8
 
         var size = maxSize
         while size > minSize {
-            let attributes: [NSAttributedString.Key: Any] = [
-                .font: NSFont.systemFont(ofSize: size, weight: .semibold)
-            ]
-            let measured = attributedText(text, attributes: attributes).boundingRect(
-                with: NSSize(width: width, height: .greatestFiniteMagnitude),
-                options: [.usesLineFragmentOrigin, .usesFontLeading]
-            )
-            if measured.height <= height && measured.width <= width {
-                return size
+            let font = preferredTextFont(ofSize: size, backgroundStyle: backgroundStyle)
+            let lines = wrappedLines(for: normalizedText, maxWidth: width, font: font)
+            let lineHeight = ceil(size * 1.16)
+            let measuredHeight = CGFloat(lines.count) * lineHeight
+            if !lines.isEmpty,
+               measuredHeight <= height,
+               lines.allSatisfy({ measuredWidth($0, font: font) <= width }) {
+                return TextLayout(lines: lines, fontSize: size, lineHeight: lineHeight)
             }
             size -= 1
         }
 
-        return minSize
+        let font = preferredTextFont(ofSize: minSize, backgroundStyle: backgroundStyle)
+        return TextLayout(
+            lines: wrappedLines(for: normalizedText, maxWidth: width, font: font),
+            fontSize: minSize,
+            lineHeight: ceil(minSize * 1.16)
+        )
     }
 
     private func preferredTextFont(ofSize size: CGFloat, backgroundStyle: TranslationTextBackgroundStyle) -> NSFont {
@@ -207,17 +220,93 @@ public struct TranslatedImageRenderer {
             ?? NSFont.systemFont(ofSize: size, weight: fallbackWeight)
     }
 
-    private func verticallyCenteredTextRect(
-        _ text: String,
+    private func draw(
+        layout: TextLayout,
         attributes: [NSAttributedString.Key: Any],
-        bounds: NSRect
-    ) -> NSRect {
-        let measured = attributedText(text, attributes: attributes).boundingRect(
-            with: NSSize(width: bounds.width, height: .greatestFiniteMagnitude),
+        in bounds: NSRect
+    ) {
+        let totalHeight = CGFloat(layout.lines.count) * layout.lineHeight
+        let topY = bounds.midY + totalHeight / 2
+
+        for (index, line) in layout.lines.enumerated() {
+            let lineRect = NSRect(
+                x: bounds.minX,
+                y: topY - CGFloat(index + 1) * layout.lineHeight,
+                width: bounds.width,
+                height: layout.lineHeight
+            )
+            attributedText(line, attributes: attributes).draw(in: lineRect)
+        }
+    }
+
+    private func normalizedRenderableText(_ text: String) -> String {
+        text
+            .replacingOccurrences(of: "\n", with: " ")
+            .replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression)
+            .replacingOccurrences(of: #" ([,.!?…])"#, with: "$1", options: .regularExpression)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private func wrappedLines(for text: String, maxWidth: CGFloat, font: NSFont) -> [String] {
+        let words = text.split(separator: " ").map(String.init)
+        guard !words.isEmpty else {
+            return []
+        }
+
+        var lines: [String] = []
+        var current = ""
+
+        for word in words {
+            let candidate = current.isEmpty ? word : "\(current) \(word)"
+            if measuredWidth(candidate, font: font) <= maxWidth {
+                current = candidate
+                continue
+            }
+
+            if !current.isEmpty {
+                lines.append(current)
+            }
+
+            if measuredWidth(word, font: font) <= maxWidth {
+                current = word
+            } else {
+                let splitLines = splitLongWord(word, maxWidth: maxWidth, font: font)
+                lines.append(contentsOf: splitLines.dropLast())
+                current = splitLines.last ?? ""
+            }
+        }
+
+        if !current.isEmpty {
+            lines.append(current)
+        }
+        return lines
+    }
+
+    private func splitLongWord(_ word: String, maxWidth: CGFloat, font: NSFont) -> [String] {
+        var lines: [String] = []
+        var current = ""
+
+        for character in word {
+            let candidate = current + String(character)
+            if candidate.count > 1, measuredWidth(candidate, font: font) > maxWidth {
+                lines.append(current)
+                current = String(character)
+            } else {
+                current = candidate
+            }
+        }
+
+        if !current.isEmpty {
+            lines.append(current)
+        }
+        return lines
+    }
+
+    private func measuredWidth(_ text: String, font: NSFont) -> CGFloat {
+        attributedText(text, attributes: [.font: font]).boundingRect(
+            with: NSSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude),
             options: [.usesLineFragmentOrigin, .usesFontLeading]
-        )
-        let y = bounds.midY - measured.height / 2
-        return NSRect(x: bounds.minX, y: y, width: bounds.width, height: min(bounds.height, measured.height + 2))
+        ).width
     }
 
     private func pngData(from image: NSImage) -> Data? {
@@ -239,4 +328,10 @@ public struct TranslatedImageRenderer {
     private func attributedText(_ text: String, attributes: [NSAttributedString.Key: Any]) -> NSAttributedString {
         NSAttributedString(string: text, attributes: attributes)
     }
+}
+
+private struct TextLayout {
+    let lines: [String]
+    let fontSize: CGFloat
+    let lineHeight: CGFloat
 }
