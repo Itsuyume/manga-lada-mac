@@ -507,108 +507,29 @@ final class AppState: ObservableObject {
         provider: TranslationProvider,
         configuration: LocalTranslatorConfiguration
     ) async throws -> [TextBlock] {
-        let translator = try makeTranslator(provider: provider, configuration: configuration)
-        let translatedTexts = try await translatedTexts(
-            for: blocks,
-            translator: translator,
-            provider: provider,
-            maxConcurrentRequests: configuration.maxConcurrentRequests
-        )
-
-        return zip(blocks, translatedTexts).map { block, translatedText in
-            var translatedBlock = block
-            translatedBlock.translatedText = translationRefiner.refine(
-                originalText: block.originalText,
-                translatedText: translatedText
-            )
-            return translatedBlock
-        }
-    }
-
-    private func translatedTexts(
-        for blocks: [TextBlock],
-        translator: TextTranslating,
-        provider: TranslationProvider,
-        maxConcurrentRequests: Int
-    ) async throws -> [String] {
-        if let batchTranslator = translator as? BatchTextTranslating {
-            statusMessage = "\(provider.displayName) 배치 번역 중... \(blocks.count)개"
-            return try await batchTranslator.translate(
-                blocks.map(\.originalText),
-                source: sourceLanguage,
-                target: targetLanguage
-            )
-        }
-
-        let concurrency = min(max(maxConcurrentRequests, 1), max(blocks.count, 1))
-        var translatedTexts = Array(repeating: "", count: blocks.count)
-        var completedCount = 0
-
-        for chunkStart in stride(from: 0, to: blocks.count, by: concurrency) {
-            let chunkEnd = min(chunkStart + concurrency, blocks.count)
-            try await withThrowingTaskGroup(of: (Int, String).self) { group in
-                for index in chunkStart..<chunkEnd {
-                    let block = blocks[index]
-                    let source = sourceLanguage
-                    let target = targetLanguage
-                    group.addTask {
-                        let translated = try await translator.translate(
-                            block.originalText,
-                            source: source,
-                            target: target
-                        )
-                        return (index, translated)
-                    }
+        let pipeline = TranslationPipeline(
+            sourceLanguage: sourceLanguage,
+            targetLanguage: targetLanguage,
+            refiner: translationRefiner
+        ) { [weak self] progress in
+            await MainActor.run {
+                guard let self else {
+                    return
                 }
-
-                for try await (index, translated) in group {
-                    translatedTexts[index] = translated
-                    completedCount += 1
-                    statusMessage = "\(provider.displayName) 번역 중... \(completedCount) / \(blocks.count)"
-                }
+                self.statusMessage = progress.isBatch
+                    ? "\(progress.provider.displayName) 배치 번역 중... \(progress.completed) / \(progress.total)"
+                    : "\(progress.provider.displayName) 번역 중... \(progress.completed) / \(progress.total)"
             }
         }
-
-        return translatedTexts
-    }
-
-    private func makeTranslator(
-        provider: TranslationProvider,
-        configuration: LocalTranslatorConfiguration
-    ) throws -> TextTranslating {
-        switch provider {
-        case .ballonsGoogle, .googleWeb:
-            return translator
-        case .deepl:
-            guard let apiKey = configuration.deepl.apiKey else {
-                throw TranslationError.missingConfiguration("DeepL API 키가 없습니다: \(AppPaths.translatorConfigURL.path)")
-            }
-            return DeepLTranslator(
-                apiKey: apiKey,
-                endpoint: configuration.deepl.endpoint,
-                context: configuration.deepl.context
+        do {
+            return try await pipeline.translate(
+                blocks,
+                provider: provider,
+                configuration: configuration,
+                fallbackTranslator: translator
             )
-        case .papago:
-            guard let clientID = configuration.papago.clientID,
-                  let clientSecret = configuration.papago.clientSecret else {
-                throw TranslationError.missingConfiguration("Papago clientId/clientSecret이 없습니다: \(AppPaths.translatorConfigURL.path)")
-            }
-            return PapagoTranslator(
-                clientID: clientID,
-                clientSecret: clientSecret,
-                endpoint: configuration.papago.endpoint
-            )
-        case .llm:
-            return OpenAICompatibleTranslator(
-                apiKey: configuration.llm.apiKey,
-                endpoint: configuration.llm.endpoint,
-                model: configuration.llm.model
-            )
-        case .ollama:
-            return OllamaTranslator(
-                endpoint: configuration.ollama.endpoint,
-                model: configuration.ollama.model
-            )
+        } catch TranslationError.missingConfiguration(let message) {
+            throw TranslationError.missingConfiguration("\(message) \(AppPaths.translatorConfigURL.path)")
         }
     }
 
