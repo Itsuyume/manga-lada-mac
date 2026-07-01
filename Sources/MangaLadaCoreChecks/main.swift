@@ -17,6 +17,7 @@ struct MangaLadaCoreChecks {
         try await checkOpenAICompatibleTranslatorSendsChatRequest()
         try await checkOllamaTranslatorSendsLocalChatRequest()
         try await checkTranslationPipelineBatchesAndRefinesBlocks()
+        try await checkTranslationPipelineRunsNonBatchRequestsConcurrently()
         try checkKoreanTranslationRefinerFixesKnownMistranslations()
         try checkKoreanTranslationRefinerLeavesUnrelatedTextAlone()
         try await checkPassthroughTranslatorRejectsBlankInput()
@@ -331,6 +332,28 @@ struct MangaLadaCoreChecks {
         try require(await recorder.lastTexts == ["天王寺さんのまんこっと", "子種"], "Pipeline did not preserve source block order.")
     }
 
+    private static func checkTranslationPipelineRunsNonBatchRequestsConcurrently() async throws {
+        let recorder = ParallelCallRecorder()
+        let fallbackTranslator = SlowSpyTranslator(recorder: recorder)
+        let configuration = LocalTranslatorConfiguration(defaultProvider: .googleWeb, maxConcurrentRequests: 2)
+        let blocks = [
+            TextBlock(box: TextBox(x: 0, y: 0, width: 0.1, height: 0.1), originalText: "一"),
+            TextBlock(box: TextBox(x: 0, y: 0.2, width: 0.1, height: 0.1), originalText: "二"),
+            TextBlock(box: TextBox(x: 0, y: 0.4, width: 0.1, height: 0.1), originalText: "三")
+        ]
+        let pipeline = TranslationPipeline(sourceLanguage: .japanese, targetLanguage: .korean)
+        let translated = try await pipeline.translate(
+            blocks,
+            provider: .googleWeb,
+            configuration: configuration,
+            fallbackTranslator: fallbackTranslator
+        )
+
+        try require(translated.map(\.translatedText) == ["번역: 一", "번역: 二", "번역: 三"], "Concurrent pipeline did not preserve result order.")
+        try require(await recorder.maxActive == 2, "Concurrent pipeline did not honor maxConcurrentRequests.")
+        try require(await recorder.startedTexts == ["一", "二", "三"], "Concurrent pipeline did not submit all source blocks.")
+    }
+
     private static func checkKoreanTranslationRefinerFixesKnownMistranslations() throws {
         let refiner = KoreanTranslationRefiner()
 
@@ -548,5 +571,32 @@ private struct BatchSpyTranslator: BatchTextTranslating {
     func translate(_ texts: [String], source: LanguageCode, target: LanguageCode) async throws -> [String] {
         await recorder.record(texts)
         return translatedTexts
+    }
+}
+
+private actor ParallelCallRecorder {
+    private(set) var active = 0
+    private(set) var maxActive = 0
+    private(set) var startedTexts: [String] = []
+
+    func start(_ text: String) {
+        active += 1
+        maxActive = max(maxActive, active)
+        startedTexts.append(text)
+    }
+
+    func finish() {
+        active -= 1
+    }
+}
+
+private struct SlowSpyTranslator: TextTranslating {
+    let recorder: ParallelCallRecorder
+
+    func translate(_ text: String, source: LanguageCode, target: LanguageCode) async throws -> String {
+        await recorder.start(text)
+        try await Task.sleep(nanoseconds: 50_000_000)
+        await recorder.finish()
+        return "번역: \(text)"
     }
 }
