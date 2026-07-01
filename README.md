@@ -8,7 +8,7 @@ MacBook에서 일본 만화 이미지를 열고 스페이스바로 OCR/번역을
 - 방향키로 페이지 이동
 - 스페이스바로 일본어 OCR과 한국어 번역 실행
 - BallonsTranslator 엔진이 있으면 텍스트 검출, OCR, 원문 제거를 실행
-- 번역은 로컬 Ollama만 사용
+- 번역은 Swift 내장 Google 번역기만 사용
 - 원문 제거 이미지 위에 Swift 렌더러가 한국어 문장을 박스 안에 맞춰 다시 식자
 - 엔진이 없으면 macOS Vision 기반 내장 OCR로 fallback
 - 번역 결과를 실제 PNG 이미지로 저장
@@ -20,7 +20,7 @@ MacBook에서 일본 만화 이미지를 열고 스페이스바로 OCR/번역을
 - UI: SwiftUI
 - 고품질 텍스트 검출/OCR/원문 제거 엔진: [dmMaze/BallonsTranslator](https://github.com/dmMaze/BallonsTranslator)를 외부 Python 엔진으로 실행
 - fallback OCR: macOS Vision framework
-- 번역: 로컬 Ollama (`gemma3:4b` 기본값)
+- 번역: Swift `GoogleWebTranslator`
 - 캐시: `Application Support/Manga Lada/Cache`
 - Ballons/Swift 합성 결과: `Application Support/Manga Lada/BallonsRuns`
 - ZIP/CBZ: `Application Support/Manga Lada/Archives`에 자동 압축 해제
@@ -38,7 +38,7 @@ MacBook에서 일본 만화 이미지를 열고 스페이스바로 OCR/번역을
 
 ## 로컬 번역기 설정
 
-번역기는 Ollama 하나만 사용합니다. 별도 API 키는 필요 없고, 아래 로컬 파일에서 모델과 동시 요청 수만 조정할 수 있습니다.
+번역기는 Swift 내장 Google 번역기 하나만 사용합니다. 별도 API 키는 필요 없고, 아래 로컬 파일에서 동시 요청 수만 조정할 수 있습니다.
 
 ```text
 ~/Library/Application Support/Manga Lada/translator.local.json
@@ -48,20 +48,8 @@ MacBook에서 일본 만화 이미지를 열고 스페이스바로 OCR/번역을
 
 ```json
 {
-  "maxConcurrentRequests": 2,
-  "ollama": {
-    "endpoint": "http://127.0.0.1:11434/api/chat",
-    "model": "gemma3:4b"
-  }
+  "maxConcurrentRequests": 2
 }
-```
-
-로컬 Ollama는 다음 순서로 준비합니다.
-
-```bash
-brew install ollama
-brew services start ollama
-ollama pull gemma3:4b
 ```
 
 `maxConcurrentRequests`는 동시에 번역할 말풍선 수이며 1부터 8 사이로 제한됩니다.
@@ -87,7 +75,7 @@ Ballons 엔진까지 포함해 실제 만화 페이지를 확인하려면 `./scr
 ```bash
 swift run MangaLadaBallonsChecks /path/to/manga-page.png
 swift run MangaLadaBallonsChecks --ocr-only /path/to/manga-page.png
-swift run MangaLadaBallonsChecks --ollama /path/to/manga-page.png
+swift run MangaLadaBallonsChecks --google /path/to/manga-page.png
 ```
 
 앱에서는 페이지를 열고 스페이스바를 누르면 같은 엔진 경로를 사용합니다.

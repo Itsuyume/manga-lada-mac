@@ -81,7 +81,7 @@ public struct TranslationPipeline: Sendable {
                     completedCount += 1
                     await progress?(
                         TranslationProgress(
-                            provider: .ollama,
+                            provider: .googleWeb,
                             completed: completedCount,
                             total: texts.count
                         )
@@ -95,10 +95,7 @@ public struct TranslationPipeline: Sendable {
 }
 
 public enum TranslatorFactory {
-    public static func makeTranslator(configuration: LocalTranslatorConfiguration) -> TextTranslating {
-        OllamaTranslator(
-            endpoint: configuration.ollama.endpoint,
-            model: configuration.ollama.model
-        )
+    public static func makeTranslator(configuration _: LocalTranslatorConfiguration) -> TextTranslating {
+        GoogleWebTranslator()
     }
 }

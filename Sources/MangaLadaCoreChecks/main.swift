@@ -9,8 +9,9 @@ struct MangaLadaCoreChecks {
         try checkArchiveExtractorExtractsZipForRecursiveScanning()
         try checkCacheRoundTripsTranslationByFingerprint()
         try checkLocalTranslatorConfigurationLoadsFileAndEnvironmentOverrides()
-        try checkOllamaTranslatorResponseParser()
-        try await checkOllamaTranslatorSendsLocalChatRequest()
+        try checkGoogleTranslatorParsesNestedResponseText()
+        try checkGoogleTranslatorRejectsEmptyParsedText()
+        try checkGoogleTranslatorBuildsExpectedRequestURL()
         try await checkTranslationPipelineTranslatesAndRefinesBlocks()
         try await checkTranslationPipelineRunsNonBatchRequestsConcurrently()
         try checkKoreanTranslationRefinerFixesKnownMistranslations()
@@ -118,11 +119,7 @@ struct MangaLadaCoreChecks {
         let configURL = root.appendingPathComponent("translator.local.json")
         let json = """
         {
-          "maxConcurrentRequests": 3,
-          "ollama": {
-            "endpoint": "http://127.0.0.1:11434",
-            "model": "file-ollama"
-          }
+          "maxConcurrentRequests": 3
         }
         """
         try json.write(to: configURL, atomically: true, encoding: .utf8)
@@ -130,51 +127,49 @@ struct MangaLadaCoreChecks {
         let configuration = try LocalTranslatorConfiguration.load(
             configURL: configURL,
             environment: [
-                "MANGA_LADA_MAX_CONCURRENT_TRANSLATIONS": "6",
-                "MANGA_LADA_OLLAMA_MODEL": "env-ollama"
+                "MANGA_LADA_MAX_CONCURRENT_TRANSLATIONS": "6"
             ]
         )
 
         try require(configuration.maxConcurrentRequests == 6, "Environment did not override concurrency.")
-        try require(configuration.ollama.model == "env-ollama", "Environment did not override Ollama model.")
-        try require(configuration.ollama.endpoint.absoluteString == "http://127.0.0.1:11434", "Ollama endpoint was not loaded.")
-        try require(configuration.cacheKey == "ollama-env-ollama", "Ollama cache key did not include model.")
+        try require(configuration.cacheKey == "google-web", "Google cache key mismatch.")
     }
 
-    private static func checkOllamaTranslatorResponseParser() throws {
-        let ollamaJSON = #"{"message":{"role":"assistant","content":"```ko\n좋습니다\n```"}}"#
-        let ollama = try OllamaTranslator.parseTranslationResponse(Data(ollamaJSON.utf8))
-        try require(ollama == "좋습니다", "Ollama response parser returned wrong text.")
-
-        let labeledOllamaJSON = #"{"message":{"role":"assistant","content":"単純文本 翻译：안녕하세요"}}"#
-        let labeledOllama = try OllamaTranslator.parseTranslationResponse(Data(labeledOllamaJSON.utf8))
-        try require(labeledOllama == "안녕하세요", "Ollama parser did not remove translation labels.")
-
-        let mixedScriptOllamaJSON = #"{"message":{"role":"assistant","content":"천왕사-san自身的話이라니"}}"#
-        let mixedScriptOllama = try OllamaTranslator.parseTranslationResponse(Data(mixedScriptOllamaJSON.utf8))
-        try require(mixedScriptOllama == "천왕사 이라니", "Ollama parser did not remove source-script residue.")
+    private static func checkGoogleTranslatorParsesNestedResponseText() throws {
+        let json = #"[[["안녕","こんにちは",null,null,1]],null,"ja"]"#
+        let translated = try GoogleWebTranslator.parseTranslationResponse(Data(json.utf8))
+        try require(translated == "안녕", "Google response parser returned wrong text.")
     }
 
-    private static func checkOllamaTranslatorSendsLocalChatRequest() async throws {
-        let session = mockSession { request in
-            try require(request.url?.path == "/api/chat", "Ollama endpoint was not normalized to /api/chat.")
-            try require(request.value(forHTTPHeaderField: "Authorization") == nil, "Ollama request should not send bearer auth.")
-            let body = try jsonObject(from: request) as? [String: Any]
-            try require(body?["model"] as? String == "gemma3:4b", "Ollama model mismatch.")
-            try require(body?["stream"] as? Bool == false, "Ollama request must disable streaming.")
-            let messages = body?["messages"] as? [[String: String]]
-            try require(messages?.last?["content"] == "こんにちは", "Ollama user message mismatch.")
-
-            return okJSON(#"{"message":{"role":"assistant","content":"안녕하세요"}}"#, for: request)
+    private static func checkGoogleTranslatorRejectsEmptyParsedText() throws {
+        let json = #"[[["","",null,null,1]],null,"ja"]"#
+        do {
+            _ = try GoogleWebTranslator.parseTranslationResponse(Data(json.utf8))
+            throw CheckError.failed("Google response parser accepted empty translated text.")
+        } catch TranslationError.missingTranslatedText {
+            return
         }
+    }
 
-        let translator = OllamaTranslator(
-            endpoint: URL(string: "http://mock.test")!,
-            model: "gemma3:4b",
-            session: session
+    private static func checkGoogleTranslatorBuildsExpectedRequestURL() throws {
+        let translator = GoogleWebTranslator(endpoint: URL(string: "https://mock.test/translate_a/single")!)
+        let url = try translator.requestURL(
+            text: "こんにちは",
+            source: .japanese,
+            target: .korean
         )
-        let translated = try await translator.translate("こんにちは", source: .japanese, target: .korean)
-        try require(translated == "안녕하세요", "Ollama translation returned wrong text.")
+        let components = try requireValue(
+            URLComponents(url: url, resolvingAgainstBaseURL: false),
+            "Google request URL components missing."
+        )
+        let items = Dictionary(uniqueKeysWithValues: (components.queryItems ?? []).compactMap { item in
+            item.value.map { (item.name, $0) }
+        })
+        try require(items["client"] == "gtx", "Google request client mismatch.")
+        try require(items["sl"] == "ja", "Google request source language mismatch.")
+        try require(items["tl"] == "ko", "Google request target language mismatch.")
+        try require(items["dt"] == "t", "Google request translation mode mismatch.")
+        try require(items["q"] == "こんにちは", "Google request text mismatch.")
     }
 
     private static func checkTranslationPipelineTranslatesAndRefinesBlocks() async throws {
@@ -313,63 +308,6 @@ struct MangaLadaCoreChecks {
         return value
     }
 
-    private static func mockSession(
-        handler: @escaping (URLRequest) throws -> (HTTPURLResponse, Data)
-    ) -> URLSession {
-        MockURLProtocol.requestCount = 0
-        MockURLProtocol.handler = handler
-        let configuration = URLSessionConfiguration.ephemeral
-        configuration.protocolClasses = [MockURLProtocol.self]
-        return URLSession(configuration: configuration)
-    }
-
-    private static func okJSON(_ json: String, for request: URLRequest) -> (HTTPURLResponse, Data) {
-        (
-            HTTPURLResponse(
-                url: request.url!,
-                statusCode: 200,
-                httpVersion: "HTTP/1.1",
-                headerFields: ["Content-Type": "application/json"]
-            )!,
-            Data(json.utf8)
-        )
-    }
-
-    private static func jsonObject(from request: URLRequest) throws -> Any {
-        guard let data = bodyData(from: request) else {
-            throw CheckError.failed("Request has no JSON body.")
-        }
-        return try JSONSerialization.jsonObject(with: data)
-    }
-
-    private static func bodyData(from request: URLRequest) -> Data? {
-        if let body = request.httpBody {
-            return body
-        }
-
-        guard let stream = request.httpBodyStream else {
-            return nil
-        }
-
-        stream.open()
-        defer { stream.close() }
-
-        var data = Data()
-        let bufferSize = 4096
-        let buffer = UnsafeMutablePointer<UInt8>.allocate(capacity: bufferSize)
-        defer { buffer.deallocate() }
-
-        while stream.hasBytesAvailable {
-            let count = stream.read(buffer, maxLength: bufferSize)
-            if count > 0 {
-                data.append(buffer, count: count)
-            } else {
-                break
-            }
-        }
-
-        return data
-    }
 }
 
 private enum CheckError: LocalizedError {
@@ -381,38 +319,6 @@ private enum CheckError: LocalizedError {
             return message
         }
     }
-}
-
-private final class MockURLProtocol: URLProtocol, @unchecked Sendable {
-    nonisolated(unsafe) static var handler: ((URLRequest) throws -> (HTTPURLResponse, Data))?
-    nonisolated(unsafe) static var requestCount = 0
-
-    override class func canInit(with request: URLRequest) -> Bool {
-        true
-    }
-
-    override class func canonicalRequest(for request: URLRequest) -> URLRequest {
-        request
-    }
-
-    override func startLoading() {
-        Self.requestCount += 1
-        guard let handler = Self.handler else {
-            client?.urlProtocol(self, didFailWithError: CheckError.failed("Mock URL handler missing."))
-            return
-        }
-
-        do {
-            let (response, data) = try handler(request)
-            client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
-            client?.urlProtocol(self, didLoad: data)
-            client?.urlProtocolDidFinishLoading(self)
-        } catch {
-            client?.urlProtocol(self, didFailWithError: error)
-        }
-    }
-
-    override func stopLoading() {}
 }
 
 private actor TextCallRecorder {

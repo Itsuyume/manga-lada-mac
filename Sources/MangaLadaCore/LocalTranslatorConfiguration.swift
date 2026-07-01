@@ -2,14 +2,11 @@ import Foundation
 
 public struct LocalTranslatorConfiguration: Equatable, Sendable {
     public let maxConcurrentRequests: Int
-    public let ollama: OllamaConfiguration
 
     public init(
-        maxConcurrentRequests: Int = 4,
-        ollama: OllamaConfiguration = OllamaConfiguration()
+        maxConcurrentRequests: Int = 4
     ) {
         self.maxConcurrentRequests = min(max(maxConcurrentRequests, 1), 8)
-        self.ollama = ollama
     }
 
     public static func load(
@@ -23,41 +20,17 @@ public struct LocalTranslatorConfiguration: Equatable, Sendable {
             ?? 4
 
         return LocalTranslatorConfiguration(
-            maxConcurrentRequests: maxConcurrentRequests,
-            ollama: OllamaConfiguration(
-                endpoint: url(
-                    firstNonBlank(environment["MANGA_LADA_OLLAMA_ENDPOINT"], file?.ollama?.endpoint),
-                    fallback: OllamaConfiguration.defaultEndpoint
-                ),
-                model: firstNonBlank(
-                    environment["MANGA_LADA_OLLAMA_MODEL"],
-                    file?.ollama?.model
-                ) ?? OllamaConfiguration.defaultModel
-            )
+            maxConcurrentRequests: maxConcurrentRequests
         )
     }
 
     public var cacheKey: String {
-        "\(TranslationProvider.ollama.cacheKey)-\(ollama.model)"
-    }
-}
-
-public struct OllamaConfiguration: Equatable, Sendable {
-    public static let defaultEndpoint = URL(string: "http://127.0.0.1:11434/api/chat")!
-    public static let defaultModel = "gemma3:4b"
-
-    public let endpoint: URL
-    public let model: String
-
-    public init(endpoint: URL = Self.defaultEndpoint, model: String = Self.defaultModel) {
-        self.endpoint = endpoint
-        self.model = model
+        TranslationProvider.googleWeb.cacheKey
     }
 }
 
 private struct LocalTranslatorConfigurationFile: Decodable {
     let maxConcurrentRequests: Int?
-    let ollama: OllamaSection?
 
     static func load(from url: URL) throws -> LocalTranslatorConfigurationFile? {
         guard FileManager.default.fileExists(atPath: url.path) else {
@@ -72,23 +45,4 @@ private struct LocalTranslatorConfigurationFile: Decodable {
             )
         }
     }
-}
-
-private struct OllamaSection: Decodable {
-    let endpoint: String?
-    let model: String?
-}
-
-private func firstNonBlank(_ values: String?...) -> String? {
-    values.lazy.compactMap { value in
-        let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines)
-        return trimmed?.isEmpty == false ? trimmed : nil
-    }.first
-}
-
-private func url(_ value: String?, fallback: URL) -> URL {
-    guard let value, let url = URL(string: value) else {
-        return fallback
-    }
-    return url
 }

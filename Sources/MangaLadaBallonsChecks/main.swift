@@ -63,7 +63,7 @@ struct MangaLadaBallonsChecks {
         _ translation: PageTranslation,
         options: BallonsCheckOptions
     ) async throws -> PageTranslation {
-        if options.useOllama {
+        if options.useGoogle {
             return try await localTranslation(translation)
         }
         if options.ocrOnly {
@@ -132,16 +132,16 @@ struct MangaLadaBallonsChecks {
 private struct BallonsCheckOptions {
     let imagePath: String
     let ocrOnly: Bool
-    let useOllama: Bool
+    let useGoogle: Bool
 
     var usesBallonsTranslation: Bool {
-        !useOllama && !ocrOnly
+        !useGoogle && !ocrOnly
     }
 
     static func parse(_ arguments: [String]) throws -> BallonsCheckOptions {
         var imagePath: String?
         var ocrOnly = false
-        var useOllama = false
+        var useGoogle = false
         var index = 1
 
         while index < arguments.count {
@@ -151,8 +151,8 @@ private struct BallonsCheckOptions {
                 index += 1
                 continue
             }
-            if argument == "--ollama" {
-                useOllama = true
+            if argument == "--google" {
+                useGoogle = true
                 index += 1
                 continue
             }
@@ -161,10 +161,10 @@ private struct BallonsCheckOptions {
                 guard providerIndex < arguments.count else {
                     throw BallonsCheckError.missingProviderValue
                 }
-                guard arguments[providerIndex] == TranslationProvider.ollama.rawValue else {
+                guard arguments[providerIndex] == TranslationProvider.googleWeb.rawValue else {
                     throw BallonsCheckError.invalidProvider(arguments[providerIndex])
                 }
-                useOllama = true
+                useGoogle = true
                 index += 2
                 continue
             }
@@ -178,7 +178,7 @@ private struct BallonsCheckOptions {
         guard let imagePath else {
             throw BallonsCheckError.missingImageArgument
         }
-        return BallonsCheckOptions(imagePath: imagePath, ocrOnly: ocrOnly, useOllama: useOllama)
+        return BallonsCheckOptions(imagePath: imagePath, ocrOnly: ocrOnly, useGoogle: useGoogle)
     }
 }
 
@@ -196,9 +196,9 @@ private enum BallonsCheckError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .missingImageArgument:
-            return "Usage: swift run MangaLadaBallonsChecks [--ocr-only] [--ollama] /path/to/page.png"
+            return "Usage: swift run MangaLadaBallonsChecks [--ocr-only] [--google] /path/to/page.png"
         case .missingProviderValue:
-            return "--local-provider requires a provider raw value, for example: ollama"
+            return "--local-provider requires a provider raw value, for example: google_web"
         case .invalidProvider(let provider):
             return "Unknown local provider: \(provider)"
         case .imageMissing(let url):
@@ -208,7 +208,7 @@ private enum BallonsCheckError: LocalizedError {
         case .emptyTranslation:
             return "Ballons returned no translation blocks."
         case .missingKoreanOutput:
-            return "Ollama did not return Korean text."
+            return "Google did not return Korean text."
         case .inpaintedImageMissing(let url):
             return "Inpainted Ballons image is missing: \(url.path)"
         case .renderedImageMissing(let url):

@@ -452,7 +452,7 @@ final class AppState: ObservableObject {
             return
         }
 
-        statusMessage = "Ollama로 한국어 번역 중..."
+        statusMessage = "Google로 한국어 번역 중..."
         let translatedBlocks = try await translate(
             blocks,
             configuration: LocalTranslatorConfiguration.load(configURL: AppPaths.translatorConfigURL)
@@ -473,7 +473,7 @@ final class AppState: ObservableObject {
     private func cacheFingerprint(baseFingerprint: String) -> String {
         let engineVersion = ballonsEngine.isInstalled ? "ballons-v5" : "vision-v4"
         let configuration = try? LocalTranslatorConfiguration.load(configURL: AppPaths.translatorConfigURL)
-        let providerKey = configuration?.cacheKey ?? TranslationProvider.ollama.cacheKey
+        let providerKey = configuration?.cacheKey ?? TranslationProvider.googleWeb.cacheKey
         return "\(baseFingerprint)-\(engineVersion)-\(providerKey)"
     }
 

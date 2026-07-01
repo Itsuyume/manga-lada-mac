@@ -1,12 +1,12 @@
 import Foundation
 
 public enum TranslationProvider: String, CaseIterable, Codable, Equatable, Identifiable, Sendable {
-    case ollama = "ollama"
+    case googleWeb = "google_web"
 
     public var id: String { rawValue }
 
     public var displayName: String {
-        "Ollama"
+        "Google"
     }
 
     public var cacheKey: String {
