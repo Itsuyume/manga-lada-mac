@@ -1,5 +1,6 @@
 import AppKit
 import Foundation
+import MangaLadaBallons
 import MangaLadaCore
 import MangaLadaRendering
 import MangaLadaVision
@@ -10,6 +11,7 @@ final class AppState: ObservableObject {
     @Published private(set) var pages: [ImagePage] = []
     @Published private(set) var currentIndex: Int = 0
     @Published private(set) var currentImage: NSImage?
+    @Published private(set) var renderedTranslationImage: NSImage?
     @Published private(set) var translation: PageTranslation?
     @Published private(set) var isBusy = false
     @Published private(set) var statusMessage = "이미지 또는 폴더를 열어주세요."
@@ -24,9 +26,11 @@ final class AppState: ObservableObject {
     private let fingerprintMaker: ImageFingerprint
     private let cache: TranslationCache
     private let archiveExtractor: ArchiveExtractor
+    private let ballonsEngine: BallonsTranslatorEngine
     private let translatedImageRenderer: TranslatedImageRenderer
     private let ocrService: VisionOCRService
     private let translator: TextTranslating
+    private var renderedTranslationImageURL: URL?
     private var preferredExportDirectory: URL?
 
     init(
@@ -34,6 +38,9 @@ final class AppState: ObservableObject {
         fingerprintMaker: ImageFingerprint = ImageFingerprint(),
         cache: TranslationCache = TranslationCache(cacheDirectory: AppPaths.cacheDirectory),
         archiveExtractor: ArchiveExtractor = ArchiveExtractor(extractionRoot: AppPaths.archiveDirectory),
+        ballonsEngine: BallonsTranslatorEngine = BallonsTranslatorEngine.standard(
+            applicationSupportDirectory: AppPaths.applicationSupportDirectory
+        ),
         translatedImageRenderer: TranslatedImageRenderer = TranslatedImageRenderer(),
         ocrService: VisionOCRService = VisionOCRService(),
         translator: TextTranslating = GoogleWebTranslator()
@@ -42,6 +49,7 @@ final class AppState: ObservableObject {
         self.fingerprintMaker = fingerprintMaker
         self.cache = cache
         self.archiveExtractor = archiveExtractor
+        self.ballonsEngine = ballonsEngine
         self.translatedImageRenderer = translatedImageRenderer
         self.ocrService = ocrService
         self.translator = translator
@@ -62,6 +70,10 @@ final class AppState: ObservableObject {
     }
 
     var canExportCurrentTranslation: Bool {
+        if renderedTranslationImageURL != nil {
+            return true
+        }
+
         guard let translation else {
             return false
         }
@@ -228,53 +240,23 @@ final class AppState: ObservableObject {
         }
 
         isBusy = true
+        defer { isBusy = false }
         errorMessage = nil
-        statusMessage = "OCR 준비 중..."
+        statusMessage = "번역 준비 중..."
 
         do {
-            let fingerprint = try fingerprintMaker.make(for: page.url)
-            if !force, let cached = try cache.load(fingerprint: fingerprint) {
-                translation = cached
-                mode = .translated
-                statusMessage = "캐시에서 번역을 불러왔습니다."
-                isBusy = false
+            let baseFingerprint = try fingerprintMaker.make(for: page.url)
+            let fingerprint = cacheFingerprint(baseFingerprint: baseFingerprint)
+
+            if ballonsEngine.isInstalled {
+                try await translateWithBallons(page: page, fingerprint: fingerprint, force: force)
                 return
             }
 
-            statusMessage = "일본어 텍스트 인식 중..."
-            let blocks = try await ocrService.recognizeText(in: page.url)
-            guard !blocks.isEmpty else {
-                translation = PageTranslation(
-                    imageURL: page.url,
-                    imageFingerprint: fingerprint,
-                    sourceLanguage: sourceLanguage,
-                    targetLanguage: targetLanguage,
-                    blocks: []
-                )
-                mode = .translated
-                statusMessage = "인식된 텍스트가 없습니다."
-                isBusy = false
-                return
-            }
-
-            statusMessage = "한국어 번역 중..."
-            let translatedBlocks = try await translate(blocks)
-            let pageTranslation = PageTranslation(
-                imageURL: page.url,
-                imageFingerprint: fingerprint,
-                sourceLanguage: sourceLanguage,
-                targetLanguage: targetLanguage,
-                blocks: translatedBlocks
-            )
-            try cache.save(pageTranslation)
-            translation = pageTranslation
-            mode = .translated
-            statusMessage = "번역 완료: \(translatedBlocks.count)개 텍스트 블록"
+            try await translateWithVision(page: page, fingerprint: fingerprint, force: force)
         } catch {
             show(error, prefix: "번역에 실패했습니다.")
         }
-
-        isBusy = false
     }
 
     func clearCurrentCacheAndRetranslate() async {
@@ -283,8 +265,12 @@ final class AppState: ObservableObject {
         }
 
         do {
-            let fingerprint = try fingerprintMaker.make(for: page.url)
+            let baseFingerprint = try fingerprintMaker.make(for: page.url)
+            let fingerprint = cacheFingerprint(baseFingerprint: baseFingerprint)
             try cache.delete(fingerprint: fingerprint)
+            if ballonsEngine.isInstalled {
+                try ballonsEngine.clearRun(runID: fingerprint)
+            }
             await translateCurrentPage(force: true)
         } catch {
             show(error, prefix: "캐시를 지우지 못했습니다.")
@@ -297,7 +283,7 @@ final class AppState: ObservableObject {
             return
         }
 
-        guard let translation else {
+        guard translation != nil || renderedTranslationImageURL != nil else {
             errorMessage = "먼저 번역을 실행해주세요."
             return
         }
@@ -316,14 +302,26 @@ final class AppState: ObservableObject {
         statusMessage = "번역본 PNG 저장 중..."
 
         do {
-            let rendered = try translatedImageRenderer.writePNG(
-                sourceImageURL: page.url,
-                translation: translation,
-                destinationURL: destinationURL,
-                fontScale: overlayFontScale
-            )
-            statusMessage = "번역본 저장 완료: \(rendered.url.lastPathComponent)"
-            NSWorkspace.shared.activateFileViewerSelecting([rendered.url])
+            if let renderedTranslationImageURL {
+                if renderedTranslationImageURL.standardizedFileURL != destinationURL.standardizedFileURL {
+                    let fileManager = FileManager.default
+                    if fileManager.fileExists(atPath: destinationURL.path) {
+                        try fileManager.removeItem(at: destinationURL)
+                    }
+                    try fileManager.copyItem(at: renderedTranslationImageURL, to: destinationURL)
+                }
+                statusMessage = "번역본 저장 완료: \(destinationURL.lastPathComponent)"
+                NSWorkspace.shared.activateFileViewerSelecting([destinationURL])
+            } else if let translation {
+                let rendered = try translatedImageRenderer.writePNG(
+                    sourceImageURL: page.url,
+                    translation: translation,
+                    destinationURL: destinationURL,
+                    fontScale: overlayFontScale
+                )
+                statusMessage = "번역본 저장 완료: \(rendered.url.lastPathComponent)"
+                NSWorkspace.shared.activateFileViewerSelecting([rendered.url])
+            }
         } catch {
             show(error, prefix: "번역본 저장에 실패했습니다.")
         }
@@ -334,6 +332,8 @@ final class AppState: ObservableObject {
     private func loadCurrentPage() async throws {
         guard let page = currentPage else {
             currentImage = nil
+            renderedTranslationImage = nil
+            renderedTranslationImageURL = nil
             translation = nil
             statusMessage = "이미지 또는 폴더를 열어주세요."
             return
@@ -344,19 +344,114 @@ final class AppState: ObservableObject {
         }
 
         currentImage = image
+        renderedTranslationImage = nil
+        renderedTranslationImageURL = nil
         mode = .imageOnly
         statusMessage = page.url.lastPathComponent
         errorMessage = nil
 
-        let fingerprint = try fingerprintMaker.make(for: page.url)
+        let baseFingerprint = try fingerprintMaker.make(for: page.url)
+        let fingerprint = cacheFingerprint(baseFingerprint: baseFingerprint)
         translation = try cache.load(fingerprint: fingerprint)
         if translation != nil {
             statusMessage = "캐시 있음: \(page.url.lastPathComponent)"
+            if ballonsEngine.isInstalled {
+                let renderedURL = ballonsEngine.renderedImageURL(runID: fingerprint)
+                if let renderedImage = NSImage(contentsOf: renderedURL) {
+                    renderedTranslationImage = renderedImage
+                    renderedTranslationImageURL = renderedURL
+                    statusMessage = "고품질 캐시 있음: \(page.url.lastPathComponent)"
+                }
+            }
         }
 
         if autoTranslate {
             await translateCurrentPage(force: false)
         }
+    }
+
+    private func translateWithBallons(page: ImagePage, fingerprint: String, force: Bool) async throws {
+        renderedTranslationImage = nil
+        renderedTranslationImageURL = nil
+
+        if !force, let cached = try cache.load(fingerprint: fingerprint) {
+            let renderedURL = ballonsEngine.renderedImageURL(runID: fingerprint)
+            if let renderedImage = NSImage(contentsOf: renderedURL) {
+                translation = cached
+                renderedTranslationImage = renderedImage
+                renderedTranslationImageURL = renderedURL
+                mode = .translated
+                statusMessage = "고품질 캐시에서 번역을 불러왔습니다."
+                return
+            }
+        }
+
+        statusMessage = "BallonsTranslator로 텍스트 검출/OCR/번역/식자 중..."
+        let engine = ballonsEngine
+        let result = try await Task.detached(priority: .userInitiated) {
+            try engine.translate(
+                sourceImageURL: page.url,
+                runID: fingerprint,
+                imageFingerprint: fingerprint
+            )
+        }.value
+
+        guard let renderedImage = NSImage(contentsOf: result.renderedImageURL) else {
+            throw AppStateError.imageLoadFailed(result.renderedImageURL)
+        }
+
+        try cache.save(result.pageTranslation)
+        translation = result.pageTranslation
+        renderedTranslationImage = renderedImage
+        renderedTranslationImageURL = result.renderedImageURL
+        mode = .translated
+        statusMessage = "고품질 번역 완료: \(result.pageTranslation.blocks.count)개 텍스트 블록"
+    }
+
+    private func translateWithVision(page: ImagePage, fingerprint: String, force: Bool) async throws {
+        renderedTranslationImage = nil
+        renderedTranslationImageURL = nil
+
+        if !force, let cached = try cache.load(fingerprint: fingerprint) {
+            translation = cached
+            mode = .translated
+            statusMessage = "내장 OCR 캐시에서 번역을 불러왔습니다."
+            return
+        }
+
+        statusMessage = "내장 Vision OCR로 일본어 텍스트 인식 중..."
+        let blocks = try await ocrService.recognizeText(in: page.url)
+        guard !blocks.isEmpty else {
+            translation = PageTranslation(
+                imageURL: page.url,
+                imageFingerprint: fingerprint,
+                sourceLanguage: sourceLanguage,
+                targetLanguage: targetLanguage,
+                blocks: []
+            )
+            mode = .translated
+            statusMessage = "인식된 텍스트가 없습니다."
+            return
+        }
+
+        statusMessage = "한국어 번역 중..."
+        let translatedBlocks = try await translate(blocks)
+        let pageTranslation = PageTranslation(
+            imageURL: page.url,
+            imageFingerprint: fingerprint,
+            sourceLanguage: sourceLanguage,
+            targetLanguage: targetLanguage,
+            blocks: translatedBlocks
+        )
+        try cache.save(pageTranslation)
+        translation = pageTranslation
+        mode = .translated
+        statusMessage = "번역 완료: \(translatedBlocks.count)개 텍스트 블록"
+    }
+
+    private func cacheFingerprint(baseFingerprint: String) -> String {
+        let engineVersion = ballonsEngine.isInstalled ? "ballons-v1" : "vision-v2"
+        return "\(baseFingerprint)-\(engineVersion)"
     }
 
     private func translate(_ blocks: [TextBlock]) async throws -> [TextBlock] {
@@ -416,19 +511,19 @@ private enum AppStateError: LocalizedError {
 }
 
 private enum AppPaths {
-    static var cacheDirectory: URL {
+    static var applicationSupportDirectory: URL {
         let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)
             .first ?? FileManager.default.temporaryDirectory
-        return base
-            .appendingPathComponent("Manga Lada", isDirectory: true)
+        return base.appendingPathComponent("Manga Lada", isDirectory: true)
+    }
+
+    static var cacheDirectory: URL {
+        applicationSupportDirectory
             .appendingPathComponent("Cache", isDirectory: true)
     }
 
     static var archiveDirectory: URL {
-        let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)
-            .first ?? FileManager.default.temporaryDirectory
-        return base
-            .appendingPathComponent("Manga Lada", isDirectory: true)
+        applicationSupportDirectory
             .appendingPathComponent("Archives", isDirectory: true)
     }
 }

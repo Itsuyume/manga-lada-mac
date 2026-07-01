@@ -139,9 +139,16 @@ private struct ViewerSurface: View {
             Color(nsColor: .textBackgroundColor)
 
             if let image = appState.currentImage {
+                let displayImage = appState.mode == .translated
+                    ? appState.renderedTranslationImage ?? image
+                    : image
+                let overlayBlocks = appState.mode == .translated && appState.renderedTranslationImage == nil
+                    ? appState.translation?.blocks ?? []
+                    : []
+
                 ImageCanvasView(
-                    image: image,
-                    blocks: appState.mode == .translated ? appState.translation?.blocks ?? [] : [],
+                    image: displayImage,
+                    blocks: overlayBlocks,
                     fontScale: appState.overlayFontScale
                 )
                 .padding(18)

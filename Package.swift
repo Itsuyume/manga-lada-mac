@@ -12,7 +12,8 @@ let package = Package(
         .executable(name: "MangaLada", targets: ["MangaLadaApp"]),
         .executable(name: "MangaLadaCoreChecks", targets: ["MangaLadaCoreChecks"]),
         .executable(name: "MangaLadaVisionChecks", targets: ["MangaLadaVisionChecks"]),
-        .executable(name: "MangaLadaRenderingChecks", targets: ["MangaLadaRenderingChecks"])
+        .executable(name: "MangaLadaRenderingChecks", targets: ["MangaLadaRenderingChecks"]),
+        .executable(name: "MangaLadaBallonsChecks", targets: ["MangaLadaBallonsChecks"])
     ],
     targets: [
         .target(
@@ -26,9 +27,13 @@ let package = Package(
             name: "MangaLadaRendering",
             dependencies: ["MangaLadaCore"]
         ),
+        .target(
+            name: "MangaLadaBallons",
+            dependencies: ["MangaLadaCore"]
+        ),
         .executableTarget(
             name: "MangaLadaApp",
-            dependencies: ["MangaLadaCore", "MangaLadaVision", "MangaLadaRendering"]
+            dependencies: ["MangaLadaCore", "MangaLadaVision", "MangaLadaRendering", "MangaLadaBallons"]
         ),
         .executableTarget(
             name: "MangaLadaCoreChecks",
@@ -41,6 +46,10 @@ let package = Package(
         .executableTarget(
             name: "MangaLadaRenderingChecks",
             dependencies: ["MangaLadaCore", "MangaLadaRendering"]
+        ),
+        .executableTarget(
+            name: "MangaLadaBallonsChecks",
+            dependencies: ["MangaLadaCore", "MangaLadaBallons"]
         )
     ]
 )
