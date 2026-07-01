@@ -5,6 +5,8 @@ import MangaLadaCore
 struct MangaLadaCoreChecks {
     static func main() async throws {
         try checkImageScannerKeepsOnlySupportedImagesAndSortsNaturally()
+        try checkImageScannerFindsNestedImagesNaturally()
+        try checkArchiveExtractorExtractsZipForRecursiveScanning()
         try checkCacheRoundTripsTranslationByFingerprint()
         try checkGoogleTranslatorParsesNestedResponseText()
         try checkGoogleTranslatorRejectsEmptyParsedText()
@@ -28,6 +30,55 @@ struct MangaLadaCoreChecks {
         try require(
             pages.map(\.url.lastPathComponent) == ["1.webp", "2.jpg", "10.png"],
             "Image scanner did not filter and naturally sort images."
+        )
+    }
+
+    private static func checkImageScannerFindsNestedImagesNaturally() throws {
+        let root = try temporaryDirectory()
+        let nested = root.appendingPathComponent("chapter")
+        try FileManager.default.createDirectory(at: nested, withIntermediateDirectories: true)
+
+        for url in [
+            nested.appendingPathComponent("10.png"),
+            nested.appendingPathComponent("2.png"),
+            root.appendingPathComponent("cover.jpg"),
+            root.appendingPathComponent("notes.txt")
+        ] {
+            FileManager.default.createFile(atPath: url.path, contents: Data())
+        }
+
+        let pages = try ImageFileScanner().images(in: root, recursive: true)
+        let rootPath = root.standardizedFileURL.path
+        let actualPaths = pages.map { page in
+            page.url.standardizedFileURL.path.replacingOccurrences(of: rootPath + "/", with: "")
+        }
+        try require(
+            actualPaths == ["chapter/2.png", "chapter/10.png", "cover.jpg"],
+            "Recursive scanner did not naturally sort nested images: \(actualPaths)"
+        )
+    }
+
+    private static func checkArchiveExtractorExtractsZipForRecursiveScanning() throws {
+        let root = try temporaryDirectory()
+        let source = root.appendingPathComponent("source", isDirectory: true)
+        let pages = source.appendingPathComponent("pages", isDirectory: true)
+        try FileManager.default.createDirectory(at: pages, withIntermediateDirectories: true)
+
+        FileManager.default.createFile(atPath: pages.appendingPathComponent("02.png").path, contents: Data())
+        FileManager.default.createFile(atPath: pages.appendingPathComponent("01.jpg").path, contents: Data())
+        FileManager.default.createFile(atPath: source.appendingPathComponent("readme.txt").path, contents: Data("skip".utf8))
+
+        let archiveURL = root.appendingPathComponent("comic.cbz")
+        try makeZip(sourceFolderURL: source, archiveURL: archiveURL)
+
+        let extractedURL = try ArchiveExtractor(
+            extractionRoot: root.appendingPathComponent("archives", isDirectory: true)
+        ).extract(archiveURL)
+        let imagePages = try ImageFileScanner().images(in: extractedURL, recursive: true)
+
+        try require(
+            imagePages.map(\.url.lastPathComponent) == ["01.jpg", "02.png"],
+            "Archive extractor did not expose images for recursive scanning."
         )
     }
 
@@ -89,6 +140,25 @@ struct MangaLadaCoreChecks {
             .appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
         return url
+    }
+
+    private static func makeZip(sourceFolderURL: URL, archiveURL: URL) throws {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/zip")
+        process.arguments = ["-qry", archiveURL.path, "."]
+        process.currentDirectoryURL = sourceFolderURL
+
+        let stderr = Pipe()
+        process.standardError = stderr
+
+        try process.run()
+        process.waitUntilExit()
+
+        guard process.terminationStatus == 0 else {
+            let data = stderr.fileHandleForReading.readDataToEndOfFile()
+            let message = String(data: data, encoding: .utf8) ?? ""
+            throw CheckError.failed("Failed to create test zip: \(message)")
+        }
     }
 
     private static func require(_ condition: Bool, _ message: String) throws {

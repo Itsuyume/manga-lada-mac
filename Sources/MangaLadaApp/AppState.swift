@@ -2,6 +2,7 @@ import AppKit
 import Foundation
 import MangaLadaCore
 import MangaLadaVision
+import UniformTypeIdentifiers
 
 @MainActor
 final class AppState: ObservableObject {
@@ -21,6 +22,7 @@ final class AppState: ObservableObject {
     private let scanner: ImageFileScanner
     private let fingerprintMaker: ImageFingerprint
     private let cache: TranslationCache
+    private let archiveExtractor: ArchiveExtractor
     private let ocrService: VisionOCRService
     private let translator: TextTranslating
 
@@ -28,12 +30,14 @@ final class AppState: ObservableObject {
         scanner: ImageFileScanner = ImageFileScanner(),
         fingerprintMaker: ImageFingerprint = ImageFingerprint(),
         cache: TranslationCache = TranslationCache(cacheDirectory: AppPaths.cacheDirectory),
+        archiveExtractor: ArchiveExtractor = ArchiveExtractor(extractionRoot: AppPaths.archiveDirectory),
         ocrService: VisionOCRService = VisionOCRService(),
         translator: TextTranslating = GoogleWebTranslator()
     ) {
         self.scanner = scanner
         self.fingerprintMaker = fingerprintMaker
         self.cache = cache
+        self.archiveExtractor = archiveExtractor
         self.ocrService = ocrService
         self.translator = translator
     }
@@ -52,18 +56,18 @@ final class AppState: ObservableObject {
         return "\(currentIndex + 1) / \(pages.count)"
     }
 
-    func openImageFromPanel() async {
+    func openFileFromPanel() async {
         let panel = NSOpenPanel()
         panel.allowsMultipleSelection = false
         panel.canChooseDirectories = false
         panel.canChooseFiles = true
-        panel.allowedContentTypes = [.image]
+        panel.allowedContentTypes = Self.openableContentTypes
 
         guard panel.runModal() == .OK, let selectedURL = panel.url else {
             return
         }
 
-        await openImage(selectedURL)
+        await openURL(selectedURL)
     }
 
     func openFolderFromPanel() async {
@@ -77,6 +81,30 @@ final class AppState: ObservableObject {
         }
 
         await openFolder(folderURL)
+    }
+
+    func openURL(_ url: URL) async {
+        do {
+            let values = try url.resourceValues(forKeys: [.isDirectoryKey])
+            if values.isDirectory == true {
+                await openFolder(url)
+                return
+            }
+
+            if ImageFileScanner.isSupportedImage(url) {
+                await openImage(url)
+                return
+            }
+
+            if ArchiveExtractor.isSupportedArchive(url) {
+                await openArchive(url)
+                return
+            }
+
+            errorMessage = "지원하지 않는 파일 형식입니다: \(url.lastPathComponent)"
+        } catch {
+            show(error, prefix: "파일을 열지 못했습니다.")
+        }
     }
 
     func openImage(_ imageURL: URL) async {
@@ -97,17 +125,7 @@ final class AppState: ObservableObject {
 
     func openFolder(_ folderURL: URL) async {
         do {
-            let contents = try FileManager.default.contentsOfDirectory(
-                at: folderURL,
-                includingPropertiesForKeys: [.isRegularFileKey],
-                options: [.skipsHiddenFiles]
-            )
-            let imagePages = contents
-                .filter(ImageFileScanner.isSupportedImage)
-                .sorted { lhs, rhs in
-                    lhs.lastPathComponent.localizedStandardCompare(rhs.lastPathComponent) == .orderedAscending
-                }
-                .map(ImagePage.init(url:))
+            let imagePages = try scanner.images(in: folderURL, recursive: false)
 
             guard !imagePages.isEmpty else {
                 errorMessage = "폴더 안에서 지원되는 이미지 파일을 찾지 못했습니다."
@@ -120,6 +138,38 @@ final class AppState: ObservableObject {
         } catch {
             show(error, prefix: "폴더를 열지 못했습니다.")
         }
+    }
+
+    func openArchive(_ archiveURL: URL) async {
+        guard ArchiveExtractor.isSupportedArchive(archiveURL) else {
+            errorMessage = "지원하지 않는 압축 파일입니다: \(archiveURL.lastPathComponent)"
+            return
+        }
+
+        isBusy = true
+        errorMessage = nil
+        statusMessage = "ZIP 압축 해제 중..."
+
+        do {
+            let extractor = archiveExtractor
+            let extractedFolderURL = try await Task.detached(priority: .userInitiated) {
+                try extractor.extract(archiveURL)
+            }.value
+
+            let imagePages = try scanner.images(in: extractedFolderURL, recursive: true)
+            guard !imagePages.isEmpty else {
+                throw AppStateError.archiveContainsNoImages(archiveURL)
+            }
+
+            pages = imagePages
+            currentIndex = 0
+            try await loadCurrentPage()
+            statusMessage = "\(archiveURL.lastPathComponent): \(imagePages.count)개 이미지"
+        } catch {
+            show(error, prefix: "압축 파일을 열지 못했습니다.")
+        }
+
+        isBusy = false
     }
 
     func goToPreviousPage() {
@@ -151,17 +201,7 @@ final class AppState: ObservableObject {
     }
 
     func openDroppedURL(_ url: URL) async {
-        do {
-            let values = try url.resourceValues(forKeys: [.isDirectoryKey])
-            if values.isDirectory == true {
-                await openFolder(url)
-                return
-            }
-
-            await openImage(url)
-        } catch {
-            show(error, prefix: "드롭한 파일을 열지 못했습니다.")
-        }
+        await openURL(url)
     }
 
     func translateCurrentPage(force: Bool = false) async {
@@ -290,11 +330,14 @@ final class AppState: ObservableObject {
 
 private enum AppStateError: LocalizedError {
     case imageLoadFailed(URL)
+    case archiveContainsNoImages(URL)
 
     var errorDescription: String? {
         switch self {
         case .imageLoadFailed(let url):
             return "이미지를 불러올 수 없습니다: \(url.lastPathComponent)"
+        case .archiveContainsNoImages(let url):
+            return "압축 파일 안에서 지원되는 이미지 파일을 찾지 못했습니다: \(url.lastPathComponent)"
         }
     }
 }
@@ -306,5 +349,26 @@ private enum AppPaths {
         return base
             .appendingPathComponent("Manga Lada", isDirectory: true)
             .appendingPathComponent("Cache", isDirectory: true)
+    }
+
+    static var archiveDirectory: URL {
+        let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)
+            .first ?? FileManager.default.temporaryDirectory
+        return base
+            .appendingPathComponent("Manga Lada", isDirectory: true)
+            .appendingPathComponent("Archives", isDirectory: true)
+    }
+}
+
+private extension AppState {
+    static var openableContentTypes: [UTType] {
+        var types: [UTType] = [.image]
+        if let zip = UTType(filenameExtension: "zip") {
+            types.append(zip)
+        }
+        if let cbz = UTType(filenameExtension: "cbz") {
+            types.append(cbz)
+        }
+        return types
     }
 }

@@ -23,8 +23,8 @@ struct MangaLadaMacApp: App {
         .commands {
             CommandGroup(replacing: .newItem) {}
             CommandMenu("Viewer") {
-                Button("Open Image...") {
-                    Task { await appState.openImageFromPanel() }
+                Button("Open Image or ZIP...") {
+                    Task { await appState.openFileFromPanel() }
                 }
                 .keyboardShortcut("o", modifiers: [.command])
 

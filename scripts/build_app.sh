@@ -49,6 +49,19 @@ cat > "$CONTENTS_DIR/Info.plist" <<PLIST
         <string>public.image</string>
       </array>
     </dict>
+    <dict>
+      <key>CFBundleTypeName</key>
+      <string>Comic ZIP Archive</string>
+      <key>CFBundleTypeRole</key>
+      <string>Viewer</string>
+      <key>LSHandlerRank</key>
+      <string>Alternate</string>
+      <key>CFBundleTypeExtensions</key>
+      <array>
+        <string>zip</string>
+        <string>cbz</string>
+      </array>
+    </dict>
   </array>
   <key>CFBundlePackageType</key>
   <string>APPL</string>

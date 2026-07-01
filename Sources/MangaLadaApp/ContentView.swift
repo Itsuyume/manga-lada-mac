@@ -59,9 +59,9 @@ private struct HeaderBar: View {
             Divider().frame(height: 22)
 
             Button {
-                Task { await appState.openImageFromPanel() }
+                Task { await appState.openFileFromPanel() }
             } label: {
-                Label("이미지 열기", systemImage: "photo")
+                Label("파일 열기", systemImage: "doc.viewfinder")
             }
 
             Button {
@@ -214,7 +214,7 @@ private struct FooterBar: View {
 
             Spacer()
 
-            Text("Space: 번역   ←/→: 페이지 이동   ⌘O: 열기")
+            Text("Space: 번역   ←/→: 페이지 이동   ⌘O: 이미지/ZIP 열기")
                 .font(.system(size: 11))
                 .foregroundStyle(.secondary)
         }
@@ -231,10 +231,10 @@ private struct EmptyStateView: View {
                 .font(.system(size: 48))
                 .foregroundStyle(.secondary)
 
-            Text("이미지나 폴더를 열면 바로 볼 수 있습니다.")
+            Text("이미지, ZIP, 폴더를 열면 바로 볼 수 있습니다.")
                 .font(.system(size: 17, weight: .semibold))
 
-            Text("스페이스바로 OCR과 번역을 실행합니다.")
+            Text("ZIP/CBZ는 압축을 풀어 페이지 순서대로 보여줍니다.")
                 .font(.system(size: 13))
                 .foregroundStyle(.secondary)
         }
