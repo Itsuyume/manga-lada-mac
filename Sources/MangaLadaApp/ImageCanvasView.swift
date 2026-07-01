@@ -67,7 +67,7 @@ private struct TranslationBubble: View {
     let fontScale: Double
 
     var body: some View {
-        let rect = overlayRect(for: block.box, imageRect: imageRect)
+        let rect = redactionRect(for: block.box, imageRect: imageRect)
         Text(displayText)
             .font(.system(size: fontSize(for: rect), weight: .semibold))
             .foregroundStyle(Color.black)
@@ -77,7 +77,7 @@ private struct TranslationBubble: View {
             .padding(.horizontal, 6)
             .padding(.vertical, 4)
             .frame(width: max(rect.width, 42), height: max(rect.height, 28))
-            .background(Color.white.opacity(0.88), in: RoundedRectangle(cornerRadius: 6))
+            .background(Color.white, in: RoundedRectangle(cornerRadius: 6))
             .overlay(
                 RoundedRectangle(cornerRadius: 6)
                     .stroke(Color.black.opacity(0.24), lineWidth: 1)
@@ -93,13 +93,16 @@ private struct TranslationBubble: View {
         return block.originalText
     }
 
-    private func overlayRect(for box: TextBox, imageRect: CGRect) -> CGRect {
-        CGRect(
+    private func redactionRect(for box: TextBox, imageRect: CGRect) -> CGRect {
+        let rawRect = CGRect(
             x: imageRect.minX + box.x * imageRect.width,
             y: imageRect.minY + box.y * imageRect.height,
             width: box.width * imageRect.width,
             height: box.height * imageRect.height
-        ).insetBy(dx: -8, dy: -5)
+        )
+        let horizontalPadding = max(10, rawRect.width * 0.08)
+        let verticalPadding = max(6, rawRect.height * 0.16)
+        return rawRect.insetBy(dx: -horizontalPadding, dy: -verticalPadding)
     }
 
     private func fontSize(for rect: CGRect) -> CGFloat {

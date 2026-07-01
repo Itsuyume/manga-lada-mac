@@ -97,8 +97,8 @@ public struct TranslatedImageRenderer {
             return
         }
 
-        let rect = pixelRect(for: block.box, imageSize: imageSize).insetBy(dx: -8, dy: -5)
-        let bubbleRect = rect.integral
+        let originalTextRect = pixelRect(for: block.box, imageSize: imageSize)
+        let bubbleRect = redactionRect(around: originalTextRect).integral
         let bubblePath = NSBezierPath(
             roundedRect: bubbleRect,
             xRadius: min(10, bubbleRect.height * 0.18),
@@ -122,7 +122,7 @@ public struct TranslatedImageRenderer {
             .paragraphStyle: paragraph
         ]
 
-        let textRect = bubbleRect.insetBy(dx: 6, dy: 4)
+        let textRect = bubbleRect.insetBy(dx: max(6, bubbleRect.width * 0.03), dy: max(4, bubbleRect.height * 0.08))
         attributedText(text, attributes: attributes).draw(in: verticallyCenteredTextRect(
             text,
             attributes: attributes,
@@ -145,6 +145,12 @@ public struct TranslatedImageRenderer {
         let width = max(1, box.width * imageSize.width)
         let height = max(1, box.height * imageSize.height)
         return NSRect(x: x, y: imageSize.height - yFromTop - height, width: width, height: height)
+    }
+
+    private func redactionRect(around rect: NSRect) -> NSRect {
+        let horizontalPadding = max(10, rect.width * 0.08)
+        let verticalPadding = max(6, rect.height * 0.16)
+        return rect.insetBy(dx: -horizontalPadding, dy: -verticalPadding)
     }
 
     private func fittedFontSize(for text: String, in rect: NSRect, scale: Double) -> CGFloat {

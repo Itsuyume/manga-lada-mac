@@ -19,7 +19,7 @@ MacBook에서 일본 만화 이미지를 열고 스페이스바로 OCR/번역을
 - 번역: Google Translate 호환 HTTP 엔드포인트
 - 캐시: `Application Support/Manga Lada/Cache`
 - ZIP/CBZ: `Application Support/Manga Lada/Archives`에 자동 압축 해제
-- 내보내기: 원본 이미지 위에 번역 말풍선을 그린 PNG 저장
+- 내보내기: 원문 영역을 불투명하게 지운 뒤 번역 말풍선을 그린 PNG 저장
 
 ## 개발 실행
 
