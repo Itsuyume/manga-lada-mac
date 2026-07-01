@@ -8,15 +8,10 @@ struct MangaLadaCoreChecks {
         try checkImageScannerFindsNestedImagesNaturally()
         try checkArchiveExtractorExtractsZipForRecursiveScanning()
         try checkCacheRoundTripsTranslationByFingerprint()
-        try checkGoogleTranslatorParsesNestedResponseText()
-        try checkGoogleTranslatorRejectsEmptyParsedText()
         try checkLocalTranslatorConfigurationLoadsFileAndEnvironmentOverrides()
-        try checkAPITranslatorResponseParsers()
-        try await checkDeepLTranslatorSendsSingleBatchRequest()
-        try await checkPapagoTranslatorSendsNaverRequest()
-        try await checkOpenAICompatibleTranslatorSendsChatRequest()
+        try checkOllamaTranslatorResponseParser()
         try await checkOllamaTranslatorSendsLocalChatRequest()
-        try await checkTranslationPipelineBatchesAndRefinesBlocks()
+        try await checkTranslationPipelineTranslatesAndRefinesBlocks()
         try await checkTranslationPipelineRunsNonBatchRequestsConcurrently()
         try checkKoreanTranslationRefinerFixesKnownMistranslations()
         try checkKoreanTranslationRefinerLeavesUnrelatedTextAlone()
@@ -118,42 +113,12 @@ struct MangaLadaCoreChecks {
         try require(loaded.blocks == page.blocks, "Cache text blocks changed during round trip.")
     }
 
-    private static func checkGoogleTranslatorParsesNestedResponseText() throws {
-        let json = #"[[["안녕","こんにちは",null,null,1]],null,"ja"]"#
-        let translated = try GoogleWebTranslator.parseTranslationResponse(Data(json.utf8))
-        try require(translated == "안녕", "Google response parser returned wrong text.")
-    }
-
-    private static func checkGoogleTranslatorRejectsEmptyParsedText() throws {
-        let json = #"[[["","",null,null,1]],null,"ja"]"#
-        do {
-            _ = try GoogleWebTranslator.parseTranslationResponse(Data(json.utf8))
-            throw CheckError.failed("Google response parser accepted empty translated text.")
-        } catch TranslationError.missingTranslatedText {
-            return
-        }
-    }
-
     private static func checkLocalTranslatorConfigurationLoadsFileAndEnvironmentOverrides() throws {
         let root = try temporaryDirectory()
         let configURL = root.appendingPathComponent("translator.local.json")
         let json = """
         {
-          "provider": "deepl",
           "maxConcurrentRequests": 3,
-          "deepl": {
-            "apiKey": "file-deepl-key",
-            "endpoint": "https://api-free.deepl.com/v2/translate",
-            "context": "manga dialogue"
-          },
-          "papago": {
-            "clientId": "file-client-id",
-            "clientSecret": "file-client-credential"
-          },
-          "llm": {
-            "endpoint": "https://example.test/v1",
-            "model": "file-model"
-          },
           "ollama": {
             "endpoint": "http://127.0.0.1:11434",
             "model": "file-ollama"
@@ -165,35 +130,18 @@ struct MangaLadaCoreChecks {
         let configuration = try LocalTranslatorConfiguration.load(
             configURL: configURL,
             environment: [
-                "MANGA_LADA_TRANSLATOR": "papago",
                 "MANGA_LADA_MAX_CONCURRENT_TRANSLATIONS": "6",
-                "MANGA_LADA_DEEPL_API_KEY": "env-deepl-key",
-                "MANGA_LADA_LLM_MODEL": "env-model"
+                "MANGA_LADA_OLLAMA_MODEL": "env-ollama"
             ]
         )
 
-        try require(configuration.defaultProvider == .papago, "Environment did not override provider.")
         try require(configuration.maxConcurrentRequests == 6, "Environment did not override concurrency.")
-        try require(configuration.deepl.apiKey == "env-deepl-key", "Environment did not override DeepL key.")
-        try require(configuration.deepl.context == "manga dialogue", "DeepL context was not loaded from file.")
-        try require(configuration.papago.clientID == "file-client-id", "Papago client ID was not loaded.")
-        try require(configuration.llm.model == "env-model", "Environment did not override LLM model.")
-        try require(configuration.cacheKey(for: .llm) == "llm-env-model", "LLM cache key did not include model.")
+        try require(configuration.ollama.model == "env-ollama", "Environment did not override Ollama model.")
+        try require(configuration.ollama.endpoint.absoluteString == "http://127.0.0.1:11434", "Ollama endpoint was not loaded.")
+        try require(configuration.cacheKey == "ollama-env-ollama", "Ollama cache key did not include model.")
     }
 
-    private static func checkAPITranslatorResponseParsers() throws {
-        let deeplJSON = #"{"translations":[{"text":"안녕"},{"text":"세계"}]}"#
-        let deepl = try DeepLTranslator.parseTranslationResponse(Data(deeplJSON.utf8))
-        try require(deepl == ["안녕", "세계"], "DeepL response parser returned wrong texts.")
-
-        let papagoJSON = #"{"message":{"result":{"translatedText":"안녕하세요"}}}"#
-        let papago = try PapagoTranslator.parseTranslationResponse(Data(papagoJSON.utf8))
-        try require(papago == "안녕하세요", "Papago response parser returned wrong text.")
-
-        let chatJSON = #"{"choices":[{"message":{"role":"assistant","content":"\"좋아요\""}}]}"#
-        let chat = try OpenAICompatibleTranslator.parseTranslationResponse(Data(chatJSON.utf8))
-        try require(chat == "좋아요", "OpenAI-compatible response parser returned wrong text.")
-
+    private static func checkOllamaTranslatorResponseParser() throws {
         let ollamaJSON = #"{"message":{"role":"assistant","content":"```ko\n좋습니다\n```"}}"#
         let ollama = try OllamaTranslator.parseTranslationResponse(Data(ollamaJSON.utf8))
         try require(ollama == "좋습니다", "Ollama response parser returned wrong text.")
@@ -205,87 +153,6 @@ struct MangaLadaCoreChecks {
         let mixedScriptOllamaJSON = #"{"message":{"role":"assistant","content":"천왕사-san自身的話이라니"}}"#
         let mixedScriptOllama = try OllamaTranslator.parseTranslationResponse(Data(mixedScriptOllamaJSON.utf8))
         try require(mixedScriptOllama == "천왕사 이라니", "Ollama parser did not remove source-script residue.")
-    }
-
-    private static func checkDeepLTranslatorSendsSingleBatchRequest() async throws {
-        let session = mockSession { request in
-            try require(request.httpMethod == "POST", "DeepL request did not use POST.")
-            try require(
-                request.value(forHTTPHeaderField: "Authorization") == "DeepL-Auth-Key deepl-key",
-                "DeepL request did not send auth key header."
-            )
-            let body = try jsonObject(from: request) as? [String: Any]
-            try require(body?["source_lang"] as? String == "JA", "DeepL source language mismatch.")
-            try require(body?["target_lang"] as? String == "KO", "DeepL target language mismatch.")
-            try require(body?["context"] as? String == "manga", "DeepL context mismatch.")
-            try require(body?["text"] as? [String] == ["こんにちは", "世界"], "DeepL did not batch text blocks.")
-
-            return okJSON(#"{"translations":[{"text":"안녕"},{"text":"세계"}]}"#, for: request)
-        }
-
-        let translator = DeepLTranslator(
-            apiKey: "deepl-key",
-            endpoint: URL(string: "https://mock.test/v2/translate")!,
-            context: "manga",
-            session: session
-        )
-        let translated = try await translator.translate(["こんにちは", "世界"], source: .japanese, target: .korean)
-        try require(translated == ["안녕", "세계"], "DeepL batch translation returned wrong texts.")
-        try require(MockURLProtocol.requestCount == 1, "DeepL did not send exactly one batch request.")
-    }
-
-    private static func checkPapagoTranslatorSendsNaverRequest() async throws {
-        let session = mockSession { request in
-            try require(request.httpMethod == "POST", "Papago request did not use POST.")
-            try require(
-                request.value(forHTTPHeaderField: "X-NCP-APIGW-API-KEY-ID") == "papago-id",
-                "Papago request did not send client ID."
-            )
-            try require(
-                request.value(forHTTPHeaderField: "X-NCP-APIGW-API-KEY") == "papago-credential",
-                "Papago request did not send client credential."
-            )
-            let form = formItems(from: request)
-            try require(form["source"] == "ja", "Papago source language mismatch.")
-            try require(form["target"] == "ko", "Papago target language mismatch.")
-            try require(form["text"] == "こんにちは", "Papago source text mismatch.")
-
-            return okJSON(#"{"message":{"result":{"translatedText":"안녕하세요"}}}"#, for: request)
-        }
-
-        let translator = PapagoTranslator(
-            clientID: "papago-id",
-            clientSecret: "papago-credential",
-            endpoint: URL(string: "https://mock.test/nmt/v1/translation")!,
-            session: session
-        )
-        let translated = try await translator.translate("こんにちは", source: .japanese, target: .korean)
-        try require(translated == "안녕하세요", "Papago translation returned wrong text.")
-    }
-
-    private static func checkOpenAICompatibleTranslatorSendsChatRequest() async throws {
-        let session = mockSession { request in
-            try require(request.url?.path == "/v1/chat/completions", "LLM endpoint was not normalized to chat completions.")
-            try require(
-                request.value(forHTTPHeaderField: "Authorization") == "Bearer llm-key",
-                "LLM request did not send bearer key."
-            )
-            let body = try jsonObject(from: request) as? [String: Any]
-            try require(body?["model"] as? String == "model-a", "LLM model mismatch.")
-            let messages = body?["messages"] as? [[String: String]]
-            try require(messages?.last?["content"] == "こんにちは", "LLM user message mismatch.")
-
-            return okJSON(#"{"choices":[{"message":{"role":"assistant","content":"안녕하세요"}}]}"#, for: request)
-        }
-
-        let translator = OpenAICompatibleTranslator(
-            apiKey: "llm-key",
-            endpoint: URL(string: "https://mock.test/v1")!,
-            model: "model-a",
-            session: session
-        )
-        let translated = try await translator.translate("こんにちは", source: .japanese, target: .korean)
-        try require(translated == "안녕하세요", "LLM translation returned wrong text.")
     }
 
     private static func checkOllamaTranslatorSendsLocalChatRequest() async throws {
@@ -310,13 +177,13 @@ struct MangaLadaCoreChecks {
         try require(translated == "안녕하세요", "Ollama translation returned wrong text.")
     }
 
-    private static func checkTranslationPipelineBatchesAndRefinesBlocks() async throws {
-        let recorder = BatchCallRecorder()
-        let fallbackTranslator = BatchSpyTranslator(
+    private static func checkTranslationPipelineTranslatesAndRefinesBlocks() async throws {
+        let recorder = TextCallRecorder()
+        let translator = FixedSpyTranslator(
             recorder: recorder,
             translatedTexts: ["텐 노지\n씨의 만화", "자종"]
         )
-        let configuration = LocalTranslatorConfiguration(defaultProvider: .googleWeb, maxConcurrentRequests: 4)
+        let configuration = LocalTranslatorConfiguration(maxConcurrentRequests: 1)
         let blocks = [
             TextBlock(
                 box: TextBox(x: 0, y: 0, width: 0.1, height: 0.1),
@@ -330,20 +197,18 @@ struct MangaLadaCoreChecks {
         let pipeline = TranslationPipeline(sourceLanguage: .japanese, targetLanguage: .korean)
         let translated = try await pipeline.translate(
             blocks,
-            provider: .googleWeb,
             configuration: configuration,
-            fallbackTranslator: fallbackTranslator
+            translator: translator
         )
 
         try require(translated.map(\.translatedText) == ["텐노지\n씨의 보지", "정액"], "Pipeline did not refine translated blocks.")
-        try require(await recorder.calls == 1, "Pipeline did not use batch translation.")
-        try require(await recorder.lastTexts == ["天王寺さんのまんこっと", "子種"], "Pipeline did not preserve source block order.")
+        try require(await recorder.texts == ["天王寺さんのまんこっと", "子種"], "Pipeline did not preserve source block order.")
     }
 
     private static func checkTranslationPipelineRunsNonBatchRequestsConcurrently() async throws {
         let recorder = ParallelCallRecorder()
-        let fallbackTranslator = SlowSpyTranslator(recorder: recorder)
-        let configuration = LocalTranslatorConfiguration(defaultProvider: .googleWeb, maxConcurrentRequests: 2)
+        let translator = SlowSpyTranslator(recorder: recorder)
+        let configuration = LocalTranslatorConfiguration(maxConcurrentRequests: 2)
         let blocks = [
             TextBlock(box: TextBox(x: 0, y: 0, width: 0.1, height: 0.1), originalText: "一"),
             TextBlock(box: TextBox(x: 0, y: 0.2, width: 0.1, height: 0.1), originalText: "二"),
@@ -352,9 +217,8 @@ struct MangaLadaCoreChecks {
         let pipeline = TranslationPipeline(sourceLanguage: .japanese, targetLanguage: .korean)
         let translated = try await pipeline.translate(
             blocks,
-            provider: .googleWeb,
             configuration: configuration,
-            fallbackTranslator: fallbackTranslator
+            translator: translator
         )
 
         try require(translated.map(\.translatedText) == ["번역: 一", "번역: 二", "번역: 三"], "Concurrent pipeline did not preserve result order.")
@@ -478,17 +342,6 @@ struct MangaLadaCoreChecks {
         return try JSONSerialization.jsonObject(with: data)
     }
 
-    private static func formItems(from request: URLRequest) -> [String: String] {
-        guard let data = bodyData(from: request),
-              let body = String(data: data, encoding: .utf8),
-              let components = URLComponents(string: "?\(body)") else {
-            return [:]
-        }
-        return Dictionary(uniqueKeysWithValues: (components.queryItems ?? []).compactMap { item in
-            item.value.map { (item.name, $0) }
-        })
-    }
-
     private static func bodyData(from request: URLRequest) -> Data? {
         if let body = request.httpBody {
             return body
@@ -562,23 +415,25 @@ private final class MockURLProtocol: URLProtocol, @unchecked Sendable {
     override func stopLoading() {}
 }
 
-private actor BatchCallRecorder {
-    private(set) var calls = 0
-    private(set) var lastTexts: [String] = []
+private actor TextCallRecorder {
+    private var nextIndex = 0
+    private(set) var texts: [String] = []
 
-    func record(_ texts: [String]) {
-        calls += 1
-        lastTexts = texts
+    func record(_ text: String) -> Int {
+        let index = nextIndex
+        nextIndex += 1
+        texts.append(text)
+        return index
     }
 }
 
-private struct BatchSpyTranslator: BatchTextTranslating {
-    let recorder: BatchCallRecorder
+private struct FixedSpyTranslator: TextTranslating {
+    let recorder: TextCallRecorder
     let translatedTexts: [String]
 
-    func translate(_ texts: [String], source: LanguageCode, target: LanguageCode) async throws -> [String] {
-        await recorder.record(texts)
-        return translatedTexts
+    func translate(_ text: String, source: LanguageCode, target: LanguageCode) async throws -> String {
+        let index = await recorder.record(text)
+        return translatedTexts[index]
     }
 }
 
