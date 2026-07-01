@@ -116,7 +116,7 @@ public struct TranslatedImageRenderer {
         }
 
         let originalTextRect = pixelRect(for: block.box, imageSize: imageSize)
-        let bubbleRect = redactionRect(around: originalTextRect).integral
+        let bubbleRect = redactionRect(around: originalTextRect, imageSize: imageSize).integral
         let bubblePath = NSBezierPath(
             roundedRect: bubbleRect,
             xRadius: min(10, bubbleRect.height * 0.18),
@@ -181,10 +181,20 @@ public struct TranslatedImageRenderer {
         return NSRect(x: x, y: imageSize.height - yFromTop - height, width: width, height: height)
     }
 
-    private func redactionRect(around rect: NSRect) -> NSRect {
+    private func redactionRect(around rect: NSRect, imageSize: NSSize) -> NSRect {
         let horizontalPadding = max(10, rect.width * 0.08)
         let verticalPadding = max(6, rect.height * 0.16)
-        return rect.insetBy(dx: -horizontalPadding, dy: -verticalPadding)
+        let padded = rect.insetBy(dx: -horizontalPadding, dy: -verticalPadding)
+        let minX = max(0, padded.minX)
+        let minY = max(0, padded.minY)
+        let maxX = min(imageSize.width, padded.maxX)
+        let maxY = min(imageSize.height, padded.maxY)
+        return NSRect(
+            x: minX,
+            y: minY,
+            width: max(1, maxX - minX),
+            height: max(1, maxY - minY)
+        )
     }
 
     private func fittedTextLayout(
@@ -199,13 +209,13 @@ public struct TranslatedImageRenderer {
         let narrowVerticalBox = rect.width < rect.height * 0.70
         let geometryLimit = narrowVerticalBox ? rect.width * 0.34 : min(rect.height * 0.36, 42)
         let maxSize = min(max(geometryLimit, 13), 38) * scale
-        let minSize: CGFloat = backgroundStyle == .none ? 10 : 8
+        let minSize: CGFloat = backgroundStyle == .none ? 8 : 6
 
         var size = maxSize
         while size > minSize {
             let font = preferredTextFont(ofSize: size, backgroundStyle: backgroundStyle)
             let lines = wrappedLines(for: normalizedText, maxWidth: width, font: font)
-            let lineHeight = ceil(size * 1.16)
+            let lineHeight = ceil(size * 1.10)
             let measuredHeight = CGFloat(lines.count) * lineHeight
             if !lines.isEmpty,
                measuredHeight <= height,
@@ -219,7 +229,7 @@ public struct TranslatedImageRenderer {
         return TextLayout(
             lines: wrappedLines(for: normalizedText, maxWidth: width, font: font),
             fontSize: minSize,
-            lineHeight: ceil(minSize * 1.16)
+            lineHeight: ceil(minSize * 1.10)
         )
     }
 

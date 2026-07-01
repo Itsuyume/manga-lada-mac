@@ -49,7 +49,7 @@ MacBook에서 일본 만화 이미지를 열고 스페이스바로 OCR/번역을
 ```json
 {
   "provider": "ollama",
-  "maxConcurrentRequests": 4,
+  "maxConcurrentRequests": 2,
   "deepl": {
     "apiKey": "DEEPL_API_KEY",
     "endpoint": "https://api-free.deepl.com/v2/translate",
@@ -71,7 +71,7 @@ MacBook에서 일본 만화 이미지를 열고 스페이스바로 OCR/번역을
 }
 ```
 
-`provider`는 기본 선택값이고, 앱에서 메뉴로 다시 바꿀 수 있습니다. `LLM`은 OpenAI 호환 `/chat/completions` 서버를, `Ollama`는 로컬 Ollama `/api/chat` 서버를 사용합니다. `DeepL`은 여러 텍스트 블록을 한 요청으로 묶고, 나머지 Swift provider는 `maxConcurrentRequests` 값만큼 병렬 번역합니다.
+`provider`는 기본 선택값이고, 앱에서 메뉴로 다시 바꿀 수 있습니다. `LLM`은 OpenAI 호환 `/chat/completions` 서버를, `Ollama`는 로컬 Ollama `/api/chat` 서버를 사용합니다. `DeepL`은 여러 텍스트 블록을 한 요청으로 묶고, 나머지 Swift provider는 `maxConcurrentRequests` 값만큼 병렬 번역합니다. 로컬 Ollama는 `brew install ollama`, `brew services start ollama`, `ollama pull gemma3:4b` 순서로 준비합니다.
 
 ## 개발 실행
 
@@ -94,6 +94,7 @@ Ballons 엔진까지 포함해 실제 만화 페이지를 확인하려면 `./scr
 ```bash
 swift run MangaLadaBallonsChecks /path/to/manga-page.png
 swift run MangaLadaBallonsChecks --ocr-only /path/to/manga-page.png
+swift run MangaLadaBallonsChecks --local-provider ollama /path/to/manga-page.png
 ```
 
 앱에서는 페이지를 열고 스페이스바를 누르면 같은 엔진 경로를 사용합니다.

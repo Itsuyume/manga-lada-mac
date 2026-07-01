@@ -153,7 +153,7 @@ public struct OpenAICompatibleTranslator: TextTranslating {
 
     public static func parseTranslationResponse(_ data: Data) throws -> String {
         let response = try JSONDecoder().decode(ChatCompletionResponse.self, from: data)
-        let translated = cleanedTranslation(response.choices.first?.message.content ?? "")
+        let translated = cleanedLLMTranslation(response.choices.first?.message.content ?? "")
         guard !translated.isEmpty else {
             throw TranslationError.missingTranslatedText
         }
@@ -203,7 +203,7 @@ public struct OllamaTranslator: TextTranslating {
 
     public static func parseTranslationResponse(_ data: Data) throws -> String {
         let response = try JSONDecoder().decode(OllamaChatResponse.self, from: data)
-        let translated = cleanedTranslation(response.message.content)
+        let translated = cleanedLLMTranslation(response.message.content)
         guard !translated.isEmpty else {
             throw TranslationError.missingTranslatedText
         }
@@ -302,6 +302,23 @@ private func cleanedTranslation(_ text: String) -> String {
             .replacingOccurrences(of: #"```$"#, with: "", options: .regularExpression)
             .trimmingCharacters(in: .whitespacesAndNewlines)
     }
+    trimmed = trimmed
+        .replacingOccurrences(
+            of: #"(?i)^\s*(translation|translated text|korean translation|korean)\s*[:：]\s*"#,
+            with: "",
+            options: .regularExpression
+        )
+        .replacingOccurrences(
+            of: #"^\s*(번역|한국어 번역|직역|의역)\s*[:：]\s*"#,
+            with: "",
+            options: .regularExpression
+        )
+        .replacingOccurrences(
+            of: #"(単純|单纯)?\s*(文本|テキスト)?\s*翻(译|譯|訳)\s*[:：]\s*"#,
+            with: "",
+            options: .regularExpression
+        )
+        .trimmingCharacters(in: .whitespacesAndNewlines)
     if trimmed.count >= 2,
        trimmed.first == "\"",
        trimmed.last == "\"" {
@@ -311,11 +328,54 @@ private func cleanedTranslation(_ text: String) -> String {
     return trimmed.trimmingCharacters(in: .whitespacesAndNewlines)
 }
 
+private func cleanedLLMTranslation(_ text: String) -> String {
+    let cleaned = cleanedTranslation(text)
+    guard containsHangul(cleaned) else {
+        return cleaned
+    }
+    return cleaned
+        .replacingOccurrences(
+            of: #"[\p{Hiragana}\p{Katakana}\p{Han}]+"#,
+            with: "",
+            options: .regularExpression
+        )
+        .replacingOccurrences(
+            of: #"[A-Za-z]+"#,
+            with: "",
+            options: .regularExpression
+        )
+        .replacingOccurrences(
+            of: #"\s*[-–—]+\s*"#,
+            with: " ",
+            options: .regularExpression
+        )
+        .replacingOccurrences(
+            of: #"\s+([,.!?…])"#,
+            with: "$1",
+            options: .regularExpression
+        )
+        .replacingOccurrences(
+            of: #"\s+"#,
+            with: " ",
+            options: .regularExpression
+        )
+        .trimmingCharacters(in: .whitespacesAndNewlines)
+}
+
+private func containsHangul(_ text: String) -> Bool {
+    text.unicodeScalars.contains { scalar in
+        (0xAC00...0xD7A3).contains(Int(scalar.value))
+    }
+}
+
 private func translationSystemPrompt(source: LanguageCode, target: LanguageCode) -> String {
     """
     You translate manga dialogue from \(source.displayName) to \(target.displayName).
-    Return only the translated Korean text, with no notes, quotes, markdown, censorship, or explanations.
-    Preserve the speaker tone and line breaks when useful, but do not transliterate unless the source is a sound effect or name.
+    Return only concise natural Korean text for the original speech bubble.
+    Use Hangul and Korean punctuation only.
+    Do not add labels, quotes, markdown, explanations, Chinese text, Japanese text, romaji, or the source text.
+    Keep the line short enough to fit the original manga balloon.
+    Preserve speaker tone, and transliterate names or sound effects into Korean when needed.
     """
 }
 

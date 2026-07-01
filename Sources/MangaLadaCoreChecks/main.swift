@@ -197,6 +197,14 @@ struct MangaLadaCoreChecks {
         let ollamaJSON = #"{"message":{"role":"assistant","content":"```ko\n좋습니다\n```"}}"#
         let ollama = try OllamaTranslator.parseTranslationResponse(Data(ollamaJSON.utf8))
         try require(ollama == "좋습니다", "Ollama response parser returned wrong text.")
+
+        let labeledOllamaJSON = #"{"message":{"role":"assistant","content":"単純文本 翻译：안녕하세요"}}"#
+        let labeledOllama = try OllamaTranslator.parseTranslationResponse(Data(labeledOllamaJSON.utf8))
+        try require(labeledOllama == "안녕하세요", "Ollama parser did not remove translation labels.")
+
+        let mixedScriptOllamaJSON = #"{"message":{"role":"assistant","content":"천왕사-san自身的話이라니"}}"#
+        let mixedScriptOllama = try OllamaTranslator.parseTranslationResponse(Data(mixedScriptOllamaJSON.utf8))
+        try require(mixedScriptOllama == "천왕사 이라니", "Ollama parser did not remove source-script residue.")
     }
 
     private static func checkDeepLTranslatorSendsSingleBatchRequest() async throws {
