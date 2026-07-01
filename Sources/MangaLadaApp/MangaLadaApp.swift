@@ -33,6 +33,11 @@ struct MangaLadaMacApp: App {
                 }
                 .keyboardShortcut(.space, modifiers: [])
 
+                Button("Save Translated PNG...") {
+                    Task { await appState.exportCurrentTranslatedImage() }
+                }
+                .keyboardShortcut("s", modifiers: [.command, .shift])
+
                 Button("Previous Page") {
                     appState.goToPreviousPage()
                 }

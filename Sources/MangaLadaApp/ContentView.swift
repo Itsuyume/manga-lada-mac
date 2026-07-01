@@ -102,6 +102,14 @@ private struct HeaderBar: View {
             .disabled(appState.currentPage == nil || appState.isBusy)
             .help("캐시 삭제 후 다시 번역")
 
+            Button {
+                Task { await appState.exportCurrentTranslatedImage() }
+            } label: {
+                Label("PNG 저장", systemImage: "square.and.arrow.down")
+            }
+            .disabled(!appState.canExportCurrentTranslation || appState.isBusy)
+            .help("번역 결과를 실제 이미지에 그려 PNG로 저장")
+
             Spacer(minLength: 12)
 
             Toggle("자동", isOn: $appState.autoTranslate)

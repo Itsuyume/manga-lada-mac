@@ -1,6 +1,7 @@
 import AppKit
 import Foundation
 import MangaLadaCore
+import MangaLadaRendering
 import MangaLadaVision
 import UniformTypeIdentifiers
 
@@ -23,14 +24,17 @@ final class AppState: ObservableObject {
     private let fingerprintMaker: ImageFingerprint
     private let cache: TranslationCache
     private let archiveExtractor: ArchiveExtractor
+    private let translatedImageRenderer: TranslatedImageRenderer
     private let ocrService: VisionOCRService
     private let translator: TextTranslating
+    private var preferredExportDirectory: URL?
 
     init(
         scanner: ImageFileScanner = ImageFileScanner(),
         fingerprintMaker: ImageFingerprint = ImageFingerprint(),
         cache: TranslationCache = TranslationCache(cacheDirectory: AppPaths.cacheDirectory),
         archiveExtractor: ArchiveExtractor = ArchiveExtractor(extractionRoot: AppPaths.archiveDirectory),
+        translatedImageRenderer: TranslatedImageRenderer = TranslatedImageRenderer(),
         ocrService: VisionOCRService = VisionOCRService(),
         translator: TextTranslating = GoogleWebTranslator()
     ) {
@@ -38,6 +42,7 @@ final class AppState: ObservableObject {
         self.fingerprintMaker = fingerprintMaker
         self.cache = cache
         self.archiveExtractor = archiveExtractor
+        self.translatedImageRenderer = translatedImageRenderer
         self.ocrService = ocrService
         self.translator = translator
     }
@@ -54,6 +59,15 @@ final class AppState: ObservableObject {
             return "0 / 0"
         }
         return "\(currentIndex + 1) / \(pages.count)"
+    }
+
+    var canExportCurrentTranslation: Bool {
+        guard let translation else {
+            return false
+        }
+        return translation.blocks.contains { block in
+            !block.translatedText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        }
     }
 
     func openFileFromPanel() async {
@@ -117,6 +131,7 @@ final class AppState: ObservableObject {
             let folderPages = try scanner.imagesInSameFolder(as: imageURL)
             pages = folderPages.isEmpty ? [ImagePage(url: imageURL)] : folderPages
             currentIndex = pages.firstIndex { $0.url == imageURL } ?? 0
+            preferredExportDirectory = imageURL.deletingLastPathComponent()
             try await loadCurrentPage()
         } catch {
             show(error, prefix: "이미지 폴더를 읽지 못했습니다.")
@@ -134,6 +149,7 @@ final class AppState: ObservableObject {
 
             pages = imagePages
             currentIndex = 0
+            preferredExportDirectory = folderURL
             try await loadCurrentPage()
         } catch {
             show(error, prefix: "폴더를 열지 못했습니다.")
@@ -163,6 +179,7 @@ final class AppState: ObservableObject {
 
             pages = imagePages
             currentIndex = 0
+            preferredExportDirectory = archiveURL.deletingLastPathComponent()
             try await loadCurrentPage()
             statusMessage = "\(archiveURL.lastPathComponent): \(imagePages.count)개 이미지"
         } catch {
@@ -274,6 +291,46 @@ final class AppState: ObservableObject {
         }
     }
 
+    func exportCurrentTranslatedImage() async {
+        guard let page = currentPage else {
+            errorMessage = "먼저 이미지를 열어주세요."
+            return
+        }
+
+        guard let translation else {
+            errorMessage = "먼저 번역을 실행해주세요."
+            return
+        }
+
+        guard canExportCurrentTranslation else {
+            errorMessage = "저장할 번역 결과가 없습니다."
+            return
+        }
+
+        guard let destinationURL = translatedImageDestinationURL(for: page.url) else {
+            return
+        }
+
+        isBusy = true
+        errorMessage = nil
+        statusMessage = "번역본 PNG 저장 중..."
+
+        do {
+            let rendered = try translatedImageRenderer.writePNG(
+                sourceImageURL: page.url,
+                translation: translation,
+                destinationURL: destinationURL,
+                fontScale: overlayFontScale
+            )
+            statusMessage = "번역본 저장 완료: \(rendered.url.lastPathComponent)"
+            NSWorkspace.shared.activateFileViewerSelecting([rendered.url])
+        } catch {
+            show(error, prefix: "번역본 저장에 실패했습니다.")
+        }
+
+        isBusy = false
+    }
+
     private func loadCurrentPage() async throws {
         guard let page = currentPage else {
             currentImage = nil
@@ -325,6 +382,22 @@ final class AppState: ObservableObject {
         errorMessage = "\(prefix) \(error.localizedDescription)"
         statusMessage = prefix
         isBusy = false
+    }
+
+    private func translatedImageDestinationURL(for sourceURL: URL) -> URL? {
+        let panel = NSSavePanel()
+        panel.allowedContentTypes = [.png]
+        panel.canCreateDirectories = true
+        panel.isExtensionHidden = false
+        panel.nameFieldStringValue = sourceURL.deletingPathExtension().lastPathComponent + "_ko.png"
+        panel.directoryURL = preferredExportDirectory ?? sourceURL.deletingLastPathComponent()
+        panel.title = "번역본 이미지 저장"
+        panel.message = "번역 오버레이를 실제 PNG 이미지로 저장합니다."
+
+        guard panel.runModal() == .OK else {
+            return nil
+        }
+        return panel.url
     }
 }
 
