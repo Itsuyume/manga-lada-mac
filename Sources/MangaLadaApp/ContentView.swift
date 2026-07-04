@@ -119,8 +119,8 @@ private struct HeaderBar: View {
             HStack(spacing: 6) {
                 Image(systemName: "textformat.size")
                     .foregroundStyle(.secondary)
-                Slider(value: $appState.overlayFontScale, in: 0.75...1.8)
-                    .frame(width: 120)
+                Slider(value: $appState.overlayFontScale, in: 0.8...2.4)
+                    .frame(width: 136)
             }
         }
         .padding(.horizontal, 14)

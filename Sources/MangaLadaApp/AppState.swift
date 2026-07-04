@@ -19,7 +19,14 @@ final class AppState: ObservableObject {
     @Published var mode: AppMode = .imageOnly
     @Published var sourceLanguage: LanguageCode = .japanese
     @Published var targetLanguage: LanguageCode = .korean
-    @Published var overlayFontScale: Double = 1.0
+    @Published var overlayFontScale: Double = 1.1 {
+        didSet {
+            guard abs(overlayFontScale - oldValue) >= 0.01 else {
+                return
+            }
+            rerenderCurrentTranslationForCurrentFontScale()
+        }
+    }
     @Published var autoTranslate = false
 
     private let scanner: ImageFileScanner
@@ -30,6 +37,7 @@ final class AppState: ObservableObject {
     private let translatedImageRenderer: TranslatedImageRenderer
     private let ocrService: VisionOCRService
     private let translationRefiner: KoreanTranslationRefiner
+    private var renderedTranslationSourceImageURL: URL?
     private var renderedTranslationImageURL: URL?
     private var preferredExportDirectory: URL?
 
@@ -302,7 +310,17 @@ final class AppState: ObservableObject {
         statusMessage = "번역본 PNG 저장 중..."
 
         do {
-            if let renderedTranslationImageURL {
+            if let sourceURL = renderedTranslationSourceImageURL, let translation {
+                let rendered = try translatedImageRenderer.writePNG(
+                    sourceImageURL: sourceURL,
+                    translation: translation,
+                    destinationURL: destinationURL,
+                    fontScale: overlayFontScale,
+                    backgroundStyle: .readabilityBubble
+                )
+                statusMessage = "번역본 저장 완료: \(rendered.url.lastPathComponent)"
+                NSWorkspace.shared.activateFileViewerSelecting([rendered.url])
+            } else if let renderedTranslationImageURL {
                 if renderedTranslationImageURL.standardizedFileURL != destinationURL.standardizedFileURL {
                     let fileManager = FileManager.default
                     if fileManager.fileExists(atPath: destinationURL.path) {
@@ -333,6 +351,7 @@ final class AppState: ObservableObject {
         guard let page = currentPage else {
             currentImage = nil
             renderedTranslationImage = nil
+            renderedTranslationSourceImageURL = nil
             renderedTranslationImageURL = nil
             translation = nil
             statusMessage = "이미지 또는 폴더를 열어주세요."
@@ -345,6 +364,7 @@ final class AppState: ObservableObject {
 
         currentImage = image
         renderedTranslationImage = nil
+        renderedTranslationSourceImageURL = nil
         renderedTranslationImageURL = nil
         mode = .imageOnly
         statusMessage = page.url.lastPathComponent
@@ -359,6 +379,7 @@ final class AppState: ObservableObject {
                 let renderedURL = ballonsEngine.mangaLadaRenderedImageURL(runID: fingerprint)
                 if let renderedImage = NSImage(contentsOf: renderedURL) {
                     renderedTranslationImage = renderedImage
+                    renderedTranslationSourceImageURL = ballonsEngine.inpaintedImageURL(runID: fingerprint)
                     renderedTranslationImageURL = renderedURL
                     statusMessage = "고품질 캐시 있음: \(page.url.lastPathComponent)"
                 }
@@ -372,6 +393,7 @@ final class AppState: ObservableObject {
 
     private func translateWithBallons(page: ImagePage, fingerprint: String, force: Bool) async throws {
         renderedTranslationImage = nil
+        renderedTranslationSourceImageURL = nil
         renderedTranslationImageURL = nil
 
         if !force, let cached = try cache.load(fingerprint: fingerprint) {
@@ -379,6 +401,7 @@ final class AppState: ObservableObject {
             if let renderedImage = NSImage(contentsOf: renderedURL) {
                 translation = cached
                 renderedTranslationImage = renderedImage
+                renderedTranslationSourceImageURL = ballonsEngine.inpaintedImageURL(runID: fingerprint)
                 renderedTranslationImageURL = renderedURL
                 mode = .translated
                 statusMessage = "고품질 캐시에서 번역을 불러왔습니다."
@@ -421,6 +444,7 @@ final class AppState: ObservableObject {
         try cache.save(pageTranslation)
         translation = pageTranslation
         renderedTranslationImage = renderedImage
+        renderedTranslationSourceImageURL = result.inpaintedImageURL
         renderedTranslationImageURL = renderedFile.url
         mode = .translated
         statusMessage = "고품질 번역 완료: \(renderedFile.blockCount)개 텍스트 블록"
@@ -428,6 +452,7 @@ final class AppState: ObservableObject {
 
     private func translateWithVision(page: ImagePage, fingerprint: String, force: Bool) async throws {
         renderedTranslationImage = nil
+        renderedTranslationSourceImageURL = nil
         renderedTranslationImageURL = nil
 
         if !force, let cached = try cache.load(fingerprint: fingerprint) {
@@ -471,7 +496,7 @@ final class AppState: ObservableObject {
     }
 
     private func cacheFingerprint(baseFingerprint: String) -> String {
-        let engineVersion = ballonsEngine.isInstalled ? "ballons-v5" : "vision-v4"
+        let engineVersion = ballonsEngine.isInstalled ? "ballons-v6" : "vision-v5"
         let configuration = try? LocalTranslatorConfiguration.load(configURL: AppPaths.translatorConfigURL)
         let providerKey = configuration?.cacheKey ?? TranslationProvider.googleWeb.cacheKey
         return "\(baseFingerprint)-\(engineVersion)-\(providerKey)"
@@ -500,6 +525,33 @@ final class AppState: ObservableObject {
             )
         } catch TranslationError.missingConfiguration(let message) {
             throw TranslationError.missingConfiguration("\(message) \(AppPaths.translatorConfigURL.path)")
+        }
+    }
+
+    private func rerenderCurrentTranslationForCurrentFontScale() {
+        guard mode == .translated,
+              !isBusy,
+              let translation,
+              let sourceURL = renderedTranslationSourceImageURL,
+              let destinationURL = renderedTranslationImageURL else {
+            return
+        }
+
+        do {
+            let rendered = try translatedImageRenderer.writePNG(
+                sourceImageURL: sourceURL,
+                translation: translation,
+                destinationURL: destinationURL,
+                fontScale: overlayFontScale,
+                backgroundStyle: .readabilityBubble
+            )
+            guard let image = NSImage(contentsOf: rendered.url) else {
+                throw AppStateError.imageLoadFailed(rendered.url)
+            }
+            renderedTranslationImage = image
+            statusMessage = "폰트 크기 적용: \(String(format: "%.2f", overlayFontScale))x"
+        } catch {
+            errorMessage = "폰트 크기 적용에 실패했습니다. \(error.localizedDescription)"
         }
     }
 

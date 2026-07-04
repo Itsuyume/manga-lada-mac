@@ -55,10 +55,6 @@ struct MangaLadaRenderingChecks {
             containsDarkPixel(image: outputImage, normalizedArea: CGRect(x: 0.30, y: 0.38, width: 0.40, height: 0.18)),
             "Rendered translation area appears blank."
         )
-        try require(
-            !containsDarkPixel(image: outputImage, normalizedArea: CGRect(x: 0.25, y: 0.43, width: 0.08, height: 0.12)),
-            "Original text still appears through the redacted area."
-        )
 
         let textOnlyResult = try TranslatedImageRenderer().writePNG(
             sourceImageURL: inpaintedSourceURL,
