@@ -111,6 +111,12 @@ private struct HeaderBar: View {
 
             Spacer(minLength: 12)
 
+            Toggle("Ballons", isOn: $appState.useBallonsEngine)
+                .toggleStyle(.switch)
+                .controlSize(.small)
+                .disabled(appState.isBusy)
+                .help("끄면 내장 Vision OCR과 Swift Google 번역 경로를 사용")
+
             Toggle("자동", isOn: $appState.autoTranslate)
                 .toggleStyle(.switch)
                 .controlSize(.small)

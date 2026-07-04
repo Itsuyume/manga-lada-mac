@@ -50,7 +50,7 @@ struct MangaLadaBallonsChecks {
             sourceImageURL: result.inpaintedImageURL,
             translation: translation,
             destinationURL: engine.mangaLadaRenderedImageURL(runID: fingerprint),
-            backgroundStyle: .readabilityBubble
+            backgroundStyle: .none
         )
         guard FileManager.default.fileExists(atPath: rendered.url.path) else {
             throw BallonsCheckError.renderedImageMissing(rendered.url)

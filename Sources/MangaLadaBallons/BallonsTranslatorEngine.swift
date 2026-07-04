@@ -257,7 +257,9 @@ public struct BallonsTranslatorEngine: Sendable {
                 ),
                 originalText: original,
                 translatedText: refined,
-                confidence: 1
+                confidence: 1,
+                sourceIsVertical: block.sourceIsVertical,
+                detectedFontSize: block.detectedFontSize
             )
         }
 
@@ -381,4 +383,14 @@ private struct BallonsBlock: Decodable {
     let xyxy: [Double]
     let text: [String]
     let translation: String?
+    let sourceIsVertical: Bool?
+    let detectedFontSize: Double?
+
+    private enum CodingKeys: String, CodingKey {
+        case xyxy
+        case text
+        case translation
+        case sourceIsVertical = "src_is_vertical"
+        case detectedFontSize = "_detected_font_size"
+    }
 }

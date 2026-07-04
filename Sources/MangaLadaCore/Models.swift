@@ -20,19 +20,25 @@ public struct TextBlock: Codable, Equatable, Identifiable, Sendable {
     public var originalText: String
     public var translatedText: String
     public var confidence: Float
+    public var sourceIsVertical: Bool?
+    public var detectedFontSize: Double?
 
     public init(
         id: UUID = UUID(),
         box: TextBox,
         originalText: String,
         translatedText: String = "",
-        confidence: Float = 0
+        confidence: Float = 0,
+        sourceIsVertical: Bool? = nil,
+        detectedFontSize: Double? = nil
     ) {
         self.id = id
         self.box = box
         self.originalText = originalText
         self.translatedText = translatedText
         self.confidence = confidence
+        self.sourceIsVertical = sourceIsVertical
+        self.detectedFontSize = detectedFontSize
     }
 }
 

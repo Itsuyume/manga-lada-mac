@@ -28,6 +28,7 @@ final class AppState: ObservableObject {
         }
     }
     @Published var autoTranslate = false
+    @Published var useBallonsEngine = false
 
     private let scanner: ImageFileScanner
     private let fingerprintMaker: ImageFingerprint
@@ -256,7 +257,7 @@ final class AppState: ObservableObject {
             let baseFingerprint = try fingerprintMaker.make(for: page.url)
             let fingerprint = cacheFingerprint(baseFingerprint: baseFingerprint)
 
-            if ballonsEngine.isInstalled {
+            if shouldUseBallonsEngine {
                 try await translateWithBallons(page: page, fingerprint: fingerprint, force: force)
                 return
             }
@@ -276,7 +277,7 @@ final class AppState: ObservableObject {
             let baseFingerprint = try fingerprintMaker.make(for: page.url)
             let fingerprint = cacheFingerprint(baseFingerprint: baseFingerprint)
             try cache.delete(fingerprint: fingerprint)
-            if ballonsEngine.isInstalled {
+            if shouldUseBallonsEngine {
                 try ballonsEngine.clearRun(runID: fingerprint)
             }
             await translateCurrentPage(force: true)
@@ -316,7 +317,7 @@ final class AppState: ObservableObject {
                     translation: translation,
                     destinationURL: destinationURL,
                     fontScale: overlayFontScale,
-                    backgroundStyle: .readabilityBubble
+                    backgroundStyle: .none
                 )
                 statusMessage = "번역본 저장 완료: \(rendered.url.lastPathComponent)"
                 NSWorkspace.shared.activateFileViewerSelecting([rendered.url])
@@ -375,7 +376,7 @@ final class AppState: ObservableObject {
         translation = try cache.load(fingerprint: fingerprint)
         if translation != nil {
             statusMessage = "캐시 있음: \(page.url.lastPathComponent)"
-            if ballonsEngine.isInstalled {
+            if shouldUseBallonsEngine {
                 let renderedURL = ballonsEngine.mangaLadaRenderedImageURL(runID: fingerprint)
                 if let renderedImage = NSImage(contentsOf: renderedURL) {
                     renderedTranslationImage = renderedImage
@@ -434,7 +435,7 @@ final class AppState: ObservableObject {
             translation: pageTranslation,
             destinationURL: ballonsEngine.mangaLadaRenderedImageURL(runID: fingerprint),
             fontScale: overlayFontScale,
-            backgroundStyle: .readabilityBubble
+            backgroundStyle: .none
         )
 
         guard let renderedImage = NSImage(contentsOf: renderedFile.url) else {
@@ -496,10 +497,14 @@ final class AppState: ObservableObject {
     }
 
     private func cacheFingerprint(baseFingerprint: String) -> String {
-        let engineVersion = ballonsEngine.isInstalled ? "ballons-v6" : "vision-v5"
+        let engineVersion = shouldUseBallonsEngine ? "ballons-v9" : "vision-v6"
         let configuration = try? LocalTranslatorConfiguration.load(configURL: AppPaths.translatorConfigURL)
         let providerKey = configuration?.cacheKey ?? TranslationProvider.googleWeb.cacheKey
         return "\(baseFingerprint)-\(engineVersion)-\(providerKey)"
+    }
+
+    private var shouldUseBallonsEngine: Bool {
+        useBallonsEngine && ballonsEngine.isInstalled
     }
 
     private func translate(
@@ -543,7 +548,7 @@ final class AppState: ObservableObject {
                 translation: translation,
                 destinationURL: destinationURL,
                 fontScale: overlayFontScale,
-                backgroundStyle: .readabilityBubble
+                backgroundStyle: .none
             )
             guard let image = NSImage(contentsOf: rendered.url) else {
                 throw AppStateError.imageLoadFailed(rendered.url)

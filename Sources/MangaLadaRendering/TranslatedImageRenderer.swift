@@ -97,12 +97,14 @@ public struct TranslatedImageRenderer {
             fraction: 1
         )
 
+        let lightRegionDetector = LightRegionDetector(image: image, imageSize: size)
         for block in blocks {
             draw(
                 block: block,
                 imageSize: size,
                 fontScale: fontScale,
-                backgroundStyle: backgroundStyle
+                backgroundStyle: backgroundStyle,
+                lightRegionDetector: lightRegionDetector
             )
         }
 
@@ -113,7 +115,8 @@ public struct TranslatedImageRenderer {
         block: TextBlock,
         imageSize: NSSize,
         fontScale: Double,
-        backgroundStyle: TranslationTextBackgroundStyle
+        backgroundStyle: TranslationTextBackgroundStyle,
+        lightRegionDetector: LightRegionDetector?
     ) {
         let text = displayText(for: block)
         guard !text.isEmpty else {
@@ -121,12 +124,20 @@ public struct TranslatedImageRenderer {
         }
 
         let originalTextRect = pixelRect(for: block.box, imageSize: imageSize)
-        let flow = preferredTextFlow(for: originalTextRect, text: text)
-        let bubbleRect = redactionRect(
+        let flow = preferredTextFlow(for: originalTextRect, block: block, text: text)
+        let fallbackRect = redactionRect(
             around: originalTextRect,
             imageSize: imageSize,
             text: text,
             flow: flow
+        )
+        let bubbleRect = textContainerRect(
+            fallbackRect: fallbackRect,
+            originalTextRect: originalTextRect,
+            imageSize: imageSize,
+            flow: flow,
+            backgroundStyle: backgroundStyle,
+            lightRegionDetector: lightRegionDetector
         ).integral
         let radius = flow == .vertical
             ? min(bubbleRect.width, bubbleRect.height) * 0.42
@@ -158,15 +169,19 @@ public struct TranslatedImageRenderer {
         paragraph.alignment = .center
         paragraph.lineBreakMode = .byWordWrapping
 
-        let textRect = bubbleRect.insetBy(
-            dx: flow == .vertical ? max(4, bubbleRect.width * 0.10) : max(6, bubbleRect.width * 0.05),
-            dy: flow == .vertical ? max(6, bubbleRect.height * 0.05) : max(5, bubbleRect.height * 0.07)
+        let textRect = textDrawingRect(
+            in: bubbleRect,
+            originalTextRect: originalTextRect,
+            flow: flow,
+            sourceIsVertical: block.sourceIsVertical == true,
+            lightRegionDetector: lightRegionDetector
         )
         let layout = fittedTextLayout(
             for: text,
             in: textRect,
             scale: fontScale,
             flow: flow,
+            detectedFontSize: block.detectedFontSize,
             backgroundStyle: backgroundStyle
         )
         var attributes: [NSAttributedString.Key: Any] = [
@@ -180,6 +195,92 @@ public struct TranslatedImageRenderer {
         }
 
         draw(layout: layout, attributes: attributes, in: textRect)
+    }
+
+    private func textDrawingRect(
+        in bubbleRect: NSRect,
+        originalTextRect: NSRect,
+        flow: TextFlow,
+        sourceIsVertical: Bool,
+        lightRegionDetector: LightRegionDetector?
+    ) -> NSRect {
+        let baseRect = bubbleRect.insetBy(
+            dx: flow == .vertical ? max(4, bubbleRect.width * 0.10) : max(6, bubbleRect.width * 0.05),
+            dy: flow == .vertical ? max(6, bubbleRect.height * 0.05) : max(5, bubbleRect.height * 0.07)
+        )
+        guard flow == .horizontal,
+              sourceIsVertical,
+              bubbleRect.height >= bubbleRect.width * 1.12 else {
+            return baseRect
+        }
+
+        let columnWidth = min(
+            baseRect.width,
+            max(96, min(originalTextRect.width * 0.70, bubbleRect.width * 0.44))
+        )
+        let minX = bestLightColumnX(
+            in: baseRect,
+            columnWidth: columnWidth,
+            lightRegionDetector: lightRegionDetector
+        ) ?? max(baseRect.minX, min(baseRect.maxX - columnWidth, bubbleRect.midX - columnWidth / 2))
+        return NSRect(
+            x: minX,
+            y: baseRect.minY,
+            width: columnWidth,
+            height: baseRect.height
+        )
+    }
+
+    private func bestLightColumnX(
+        in baseRect: NSRect,
+        columnWidth: CGFloat,
+        lightRegionDetector: LightRegionDetector?
+    ) -> CGFloat? {
+        guard let lightRegionDetector,
+              baseRect.width > columnWidth + 1 else {
+            return nil
+        }
+
+        let steps = 14
+        var bestX = baseRect.minX
+        var bestScore = -Double.greatestFiniteMagnitude
+        for step in 0...steps {
+            let progress = CGFloat(step) / CGFloat(steps)
+            let x = baseRect.minX + (baseRect.width - columnWidth) * progress
+            let candidate = NSRect(x: x, y: baseRect.minY, width: columnWidth, height: baseRect.height)
+            let centerPenalty = Double(abs(candidate.midX - baseRect.midX) / max(1, baseRect.width)) * 0.08
+            let score = lightRegionDetector.lightCoverage(in: candidate) - centerPenalty
+            if score > bestScore {
+                bestScore = score
+                bestX = x
+            }
+        }
+        return bestScore >= 0.42 ? bestX : nil
+    }
+
+    private func textContainerRect(
+        fallbackRect: NSRect,
+        originalTextRect: NSRect,
+        imageSize: NSSize,
+        flow: TextFlow,
+        backgroundStyle: TranslationTextBackgroundStyle,
+        lightRegionDetector: LightRegionDetector?
+    ) -> NSRect {
+        guard backgroundStyle == .none,
+              let detectedRect = lightRegionDetector?.connectedLightRegion(
+                around: originalTextRect,
+                imageSize: imageSize,
+                flow: flow
+              ) else {
+            return fallbackRect
+        }
+
+        let mergedRect = detectedRect.union(originalTextRect)
+        guard mergedRect.width >= fallbackRect.width * 0.72,
+              mergedRect.height >= fallbackRect.height * 0.72 else {
+            return fallbackRect
+        }
+        return clamped(mergedRect, imageSize: imageSize)
     }
 
     private func pixelBackedSize(for image: NSImage) -> NSSize {
@@ -217,10 +318,14 @@ public struct TranslatedImageRenderer {
             verticalPadding = max(7, rect.height * min(0.18, 0.08 + characterCount * 0.002))
         }
         let padded = rect.insetBy(dx: -horizontalPadding, dy: -verticalPadding)
-        let minX = max(0, padded.minX)
-        let minY = max(0, padded.minY)
-        let maxX = min(imageSize.width, padded.maxX)
-        let maxY = min(imageSize.height, padded.maxY)
+        return clamped(padded, imageSize: imageSize)
+    }
+
+    private func clamped(_ rect: NSRect, imageSize: NSSize) -> NSRect {
+        let minX = max(0, rect.minX)
+        let minY = max(0, rect.minY)
+        let maxX = min(imageSize.width, rect.maxX)
+        let maxY = min(imageSize.height, rect.maxY)
         return NSRect(
             x: minX,
             y: minY,
@@ -229,12 +334,15 @@ public struct TranslatedImageRenderer {
         )
     }
 
-    private func preferredTextFlow(for rect: NSRect, text: String) -> TextFlow {
+    private func preferredTextFlow(for rect: NSRect, block: TextBlock, text: String) -> TextFlow {
         let normalizedText = normalizedRenderableText(text)
         let characterCount = normalizedText.filter { !$0.isWhitespace }.count
         let tallNarrowBox = rect.height >= rect.width * 2.05
-        let compactText = characterCount <= 24
-        return tallNarrowBox && compactText ? .vertical : .horizontal
+        let veryShortText = characterCount <= 8
+        if block.sourceIsVertical == true, tallNarrowBox, veryShortText {
+            return .vertical
+        }
+        return tallNarrowBox && veryShortText ? .vertical : .horizontal
     }
 
     private func fittedTextLayout(
@@ -242,13 +350,26 @@ public struct TranslatedImageRenderer {
         in rect: NSRect,
         scale: Double,
         flow: TextFlow,
+        detectedFontSize: Double?,
         backgroundStyle: TranslationTextBackgroundStyle
     ) -> TextLayout {
         switch flow {
         case .vertical:
-            return fittedVerticalTextLayout(for: text, in: rect, scale: scale, backgroundStyle: backgroundStyle)
+            return fittedVerticalTextLayout(
+                for: text,
+                in: rect,
+                scale: scale,
+                detectedFontSize: detectedFontSize,
+                backgroundStyle: backgroundStyle
+            )
         case .horizontal:
-            return fittedHorizontalTextLayout(for: text, in: rect, scale: scale, backgroundStyle: backgroundStyle)
+            return fittedHorizontalTextLayout(
+                for: text,
+                in: rect,
+                scale: scale,
+                detectedFontSize: detectedFontSize,
+                backgroundStyle: backgroundStyle
+            )
         }
     }
 
@@ -256,21 +377,23 @@ public struct TranslatedImageRenderer {
         for text: String,
         in rect: NSRect,
         scale: Double,
+        detectedFontSize: Double?,
         backgroundStyle: TranslationTextBackgroundStyle
     ) -> TextLayout {
         let width = max(1, rect.width - 12)
         let height = max(1, rect.height - 8)
         let normalizedText = normalizedRenderableText(text)
         let geometryLimit = min(rect.height * 0.42, rect.width * 0.22)
-        let maxSize = min(max(geometryLimit, 16), 96) * scale
+        let sourceLimit = detectedFontSize.map { CGFloat($0) * 0.92 } ?? geometryLimit
+        let maxSize = min(max(geometryLimit, sourceLimit, 16), 112) * scale
         let minimumBase = max(backgroundStyle == .none ? 10 : 13, min(rect.width, rect.height) * 0.10)
-        let minSize = min(max(minimumBase * scale, 11), 28)
+        let minSize = max(8, min(max(minimumBase * scale, 11), 28))
 
         var size = maxSize
-        while size > minSize {
+        while size >= minSize {
             let font = preferredTextFont(ofSize: size, backgroundStyle: backgroundStyle)
             let lines = wrappedLines(for: normalizedText, maxWidth: width, font: font)
-            let lineHeight = ceil(size * 1.10)
+            let lineHeight = ceil(size * 1.06)
             let measuredHeight = CGFloat(lines.count) * lineHeight
             if !lines.isEmpty,
                measuredHeight <= height,
@@ -280,11 +403,26 @@ public struct TranslatedImageRenderer {
             size -= 1
         }
 
-        let font = preferredTextFont(ofSize: minSize, backgroundStyle: backgroundStyle)
+        let hardMinSize = max(7, minSize * 0.72)
+        var fallbackSize = minSize - 1
+        while fallbackSize >= hardMinSize {
+            let font = preferredTextFont(ofSize: fallbackSize, backgroundStyle: backgroundStyle)
+            let lines = wrappedLines(for: normalizedText, maxWidth: width, font: font)
+            let lineHeight = ceil(fallbackSize * 1.06)
+            let measuredHeight = CGFloat(lines.count) * lineHeight
+            if !lines.isEmpty,
+               measuredHeight <= height,
+               lines.allSatisfy({ measuredWidth($0, font: font) <= width }) {
+                return .horizontal(lines: lines, fontSize: fallbackSize, lineHeight: lineHeight)
+            }
+            fallbackSize -= 1
+        }
+
+        let font = preferredTextFont(ofSize: hardMinSize, backgroundStyle: backgroundStyle)
         return .horizontal(
             lines: wrappedLines(for: normalizedText, maxWidth: width, font: font),
-            fontSize: minSize,
-            lineHeight: ceil(minSize * 1.10)
+            fontSize: hardMinSize,
+            lineHeight: ceil(hardMinSize * 1.06)
         )
     }
 
@@ -292,18 +430,20 @@ public struct TranslatedImageRenderer {
         for text: String,
         in rect: NSRect,
         scale: Double,
+        detectedFontSize: Double?,
         backgroundStyle: TranslationTextBackgroundStyle
     ) -> TextLayout {
         let units = verticalTextUnits(for: text)
         let width = max(1, rect.width - 4)
         let height = max(1, rect.height - 4)
         let geometryLimit = min(rect.width * 0.52, rect.height * 0.16)
-        let maxSize = min(max(geometryLimit, 16), 72) * scale
+        let sourceLimit = detectedFontSize.map { CGFloat($0) * 0.78 } ?? geometryLimit
+        let maxSize = min(max(geometryLimit, sourceLimit, 16), 96) * scale
         let minimumBase = max(backgroundStyle == .none ? 10 : 13, min(rect.width, rect.height) * 0.12)
-        let minSize = min(max(minimumBase * scale, 11), 28)
+        let minSize = max(8, min(max(minimumBase * scale, 11), 28))
 
         var size = maxSize
-        while size > minSize {
+        while size >= minSize {
             let lineHeight = ceil(size * 1.08)
             let columnWidth = ceil(size * 1.18)
             let maxRows = max(1, Int(floor(height / lineHeight)))
@@ -320,11 +460,12 @@ public struct TranslatedImageRenderer {
             size -= 1
         }
 
-        let lineHeight = ceil(minSize * 1.08)
-        let columnWidth = ceil(minSize * 1.18)
+        let hardMinSize = max(7, minSize * 0.72)
+        let lineHeight = ceil(hardMinSize * 1.08)
+        let columnWidth = ceil(hardMinSize * 1.18)
         return .vertical(
             columns: verticalColumns(for: units, maxRows: max(1, Int(floor(height / lineHeight)))),
-            fontSize: minSize,
+            fontSize: hardMinSize,
             lineHeight: lineHeight,
             columnWidth: columnWidth
         )
@@ -342,6 +483,12 @@ public struct TranslatedImageRenderer {
         attributes: [NSAttributedString.Key: Any],
         in bounds: NSRect
     ) {
+        NSGraphicsContext.saveGraphicsState()
+        NSBezierPath(rect: bounds).setClip()
+        defer {
+            NSGraphicsContext.restoreGraphicsState()
+        }
+
         switch layout {
         case .horizontal(let lines, _, let lineHeight):
             drawHorizontal(lines: lines, lineHeight: lineHeight, attributes: attributes, in: bounds)
@@ -503,7 +650,7 @@ public struct TranslatedImageRenderer {
     }
 }
 
-private enum TextFlow {
+enum TextFlow {
     case horizontal
     case vertical
 }
