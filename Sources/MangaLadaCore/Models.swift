@@ -15,6 +15,7 @@ public struct TextBox: Codable, Equatable, Sendable {
 }
 
 public struct TextBlock: Codable, Equatable, Identifiable, Sendable {
+    /// Fresh OCR creates a new ID. Geometry refreshes retain it, even when a user edits the source text.
     public var id: UUID
     public var box: TextBox
     public var originalText: String

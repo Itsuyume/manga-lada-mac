@@ -9,6 +9,10 @@ struct MangaLadaWorkflowChecks {
     @MainActor
     static func main() async throws {
         let arguments = CommandLine.arguments
+        if arguments.count == 2, arguments[1] == "--cache-migration" {
+            try CacheMigrationChecks.run()
+            return
+        }
         if arguments.count == 5, arguments[1] == "--review" {
             try await BookTranslationReviews.run(source: URL(fileURLWithPath: arguments[2]), output: URL(fileURLWithPath: arguments[3]),
                                                  correctionsURL: URL(fileURLWithPath: arguments[4]))

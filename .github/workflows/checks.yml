@@ -20,6 +20,7 @@ jobs:
       - run: swift build --explicit-target-dependency-import-check error
       - run: swift run MangaLadaCoreChecks
       - run: swift run MangaLadaVisionChecks
+      - run: swift run MangaLadaWorkflowChecks --cache-migration
       - name: Rendering behavior checks
         timeout-minutes: 4
         run: |
