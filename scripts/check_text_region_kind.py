@@ -2,6 +2,7 @@
 """Behavior checks for OCR kind hints using real contour detection, without models."""
 from copy import deepcopy
 from pathlib import Path
+import json
 import sys
 
 sys.dont_write_bytecode = True
@@ -10,6 +11,10 @@ import cv2
 import numpy as np
 from balloon_geometry import BalloonGeometry
 from text_region_kind import classify_text_kind
+
+catalog_path = Path(__file__).resolve().parents[1] / "Sources/MangaLadaCore/Resources/sound-effect-lexicon.json"
+catalog = json.loads(catalog_path.read_text())
+sound_effect_sources = {source for entry in catalog["entries"] for source in entry["sources"]}
 
 
 def enclosed(color: int, rectangle: bool = True) -> tuple:
@@ -30,7 +35,7 @@ def enclosed(color: int, rectangle: bool = True) -> tuple:
 
 def check_kind(image, block, expected):
     pixels, original = image.copy(), deepcopy(block)
-    actual = classify_text_kind(block)
+    actual = classify_text_kind(block, sound_effect_sources, catalog["recognitionPatterns"])
     assert actual == expected, f"{block['originalText']}: expected {expected}, got {actual}"
     assert np.array_equal(image, pixels) and block == original, "Classification changed pixels, text, or geometry"
 
@@ -51,7 +56,8 @@ def run():
     blank = np.zeros((1, 1, 3), np.uint8)
     for text in ("", "あっ", "アッ", "うん", "ナナ", "ママ", "ココ", "キキ", "ホテル", "ありがとう", "雨が降ってきた"):
         check_kind(blank, {"originalText": text, "balloonShape": None}, None)
-    for text in ("ザアア", "ザーッ", "ゴゴゴ", "ドンドン", "カチッ", "ガチャン", "バタン", "ゴロゴロ", "ｻﾞｱｱ", "ザアア…"):
+    for text in ("ザアア", "ザーッ", "ゴゴゴ", "ドンドン", "カチッ", "ガチャン", "バタン", "ゴロゴロ", "ｻﾞｱｱ", "ザアア…",
+                 "ザアァーッ", "バタンバタン", "ガチャガチャ", "ゴロゴロゴロゴロ", "ピッピッピッ"):
         effect = {"originalText": text, "balloonShape": None}
         check_kind(blank, effect, "soundEffect")
         effect.update(textKind="dialogue", userDefinedTextKind=True)

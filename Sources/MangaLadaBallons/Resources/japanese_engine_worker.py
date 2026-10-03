@@ -59,9 +59,10 @@ class JapaneseEngine:
         from balloon_geometry import BalloonGeometry, separate_shared_balloons
         from text_region_kind import classify_text_kind
         geometry = BalloonGeometry(image, text_mask=text_mask)
+        sound_effect_sources = set(request["soundEffectSources"])
         for block in blocks:
             block["balloonShape"] = geometry.shape(block["box"], block["detectedFontSize"])
-            kind = classify_text_kind(block)
+            kind = classify_text_kind(block, sound_effect_sources, request["soundEffectPatterns"])
             if kind is not None:
                 block["textKind"] = kind
         separate_shared_balloons(blocks)

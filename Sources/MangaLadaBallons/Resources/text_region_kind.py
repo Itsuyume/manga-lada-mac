@@ -2,15 +2,8 @@
 import re
 import unicodedata
 
-# Only unambiguous common sound forms are hints. Kana alone also includes names,
-# replies and dialogue; unknown words remain available to the translation model.
-SOUND_EFFECT = re.compile(
-    r"(?:ザ[アァー]{1,6}ッ?|([ドゴガ])\1{1,7}|"
-    r"(?:(?:[ドゴ]ン|[ドゴガ]ーン|バタン|カチッ|ガチャ[ンッ]?|ゴロゴロ|パチパチ|ピ[ッー])){1,3})"
-)
 
-
-def classify_text_kind(block: dict) -> str | None:
+def classify_text_kind(block: dict, sound_effect_sources: set[str], sound_effect_patterns: list[str]) -> str | None:
     existing = block.get("textKind")
     if block.get("userDefinedTextKind") is True or existing == "title":
         return existing
@@ -18,7 +11,7 @@ def classify_text_kind(block: dict) -> str | None:
     if shape is not None:
         return "caption" if rectangular_enclosure(shape) else existing
     text = unicodedata.normalize("NFKC", block["originalText"]).strip(" \t\r\n.!?。…・")
-    if SOUND_EFFECT.fullmatch(text):
+    if text in sound_effect_sources or any(re.fullmatch(pattern, text) for pattern in sound_effect_patterns):
         return "soundEffect"
     return existing
 

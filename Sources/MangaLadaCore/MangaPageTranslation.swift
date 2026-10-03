@@ -44,20 +44,22 @@ public enum MangaPageResponse {
             throw TranslationError.invalidPageResponse("영역 번호 누락 또는 중복")
         }
         let entries = Dictionary(uniqueKeysWithValues: response.translations.map { ($0.id, $0) })
+        let lexicon = try JapaneseSoundEffectLexicon.bundled()
         return try blocks.enumerated().map { index, block in
             guard let entry = entries[index] else {
                 throw TranslationError.invalidPageResponse("영역 \(index) 누락")
             }
             let text = entry.text.trimmingCharacters(in: .whitespacesAndNewlines)
-            let hasKorean = text.unicodeScalars.contains { (0xAC00...0xD7A3).contains($0.value) || (0x3130...0x318F).contains($0.value) }
+            let hasKorean = TextLanguageDetector.containsKorean(text)
             let sourceHasJapanese = TextLanguageDetector.containsJapanese(block.originalText)
             let interruptionOnly = block.originalText.filter(\.isLetter).allSatisfy { $0 == "っ" || $0 == "ッ" }
             guard !text.isEmpty, (!sourceHasJapanese || interruptionOnly || hasKorean), text.range(of: #"[\p{Hiragana}\p{Katakana}\p{Han}]"#, options: .regularExpression) == nil else {
                 throw TranslationError.invalidPageResponse("영역 \(index)에 한국어 번역이 없습니다. 원문: \(block.originalText) / 모델 응답: \(text)")
             }
             var translated = block
-            translated.translatedText = text
             translated.textKind = block.textKind ?? entry.kind
+            translated.translatedText = translated.textKind == .soundEffect
+                ? try SoundEffectTranslation.text(text, source: block.originalText, lexicon: lexicon) : text
             return translated
         }
     }

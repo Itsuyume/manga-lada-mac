@@ -5,6 +5,8 @@ import MangaLadaCore
 struct MangaLadaCoreChecks {
     static func main() async throws {
         try JapanesePipelineChecks.run()
+        try SoundEffectTranslationChecks.run()
+        try JapaneseHorizontalOCRChecks.run()
         try ReadingBehaviorChecks.run()
         try SelectionGeometryChecks.run()
         try await NetworkBoundaryChecks.run()

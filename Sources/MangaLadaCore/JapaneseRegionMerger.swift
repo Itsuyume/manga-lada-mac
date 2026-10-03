@@ -7,8 +7,8 @@ public enum JapaneseRegionMerger {
         let unique = blocks.enumerated().filter { index, block in
             !blocks.enumerated().contains { otherIndex, other in
                 guard index != otherIndex, normalized(other.originalText).contains(normalized(block.originalText)),
-                      intersectionArea(block.box, other.box) / max(0.000001, area(block.box)) > 0.8 else { return false }
-                return area(other.box) > area(block.box) * 1.25 || (other.originalText == block.originalText && otherIndex < index)
+                      block.box.intersectionArea(with: other.box) / max(0.000001, block.box.area) > 0.8 else { return false }
+                return other.box.area > block.box.area * 1.25 || (other.originalText == block.originalText && otherIndex < index)
             }
         }.map(\.element)
         var resolved: [TextBlock] = []
@@ -16,13 +16,10 @@ public enum JapaneseRegionMerger {
             guard let shape = block.balloonShape, block.textKind != .title, block.textKind != .soundEffect,
                   let index = resolved.firstIndex(where: { existing in
                       guard let prior = existing.balloonShape else { return false }
-                      return intersectionArea(prior.bounds, shape.bounds) / max(area(prior.bounds), area(shape.bounds)) > 0.85
+                      return prior.bounds.intersectionArea(with: shape.bounds) / max(prior.bounds.area, shape.bounds.area) > 0.85
                   }) else { resolved.append(block); continue }
             resolved[index].originalText += " " + block.originalText
-            let prior = resolved[index].box
-            let left = min(prior.x, block.box.x), top = min(prior.y, block.box.y)
-            resolved[index].box = TextBox(x: left, y: top, width: max(prior.x + prior.width, block.box.x + block.box.width) - left,
-                                         height: max(prior.y + prior.height, block.box.y + block.box.height) - top)
+            resolved[index].box = resolved[index].box.union(block.box)
         }
         return resolved
     }
@@ -59,13 +56,7 @@ public enum JapaneseRegionMerger {
         hypot(a.x + a.width / 2 - b.x - b.width / 2, a.y + a.height / 2 - b.y - b.height / 2)
     }
     private static func overlaps(_ a: TextBox, _ b: TextBox) -> Bool {
-        let smaller = min(area(a), area(b))
-        return smaller > 0 && intersectionArea(a, b) / smaller > 0.25
-    }
-    private static func area(_ box: TextBox) -> Double { box.width * box.height }
-    private static func intersectionArea(_ a: TextBox, _ b: TextBox) -> Double {
-        let width = max(0, min(a.x + a.width, b.x + b.width) - max(a.x, b.x))
-        let height = max(0, min(a.y + a.height, b.y + b.height) - max(a.y, b.y))
-        return width * height
+        let smaller = min(a.area, b.area)
+        return smaller > 0 && a.intersectionArea(with: b) / smaller > 0.25
     }
 }

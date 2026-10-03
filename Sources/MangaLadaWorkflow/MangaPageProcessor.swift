@@ -2,6 +2,7 @@ import Foundation
 import MangaLadaBallons
 import MangaLadaCore
 import MangaLadaRendering
+import MangaLadaVision
 
 public struct ProcessedMangaPage: Sendable {
     public var translation: PageTranslation
@@ -141,6 +142,12 @@ public final class MangaPageProcessor {
         await status(prior == nil ? "일본어 글자 검출 · 만화 OCR · 원문 제거 중" : "기존 일본어 인식 재사용 · 원문 복원 갱신 중")
         var result = try await recognitionSession.recognizeAndClean(source: imageURL, runID: key, priorBlocks: prior?.blocks)
         try Task.checkCancellation()
+        if result.blocks.contains(where: { JapaneseHorizontalOCR.canRefine($0) }) {
+            await status("가로 일본어 인식 대조 중")
+            let observations = try await VisionOCRService().recognizeText(in: imageURL, recognitionLanguages: ["ja-JP"])
+            result.blocks = JapaneseHorizontalOCR.reconcile(result.blocks, observations: observations)
+            try Task.checkCancellation()
+        }
         if prior == nil { result.blocks = try await GraphicalTitleRecognition.repair(in: imageURL, blocks: result.blocks) }
         try cache.save(result)
         return result

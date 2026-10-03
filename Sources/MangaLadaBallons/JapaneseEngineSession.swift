@@ -9,12 +9,16 @@ public actor JapaneseEngineSession {
     public init(engine: BallonsTranslatorEngine) { self.engine = engine }
 
     public func recognizeAndClean(source: URL, runID: String, priorBlocks: [TextBlock]? = nil) async throws -> PageTranslation {
-        let blocks = try await exchange(Request(source: source.path, destination: engine.inpaintedImageURL(runID: runID).path, blocks: priorBlocks, regions: nil))
+        let lexicon = try JapaneseSoundEffectLexicon.bundled()
+        let blocks = try await exchange(Request(source: source.path, destination: engine.inpaintedImageURL(runID: runID).path,
+                                               blocks: priorBlocks, regions: nil, soundEffectSources: lexicon.sourceForms,
+                                               soundEffectPatterns: lexicon.recognitionPatterns))
         return PageTranslation(imageURL: source, imageFingerprint: runID, sourceLanguage: .japanese, targetLanguage: .korean, blocks: blocks)
     }
     public func verifyProposedRegions(source: URL, regions: [TextBlock]) async throws -> [TextBlock] {
         guard !regions.isEmpty else { return [] }
-        return try await exchange(Request(source: source.path, destination: nil, blocks: nil, regions: regions))
+        return try await exchange(Request(source: source.path, destination: nil, blocks: nil, regions: regions,
+                                          soundEffectSources: nil, soundEffectPatterns: nil))
     }
     private func exchange(_ value: Request) async throws -> [TextBlock] {
         guard !processing else { throw JapaneseEngineSessionError.busy }
@@ -40,6 +44,10 @@ public actor JapaneseEngineSession {
         }
     }
     public func stop() { connection?.terminate(); connection = nil }
-    private struct Request: Encodable { let source: String; let destination: String?; let blocks: [TextBlock]?; let regions: [TextBlock]? }
+    private struct Request: Encodable {
+        let source: String; let destination: String?; let blocks: [TextBlock]?; let regions: [TextBlock]?
+        let soundEffectSources: [String]?
+        let soundEffectPatterns: [String]?
+    }
     private struct Response: Decodable { let blocks: [TextBlock]?; let error: String? }
 }

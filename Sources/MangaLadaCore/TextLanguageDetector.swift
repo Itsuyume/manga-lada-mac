@@ -1,6 +1,9 @@
 import Foundation
 
 public enum TextLanguageDetector {
+    public static func containsKorean(_ text: String) -> Bool {
+        text.unicodeScalars.contains { (0xAC00...0xD7A3).contains($0.value) || (0x3130...0x318F).contains($0.value) }
+    }
     public static func containsJapanese(_ text: String) -> Bool {
         text.unicodeScalars.contains { (0x3040...0x30FF).contains($0.value) || (0x4E00...0x9FFF).contains($0.value) }
     }
