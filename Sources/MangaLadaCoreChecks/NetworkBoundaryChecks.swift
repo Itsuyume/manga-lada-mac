@@ -19,6 +19,8 @@ enum NetworkBoundaryChecks {
         try await checkGemma(blocks, session: session)
         try await checkGemmaValidationRetry(blocks, session: session)
         try await checkValidationRetry(blocks, session: session, validPage: page)
+        try await checkMissingFieldRetry(blocks, session: session, validPage: page)
+        try await checkIncompleteResponse(blocks, session: session, validPage: page)
         try await checkLocalGuard(blocks, session: session)
         FixtureProtocol.state.install { _ in (503, Data()) }
         do { _ = try await OllamaPageTranslator(session: session).translatePage(blocks); throw BoundaryCheckError.failed("HTTP failure was hidden.") }
@@ -80,6 +82,38 @@ enum NetworkBoundaryChecks {
             catch TranslationError.missingConfiguration { }
         }
     }
+    private static func checkIncompleteResponse(_ blocks: [TextBlock], session: URLSession, validPage: String) async throws {
+        let completions: [(Bool?, String?)] = [(true, "length"), (false, nil), (nil, nil)]
+        for model in ["translategemma:12b", "qwen3.5:9b"] {
+            let content = model.hasPrefix("translategemma") ? "[R0] 고마워" : validPage
+            for (done, reason) in completions {
+                FixtureProtocol.state.install { _ in
+                    let reply = ChatReply(message: Message(role: "assistant", content: content), done: done, done_reason: reason)
+                    return (200, try JSONEncoder().encode(reply))
+                }
+                do {
+                    _ = try await OllamaPageTranslator(configuration: OllamaConfiguration(model: model), session: session).translatePage(blocks)
+                    throw BoundaryCheckError.failed("Unfinished model output was accepted as a complete translation.")
+                } catch TranslationError.invalidPageResponse { }
+                try check(FixtureProtocol.state.count == 1, "Incomplete generation repeated the same request budget.")
+            }
+        }
+    }
+    private static func checkMissingFieldRetry(_ blocks: [TextBlock], session: URLSession, validPage: String) async throws {
+        FixtureProtocol.state.install { request in
+            if FixtureProtocol.state.count == 1 {
+                let content = #"{"translations":[{"id":0,"text":"고마워"}]}"#
+                return (200, try JSONEncoder().encode(ChatReply(message: Message(role: "assistant", content: content))))
+            }
+            let body = try JSONDecoder().decode(OllamaProbe.self, from: Self.body(request))
+            try check(body.messages.last?.content.contains("translations[0].kind") == true,
+                      "The retry did not tell the model which required field to restore.")
+            return (200, try JSONEncoder().encode(ChatReply(message: Message(role: "assistant", content: validPage))))
+        }
+        let result = try await OllamaPageTranslator(configuration: OllamaConfiguration(model: "qwen3.5:9b"), session: session).translatePage(blocks)
+        try check(result[0].translatedText == "고마워" && result[0].textKind == .dialogue && FixtureProtocol.state.count == 2,
+                  "A missing classification did not recover with one targeted retry.")
+    }
     private static func body(_ request: URLRequest) throws -> Data {
         if let data = request.httpBody { return data }
         guard let stream = request.httpBodyStream else { throw BoundaryCheckError.failed("No request body.") }
@@ -93,13 +127,17 @@ enum NetworkBoundaryChecks {
         return data
     }
     private static func check(_ condition: Bool, _ message: String) throws { if !condition { throw BoundaryCheckError.failed(message) } }
-    private struct OllamaProbe: Decodable { let model: String; let think: Bool; let stream: Bool; let format: Schema; struct Schema: Decodable { let type: String } }
-    private struct Message: Encodable { let role: String; let content: String }
+    private struct OllamaProbe: Decodable { let model: String; let think: Bool; let stream: Bool; let format: Schema; let messages: [Message]; struct Schema: Decodable { let type: String } }
+    private struct Message: Codable { let role: String; let content: String }
     private struct GemmaProbe: Decodable {
         let model: String; let messages: [UserMessage]; let format: String?; let think: Bool?
         struct UserMessage: Decodable { let role: String; let content: String }
     }
-    private struct ChatReply: Encodable { let message: Message }
+    private struct ChatReply: Encodable {
+        let message: Message
+        var done: Bool? = true
+        var done_reason: String? = "stop"
+    }
     private struct GeminiReply: Encodable {
         let candidates: [Candidate]
         struct Candidate: Encodable { let content: Content }

@@ -33,6 +33,8 @@ macOS 내장 libarchive를 사용하므로 7z 프로그램을 따로 설치할 �
 
 모델을 내려받은 뒤에는 유료 API 키 없이 실행할 수 있습니다. 로컬 모드는 루프백 주소만 허용하며 클라우드 모델 이름을 거부합니다. 두 Ollama 모델과 별도의 OCR·원문 제거 모델을 저장할 공간이 필요합니다.
 
+로컬 모델의 생성 완료 여부와 출력 제한 중단을 확인해, 잘린 문장을 완성된 번역으로 저장하지 않습니다. 한국어 문장에 일본어 한자가 남았거나 문구 종류가 누락된 응답은 검증 오류로 처리하고 한 번만 수정 요청을 보냅니다. 이 검사는 응답 누락을 막는 장치이며 인물 관계·말투·문맥의 의미 정확도를 보장하지 않습니다.
+
 새 Mac의 최초 준비:
 
 ```bash
@@ -106,6 +108,13 @@ swift run MangaLadaWorkflowChecks /path/to/japanese-page.png /path/to/result.png
 swift run MangaLadaWorkflowChecks /path/to/page.png /path/to/manual.png BookTitle --region=0.1,0.2,0.2,0.3
 # 원본 보존, 모든 페이지 크기/저장, 실패 기록을 확인하는 책 전체 검사
 swift run MangaLadaWorkflowChecks --book /path/to/book.zip /path/to/output-folder
+```
+
+모델의 번역 문장과 시간을 비교할 때는 아래 검수를 별도로 실행합니다. 로컬 모델이 준비되어 있어야 하며 OCR·식자·번역 캐시를 거치지 않고 앱의 실제 번역 경로를 호출합니다. 출력 JSON의 일본어·한국어·검토 항목을 직접 대조해야 합니다. 명령의 성공은 응답 형식과 영역 보존을 뜻하며 의미 정확도의 합격을 뜻하지 않습니다. 기존 보고서 파일은 덮어쓰지 않습니다.
+
+```bash
+swift run MangaLadaWorkflowChecks --text-benchmark fixtures/translation-quality-ja-ko.json /path/to/new-report.json --model=translategemma:12b
+swift run MangaLadaWorkflowChecks --text-benchmark fixtures/translation-quality-extra-ja-ko.json /path/to/new-extra-report.json --model=qwen3.5:9b
 ```
 
 행동 검증은 빈/텍스트/이미지 클립보드·외부 이미지 격리·임시 파일 소멸·선택 영역의 역방향 드래그/경계/빈 크기/저장·빈 입력·끝 페이지·양면 순서·번호 누락·잘못된 모델 응답·외부 HTTP 실패·이미지 크기·가로 식자·원본 보존·압축 재사용/동시 접근·저장 폴더 격리·CBZ 왕복을 확인합니다. 내부 구현을 mock하지 않으며 네트워크 경계만 대체합니다. CI가 의존 경계·순환·복잡도·빌드·가벼운 행동 검증을 실행합니다. 외부 OCR 모델이 필요한 검증은 로컬에서 별도로 실행합니다.

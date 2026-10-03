@@ -28,6 +28,13 @@ public enum MangaPageResponse {
     public static func decode(_ data: Data, blocks: [TextBlock]) throws -> [TextBlock] {
         let response: PageResponse
         do { response = try JSONDecoder().decode(PageResponse.self, from: data) }
+        catch DecodingError.keyNotFound(let key, let context) {
+            let path = (context.codingPath + [key]).reduce("") { path, component in
+                if let index = component.intValue { return "\(path)[\(index)]" }
+                return path.isEmpty ? component.stringValue : "\(path).\(component.stringValue)"
+            }
+            throw TranslationError.invalidPageResponse("모델 응답에서 필수 항목이 빠졌습니다: \(path)")
+        }
         catch { throw TranslationError.invalidPageResponse("JSON 형식 오류: \(error.localizedDescription)") }
         guard response.translations.count == blocks.count else {
             throw TranslationError.invalidPageResponse("\(blocks.count)개 영역 중 \(response.translations.count)개만 반환되었습니다.")
@@ -45,7 +52,7 @@ public enum MangaPageResponse {
             let hasKorean = text.unicodeScalars.contains { (0xAC00...0xD7A3).contains($0.value) || (0x3130...0x318F).contains($0.value) }
             let sourceHasJapanese = TextLanguageDetector.containsJapanese(block.originalText)
             let interruptionOnly = block.originalText.filter(\.isLetter).allSatisfy { $0 == "っ" || $0 == "ッ" }
-            guard !text.isEmpty, (!sourceHasJapanese || interruptionOnly || hasKorean), text.range(of: #"[\p{Hiragana}\p{Katakana}]"#, options: .regularExpression) == nil else {
+            guard !text.isEmpty, (!sourceHasJapanese || interruptionOnly || hasKorean), text.range(of: #"[\p{Hiragana}\p{Katakana}\p{Han}]"#, options: .regularExpression) == nil else {
                 throw TranslationError.invalidPageResponse("영역 \(index)에 한국어 번역이 없습니다. 원문: \(block.originalText) / 모델 응답: \(text)")
             }
             var translated = block

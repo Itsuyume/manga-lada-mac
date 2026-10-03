@@ -20,6 +20,15 @@ struct MangaLadaWorkflowChecks {
         }
         var settings = LocalTranslatorConfiguration(enhanceSoundEffects: arguments.contains("--effects"))
         if let option = arguments.first(where: { $0.hasPrefix("--model=") }) { settings.ollama.model = String(option.dropFirst(8)) }
+        if arguments.count >= 4, arguments[1] == "--text-benchmark" {
+            do {
+                try await TextTranslationBenchmark.run(input: URL(fileURLWithPath: arguments[2]), output: URL(fileURLWithPath: arguments[3]), configuration: settings)
+            } catch {
+                FileHandle.standardError.write(Data("Text benchmark failed: \(error.localizedDescription)\n".utf8))
+                exit(1)
+            }
+            return
+        }
         if arguments.count >= 4, arguments[1] == "--book" {
             try await BookTranslationChecks.run(source: URL(fileURLWithPath: arguments[2]), output: URL(fileURLWithPath: arguments[3]), configuration: settings)
             return

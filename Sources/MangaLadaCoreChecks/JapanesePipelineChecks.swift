@@ -16,7 +16,8 @@ enum JapanesePipelineChecks {
             #"{"translations":[]}"#,
             #"{"translations":[{"id":0,"text":"안녕","kind":"dialogue"},{"id":0,"text":"쾅","kind":"soundEffect"}]}"#,
             #"{"translations":[{"id":0,"text":" ","kind":"dialogue"},{"id":1,"text":"쾅","kind":"soundEffect"}]}"#,
-            #"{"translations":[{"id":0,"text":"急いで","kind":"dialogue"},{"id":1,"text":"쾅","kind":"soundEffect"}]}"#
+            #"{"translations":[{"id":0,"text":"急いで","kind":"dialogue"},{"id":1,"text":"쾅","kind":"soundEffect"}]}"#,
+            #"{"translations":[{"id":0,"text":"그弁当, 혼자 다 못 먹어","kind":"dialogue"},{"id":1,"text":"쾅","kind":"soundEffect"}]}"#
         ] {
             do {
                 _ = try MangaPageResponse.decode(Data(invalid.utf8), blocks: blocks)

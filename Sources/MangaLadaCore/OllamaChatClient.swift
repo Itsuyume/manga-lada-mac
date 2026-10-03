@@ -40,6 +40,12 @@ struct OllamaChatClient: Sendable {
         request.httpBody = try JSONEncoder().encode(chat)
         let data = try await TranslationHTTP.data(for: request, session: session)
         let response = try JSONDecoder().decode(ChatResponse.self, from: data)
+        guard response.done == true else {
+            throw TranslationError.invalidPageResponse("로컬 모델이 응답을 끝까지 생성했는지 확인할 수 없습니다. 이 결과는 저장하지 않았습니다.")
+        }
+        guard response.doneReason != "length" else {
+            throw TranslationError.invalidPageResponse("로컬 모델의 응답이 출력 길이 제한에 걸려 중단되었습니다. 문장이 잘릴 수 있어 이 결과는 저장하지 않았습니다.")
+        }
         return response.message.content
     }
     private struct ChatRequest: Encodable {
@@ -48,7 +54,12 @@ struct OllamaChatClient: Sendable {
     }
     private struct Options: Encodable { let temperature: Double; let num_ctx: Int; let num_predict: Int }
     private struct Message: Codable { let role: String; let content: String; let images: [String]? }
-    private struct ChatResponse: Decodable { let message: Message }
+    private struct ChatResponse: Decodable {
+        let message: Message
+        let done: Bool?
+        let doneReason: String?
+        enum CodingKeys: String, CodingKey { case message, done; case doneReason = "done_reason" }
+    }
 }
 
 enum ModelJSON {
