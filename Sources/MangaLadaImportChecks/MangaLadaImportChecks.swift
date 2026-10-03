@@ -10,6 +10,12 @@ import UniformTypeIdentifiers
 struct MangaLadaImportChecks {
     @MainActor
     static func main() async throws {
+        let arguments = CommandLine.arguments
+        if arguments.dropFirst().first == "--export" {
+            guard arguments.count == 4 else { throw ImportCheckError.failed("Usage: MangaLadaImportChecks --export <completed-folder> <output.cbz>") }
+            try await exportBook(source: URL(fileURLWithPath: arguments[2]), destination: URL(fileURLWithPath: arguments[3]))
+            return
+        }
         let root = FileManager.default.temporaryDirectory.appendingPathComponent("comic-import-" + UUID().uuidString)
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: root) }
@@ -26,12 +32,29 @@ struct MangaLadaImportChecks {
         try await checkConcurrentArchive(source: source, root: root)
         try await checkPDF(root: root, loader: loader)
         let exported = root.appendingPathComponent("export.cbz")
-        try await CBZExporter().export(pages: book.pages.map(\.url), to: exported)
-        let roundTrip = try await loader.load(exported)
-        try check(roundTrip.pages.count == 3 && (try Data(contentsOf: roundTrip.pages[0].url)) == (try Data(contentsOf: book.pages[0].url)), "CBZ round trip changed page bytes.")
+        try await checkCBZExport(book: book, destination: exported, loader: loader)
         try checkBookOutput(source: source, book: book, root: root)
         if let path = CommandLine.arguments.dropFirst().first { try checkRAR(URL(fileURLWithPath: path), root: root) }
         print("MangaLadaImportChecks passed: folders, natural order, ZIP/CBZ, 7z/CB7, TAR, PDF, CBZ export, output isolation")
+    }
+    private static func exportBook(source: URL, destination: URL) async throws {
+        let cache = FileManager.default.temporaryDirectory.appendingPathComponent("comic-round-trip-" + UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: cache) }
+        let loader = ComicBookLoader(extractionRoot: cache)
+        let book = try await loader.load(source)
+        try await checkCBZExport(book: book, destination: destination, loader: loader)
+        print("CBZ export checks passed: \(book.pages.count) pages, every page restored byte-for-byte, source preserved")
+    }
+    private static func checkCBZExport(book: ComicBook, destination: URL, loader: ComicBookLoader) async throws {
+        let fingerprint = ImageFingerprint()
+        let expected = try book.pages.map { try fingerprint.make(for: $0.url) }
+        try await CBZExporter().export(pages: book.pages.map(\.url), to: destination)
+        let roundTrip = try await loader.load(destination)
+        try check(roundTrip.pages.count == book.pages.count, "CBZ round trip changed the page count.")
+        for index in book.pages.indices {
+            try check(try fingerprint.make(for: roundTrip.pages[index].url) == expected[index], "CBZ round trip changed page \(index + 1).")
+            try check(try fingerprint.make(for: book.pages[index].url) == expected[index], "CBZ export changed source page \(index + 1).")
+        }
     }
     private static func checkArchives(source: URL, root: URL, loader: ComicBookLoader) async throws {
         for (suffix, format) in [("zip", "zip"), ("cbz", "zip"), ("7z", "7zip"), ("cb7", "7zip"), ("tar", "pax")] {

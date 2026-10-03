@@ -82,6 +82,8 @@ swift run MangaLadaCoreChecks
 swift run MangaLadaVisionChecks
 swift run MangaLadaRenderingChecks
 swift run MangaLadaImportChecks
+# 완성본 폴더를 실제 CBZ로 내보내고 모든 페이지 바이트·원본 보존 검사
+swift run MangaLadaImportChecks --export /path/to/completed-folder /path/to/output.cbz
 # 외부 엔진의 Python 환경에서
 python scripts/check_balloon_geometry.py
 python scripts/check_supplemental_mask.py
