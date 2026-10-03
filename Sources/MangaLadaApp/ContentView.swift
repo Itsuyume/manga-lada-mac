@@ -39,9 +39,9 @@ private struct TranslatorBody: View {
                     RecognizedRegionLegend(state: state)
                 }
                 ComicPageCanvas(pages: state.displayPages, index: state.currentIndex, settings: reading, revision: state.imageRevision,
-                                   selection: state.isSelectingRegion ? Binding(get: { state.selectedRegion }, set: state.selectRegion) : nil,
+                                   selection: state.isSelectingRegion ? Binding(get: { state.selectedRegion }, set: { state.selectRegion($0) }) : nil,
                                    regions: state.showInspector || state.isSelectingRegion ? state.currentResult?.translation.blocks ?? [] : [],
-                                   selectedRegionID: Binding(get: { state.selectedBlockID }, set: state.focusBlock), onSelect: state.select)
+                                   selectedRegionID: Binding(get: { state.selectedBlockID }, set: { state.focusBlock($0) }), onSelect: state.select)
                 .allowsHitTesting(!state.isSelectingRegion || !state.isBusy)
             } }
             if state.showInspector && !state.pages.isEmpty { Divider(); TranslationInspector(state: state).frame(width: 260) }
