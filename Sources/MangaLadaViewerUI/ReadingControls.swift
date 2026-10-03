@@ -31,7 +31,8 @@ public struct ReadingControls: View {
                 ForEach(PageFit.allCases, id: \.self) { Text($0.label).tag($0) }
             }.labelsHidden().frame(width: 110)
             Button { settings.zoomOut() } label: { Image(systemName: "minus.magnifyingglass") }.help("축소")
-            Button("\(Int(settings.zoom * 100))%") { settings.zoom = 1 }.monospacedDigit().frame(width: 55).help("확대 초기화")
+            Button("\(Int(settings.zoom * 100))%") { settings.endMagnification(); settings.zoom = 1 }
+                .monospacedDigit().frame(width: 55).help("확대 초기화 · 트랙패드에서 두 손가락을 벌리거나 오므려 확대·축소")
             Button { settings.zoomIn() } label: { Image(systemName: "plus.magnifyingglass") }.help("확대")
         }.buttonStyle(.borderless).controlSize(.small).padding(.horizontal, 18).padding(.vertical, 10)
             .background(.bar).onChange(of: index, initial: true) { _, value in pageNumber = total == 0 ? "0" : String(value + 1) }

@@ -5,7 +5,9 @@ import MangaLadaRendering
 extension MangaLadaRenderingChecks {
     @MainActor
     static func checkSoundEffects(in root: URL) throws {
+        stage("Registering bundled fonts")
         try SoundEffectFonts.registerBundledFonts()
+        stage("Creating sound effect source image")
         let library = try SoundEffectLibrary.standard()
         try require(library.styles.count == 12, "The effect library is incomplete.")
         try require(try library.automaticStyle(original: "ドキドキ", translated: "두근두근").id == "heartbeat", "Heartbeat selection lost its semantic rule.")
@@ -16,6 +18,7 @@ extension MangaLadaRenderingChecks {
         let source = image.tiffRepresentation!
         var bytes = Set<Data>()
         for style in library.styles {
+            stage("Sound effect \(style.id)")
             let block = TextBlock(box: TextBox(x: 0.14, y: 0.18, width: 0.72, height: 0.64), originalText: "ドーン", translatedText: "쾅!",
                                   detectedFontSize: 94, textKind: .soundEffect, rotationDegrees: 12, effectStyleID: style.id)
             let output = try TranslatedImageRenderer().render(image: image, blocks: [block], backgroundStyle: .none)

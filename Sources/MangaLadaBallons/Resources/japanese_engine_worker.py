@@ -45,6 +45,7 @@ class JapaneseEngine:
         height, width = image.shape[:2]
         mask, detected = self.detector.detect(image)
         self.prepare_title_mask(image, mask, detected)
+        text_mask = mask.copy()
         blocks = request.get("blocks")
         if blocks is None:
             self.ocr.load_model()
@@ -52,7 +53,7 @@ class JapaneseEngine:
         self.expand_outline_mask(image, mask, detected)
         result = self.painter.inpaint(image, mask, detected, check_need_inpaint=False) if detected else image
         from balloon_geometry import BalloonGeometry, separate_shared_balloons
-        geometry = BalloonGeometry(image)
+        geometry = BalloonGeometry(image, text_mask=text_mask)
         for block in blocks:
             block["balloonShape"] = geometry.shape(block["box"], block["detectedFontSize"])
             if block.get("textKind") is None:

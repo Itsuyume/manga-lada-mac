@@ -6,8 +6,8 @@ struct JapanesePageKeys {
     let recognition: String
     let previousRecognition: [String]
     let previous: [String]
-    private static let translationVersion = 19
-    private static let recognitionVersion = 18
+    private static let translationVersion = 21
+    private static let recognitionVersion = 20
     init(imageURL: URL, configuration: LocalTranslatorConfiguration, context: String, title: String) throws {
         let fingerprints = ImageFingerprint()
         let image = try fingerprints.make(for: imageURL)
@@ -18,13 +18,10 @@ struct JapanesePageKeys {
         translation = prefix + "v\(Self.translationVersion)-" + suffix + newContext
         recognition = prefix + "ocr-v\(Self.recognitionVersion)-balloons"
         previousRecognition = ((Self.recognitionVersion - 3)..<Self.recognitionVersion).reversed().map { prefix + "ocr-v\($0)-balloons" }
-        previous = [prefix + "v18-" + suffix + newContext, prefix + "v18-" + suffix + oldContext,
-                    prefix + "v17-" + suffix + newContext, prefix + "v17-" + suffix + oldContext,
-                    prefix + "v16-" + suffix + newContext, prefix + "v16-" + suffix + oldContext,
-                    prefix + "v15-" + suffix + newContext, prefix + "v15-" + suffix + oldContext,
-                    prefix + "v14-" + suffix + newContext, prefix + "v14-" + suffix + oldContext, prefix + "v13-" + suffix + newContext,
-                    prefix + "v13-" + suffix + oldContext, prefix + "v12-" + suffix + newContext,
-                    prefix + "v12-" + suffix + oldContext, prefix + "v11-" + suffix + oldContext]
+        let contexts = newContext == oldContext ? [newContext] : [newContext, oldContext]
+        previous = stride(from: Self.translationVersion - 1, through: 11, by: -1).flatMap { version in
+            contexts.map { prefix + "v\(version)-" + suffix + $0 }
+        }
     }
 }
 

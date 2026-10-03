@@ -5,6 +5,7 @@ permissions:
 jobs:
   mac:
     runs-on: macos-15
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -19,5 +20,23 @@ jobs:
       - run: swift build --explicit-target-dependency-import-check error
       - run: swift run MangaLadaCoreChecks
       - run: swift run MangaLadaVisionChecks
-      - run: swift run MangaLadaRenderingChecks
+      - name: Rendering behavior checks
+        timeout-minutes: 4
+        run: |
+          python3 - <<'PY'
+          import subprocess
+          import sys
+          check = subprocess.Popen([".build/debug/MangaLadaRenderingChecks"])
+          try:
+              sys.exit(check.wait(timeout=120))
+          except subprocess.TimeoutExpired:
+              print("Rendering checks exceeded 120 seconds; collecting a stack sample.", flush=True)
+              try:
+                  subprocess.run(["sample", str(check.pid), "3"], timeout=15, check=False)
+              finally:
+                  check.kill()
+                  check.wait()
+              sys.exit(124)
+          PY
       - run: swift run MangaLadaImportChecks
+        timeout-minutes: 4

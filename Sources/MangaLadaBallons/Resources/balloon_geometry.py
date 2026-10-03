@@ -17,9 +17,12 @@ def white_background_ratio(image: np.ndarray, box: dict, font_size: float) -> fl
 
 
 class BalloonGeometry:
-    def __init__(self, source: np.ndarray):
+    def __init__(self, source: np.ndarray, text_mask: np.ndarray | None = None):
         self.source = source
         self.height, self.width = source.shape[:2]
+        if text_mask is not None and text_mask.shape != source.shape[:2]:
+            raise ValueError("Text mask dimensions do not match the source page")
+        self.text_mask = text_mask
         gray = cv2.cvtColor(source, cv2.COLOR_BGR2GRAY)
         self.ink = (gray < 180).astype(np.uint8) * 255
         self.edges = cv2.Canny(gray, 40, 100)
@@ -29,6 +32,8 @@ class BalloonGeometry:
         x, y, w, h = (box[key] * scale for key, scale in (("x", self.width), ("y", self.height), ("width", self.width), ("height", self.height)))
         if w < 1 or h < 1:
             return None
+        center_x, center_y = x + w / 2, y + h / 2
+        text_points = self.text_points(x, y, w, h)
         patch = self.source[max(0, int(y)):min(self.height, int(y + h)), max(0, int(x)):min(self.width, int(x + w))]
         if patch.size == 0:
             return None
@@ -49,18 +54,18 @@ class BalloonGeometry:
         for contour in self.contours[kernel]:
             area = cv2.contourArea(contour)
             bx, by, bw, bh = cv2.boundingRect(contour)
-            if not w * h * .9 <= area <= self.width * self.height * .20 or bw < w * .8 or bh < h * .75:
+            minimum_area = .45 if text_points is not None else .9
+            if not w * h * minimum_area <= area <= self.width * self.height * .20 or bw < w * .8 or bh < h * .75:
                 continue
-            if cv2.pointPolygonTest(contour, (x + w / 2, y + h / 2), False) < 0:
+            if bw > max(w * 3, font_size * 9) or bh > max(h * 3, font_size * 9):
                 continue
-            corners = ((x + w * dx, y + h * dy) for dx, dy in ((.1, .1), (.9, .1), (.1, .9), (.9, .9)))
-            if sum(cv2.pointPolygonTest(contour, point, False) >= 0 for point in corners) < 3:
+            # A panel can be mostly white and contain the text, but its center is
+            # unrelated to that dialogue. Keep placement anchored to the source ink.
+            if abs(bx + bw / 2 - center_x) > max(w * .75, font_size * 2) or abs(by + bh / 2 - center_y) > max(h * .75, font_size * 2):
                 continue
             local = np.zeros((bh, bw), np.uint8)
             cv2.drawContours(local, [contour - [bx, by]], -1, 255, -1)
-            text_area = local[max(0, int(y - by)):min(bh, int(np.ceil(y + h - by))),
-                              max(0, int(x - bx)):min(bw, int(np.ceil(x + w - bx)))]
-            if text_area.size == 0 or (text_area > 0).mean() < .90:
+            if not self.contains_text(local, bx, by, (x, y, w, h), text_points):
                 continue
             colors = self.source[by:by + bh, bx:bx + bw][local > 0]
             uniform = (np.abs(colors.astype(np.float32) - background).max(axis=1) <= 30).mean()
@@ -69,7 +74,27 @@ class BalloonGeometry:
         if not candidates:
             return None
         _, bx, by, mask = min(candidates, key=lambda item: item[0])
-        return sampled_shape(mask, bx, by, self.width, self.height, x + w / 2 - bx)
+        return sampled_shape(mask, bx, by, self.width, self.height, center_x - bx)
+
+    def text_points(self, x: float, y: float, w: float, h: float) -> tuple | None:
+        if self.text_mask is None:
+            return None
+        left, top = max(0, int(x)), max(0, int(y))
+        ys, xs = np.nonzero(self.text_mask[top:min(self.height, int(np.ceil(y + h))), left:min(self.width, int(np.ceil(x + w)))])
+        return (xs + left, ys + top) if len(xs) else None
+
+    @staticmethod
+    def contains_text(mask: np.ndarray, bx: int, by: int, rectangle: tuple, points: tuple | None) -> bool:
+        height, width = mask.shape
+        if points is not None:
+            xs, ys = points[0] - bx, points[1] - by
+            inside = (xs >= 0) & (xs < width) & (ys >= 0) & (ys < height)
+            return np.count_nonzero(mask[ys[inside], xs[inside]]) >= len(xs) * .96
+        x, y, w, h = rectangle
+        area = mask[max(0, int(y - by)):min(height, int(np.ceil(y + h - by))),
+                    max(0, int(x - bx)):min(width, int(np.ceil(x + w - bx)))]
+        full_area = (int(np.ceil(x + w)) - int(x)) * (int(np.ceil(y + h)) - int(y))
+        return full_area > 0 and np.count_nonzero(area) >= full_area * .90
 
 
 def sampled_shape(mask: np.ndarray, x: int, y: int, width: int, height: int, center_x: float) -> dict | None:

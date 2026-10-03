@@ -12,6 +12,8 @@ public final class ReadingSettings: ObservableObject {
     @Published public var coverAlone = true
     private let defaults: UserDefaults
     private let prefix: String
+    private let zoomRange = 0.4...4.0
+    private var magnificationStart: Double?
 
     public init(prefix: String, defaults: UserDefaults = .standard) {
         self.prefix = prefix; self.defaults = defaults
@@ -21,9 +23,22 @@ public final class ReadingSettings: ObservableObject {
     public func navigation(count: Int) -> PageNavigation {
         PageNavigation(count: count, layout: layout, direction: direction, coverAlone: coverAlone)
     }
-    public func zoomIn() { zoom = min(4, zoom + 0.2) }
-    public func zoomOut() { zoom = max(0.4, zoom - 0.2) }
+    public func zoomIn() { endMagnification(); zoom = clampedZoom(zoom + 0.2) }
+    public func zoomOut() { endMagnification(); zoom = clampedZoom(zoom - 0.2) }
+    public func updateMagnification(_ factor: Double) throws {
+        guard factor.isFinite, factor > 0, zoom.isFinite, zoom > 0 else { throw ReadingGestureError.invalidMagnification }
+        let start = magnificationStart ?? zoom
+        magnificationStart = start
+        zoom = clampedZoom(start * factor)
+    }
+    public func endMagnification() { magnificationStart = nil }
+    private func clampedZoom(_ value: Double) -> Double { min(zoomRange.upperBound, max(zoomRange.lowerBound, value)) }
     public func toggleFullScreen() { NSApp.keyWindow?.toggleFullScreen(nil) }
+}
+
+public enum ReadingGestureError: LocalizedError {
+    case invalidMagnification
+    public var errorDescription: String? { "확대·축소 제스처 값이 올바르지 않습니다." }
 }
 
 public enum MangaUI {

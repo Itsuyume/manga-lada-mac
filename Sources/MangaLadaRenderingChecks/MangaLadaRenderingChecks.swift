@@ -8,9 +8,13 @@ struct MangaLadaRenderingChecks {
     @MainActor
     static func main() throws {
         let root = try temporaryDirectory()
+        stage("Curved line wrapping")
         try checkCurvedLineWrapping()
+        stage("Sound effects")
         try checkSoundEffects(in: root)
+        stage("Dark captions and manual contours")
         try checkDarkCaptionAndManualContour()
+        stage("PNG rendering and pixel preservation")
         let sourceURL = root.appendingPathComponent("source.png")
         let inpaintedSourceURL = root.appendingPathComponent("inpainted-source.png")
         let outputURL = root.appendingPathComponent("translated.png")
@@ -163,10 +167,17 @@ struct MangaLadaRenderingChecks {
             containsTintedPixel(image: readabilityImage, normalizedArea: CGRect(x: 0.10, y: 0.10, width: 0.10, height: 0.10)),
             "Readability renderer unexpectedly replaced untouched background."
         )
+        stage("Short vertical source")
         try checkShortVerticalSource(in: root)
+        stage("Shape and consistency")
         try checkShapeAndConsistency(in: root)
+        stage("Floating text")
         try checkFloatingText()
         print("MangaLadaRenderingChecks passed: \(outputURL.path)")
+    }
+
+    static func stage(_ message: String) {
+        FileHandle.standardError.write(Data("Rendering check: \(message)\n".utf8))
     }
 
     private static func makeSourceImage(at url: URL) throws {

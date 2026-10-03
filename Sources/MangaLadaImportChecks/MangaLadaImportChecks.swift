@@ -28,6 +28,7 @@ struct MangaLadaImportChecks {
         let imageBook = try await loader.load(source.appendingPathComponent("2.png"))
         try check(imageBook.initialIndex == 1 && imageBook.sourceURL.standardizedFileURL.path == source.standardizedFileURL.path, "Opening an image did not select its page in the same book.")
         try await ImageInputChecks.run(image: source.appendingPathComponent("2.png"), root: root, loader: loader)
+        try ReadingGestureChecks.run()
         try await checkArchives(source: source, root: root, loader: loader)
         try await checkConcurrentArchive(source: source, root: root)
         try await checkPDF(root: root, loader: loader)

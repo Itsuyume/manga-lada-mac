@@ -16,6 +16,13 @@ original = image.copy()
 box = {"x": 280 / 640, "y": 250 / 640, "width": 80 / 640, "height": 140 / 640}
 shape = balloon_shape(image, box, 40)
 assert shape is not None, "Closed balloon interior was not found"
+assert BalloonGeometry(image, text_mask=np.zeros(image.shape[:2], np.uint8)).shape(box, 40) == shape, "An empty ink mask changed rectangle-based detection"
+try:
+    BalloonGeometry(image, text_mask=np.zeros((10, 10), np.uint8))
+except ValueError as error:
+    assert "dimensions" in str(error)
+else:
+    raise AssertionError("A mask with different page dimensions was accepted")
 assert np.array_equal(image, original), "Geometry detection changed source pixels"
 widths = [row["right"] - row["left"] for row in shape["rows"]]
 assert widths[len(widths) // 2] > widths[4] * 1.3, "Curved balloon was reduced to a rectangle"
@@ -39,6 +46,35 @@ cv2.rectangle(notched_art, (210, 190), (430, 450), (250, 250, 250), -1)
 cv2.rectangle(notched_art, (210, 275), (320, 300), (145, 145, 145), -1)
 cv2.rectangle(notched_art, (320, 340), (430, 365), (145, 145, 145), -1)
 assert balloon_shape(notched_art, box, 40) is None, "Broken text halos or artwork became a balloon interior"
+panel = np.full_like(image, 255)
+cv2.rectangle(panel, (64, 220), (576, 365), (0, 0, 0), 4)
+cv2.rectangle(panel, (280, 250), (365, 320), (0, 0, 0), -1)
+panel_text = {"x": 500 / 640, "y": 250 / 640, "width": 55 / 640, "height": 75 / 640}
+assert balloon_shape(panel, panel_text, 25) is None, "Panel border relocated right-hand dialogue onto the character's face"
+centered_panel = np.full_like(image, 255)
+cv2.rectangle(centered_panel, (64, 220), (576, 365), (0, 0, 0), 4)
+cv2.rectangle(centered_panel, (170, 245), (240, 335), (0, 0, 0), -1)
+centered_text = {"x": 292 / 640, "y": 250 / 640, "width": 55 / 640, "height": 75 / 640}
+assert balloon_shape(centered_panel, centered_text, 25) is None, "Panel border became a balloon even when the dialogue was near its center"
+jagged = np.full_like(image, 145)
+polygon = np.array([(420, 200), (570, 200), (570, 310), (520, 310), (520, 430), (420, 430)])
+cv2.fillPoly(jagged, [polygon], (255, 255, 255))
+cv2.polylines(jagged, [polygon], True, (0, 0, 0), 3)
+ink = np.zeros(image.shape[:2], np.uint8)
+for left, top, right, bottom in [(540, 220, 548, 260), (485, 270, 493, 340), (440, 350, 448, 410)]:
+    cv2.rectangle(ink, (left, top), (right, bottom), 255, -1)
+jagged[ink > 0] = 0
+jagged_text = {"x": 432 / 640, "y": 214 / 640, "width": 130 / 640, "height": 200 / 640}
+source_before, ink_before = jagged.copy(), ink.copy()
+jagged_shape = BalloonGeometry(jagged, text_mask=ink).shape(jagged_text, 25)
+assert np.array_equal(jagged, source_before) and np.array_equal(ink, ink_before), "Glyph containment altered the source image or OCR mask"
+assert jagged_shape is not None, "Staggered Japanese columns in a jagged balloon were rejected by their rectangular bounding box"
+upper = next(row for row in jagged_shape["rows"] if row["y"] >= .4)
+lower = next(row for row in jagged_shape["rows"] if row["y"] >= .6)
+assert lower["right"] < upper["right"] - .05, "Jagged balloon lost the narrower lower interior"
+wrong_ink = ink.copy()
+wrong_ink[350:405, 535:555] = 255
+assert BalloonGeometry(jagged, text_mask=wrong_ink).shape(jagged_text, 25) is None, "A candidate excluding actual source letters was accepted"
 joined_mask = np.zeros((640, 640), np.uint8)
 cv2.ellipse(joined_mask, (265, 320), (90, 125), 0, 0, 360, 255, -1)
 cv2.ellipse(joined_mask, (375, 320), (90, 125), 0, 0, 360, 255, -1)
@@ -73,4 +109,4 @@ edge = np.full_like(image, 255)
 cv2.ellipse(edge, (320, 30), (110, 140), 0, 0, 360, (0, 0, 0), 4)
 edge_shape = balloon_shape(edge, {"x": 300 / 640, "y": 10 / 640, "width": 40 / 640, "height": 80 / 640}, 35)
 assert edge_shape is not None and edge_shape["bounds"]["y"] < .01, "Balloon clipped at the page edge was lost"
-print("Balloon geometry checks passed: source outlines, curved/pastel/dark interiors, separate joined lobes, blank/artwork rejection, source preserved")
+print("Balloon geometry checks passed: source outlines, curved/pastel/dark/staggered interiors, joined lobes, panel/art rejection, empty/invalid masks, source preserved")

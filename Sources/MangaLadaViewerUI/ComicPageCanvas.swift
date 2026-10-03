@@ -1,3 +1,4 @@
+import AppKit
 import MangaLadaCore
 import SwiftUI
 
@@ -11,6 +12,7 @@ public struct ComicPageCanvas: View {
     let regions: [TextBlock]
     let selectedRegionID: Binding<UUID?>?
     @State private var scrollPage: Int?
+    @GestureState private var isMagnifying = false
     public init(pages: [URL], index: Int, settings: ReadingSettings, revision: Int = 0, selection: Binding<TextBox?>? = nil,
                 regions: [TextBlock] = [], selectedRegionID: Binding<UUID?>? = nil, onSelect: @escaping (Int) -> Void) {
         self.pages = pages; self.index = index; self.settings = settings; self.revision = revision; self.selection = selection; self.onSelect = onSelect
@@ -33,6 +35,15 @@ public struct ComicPageCanvas: View {
                 }.id("\(index)-\(settings.layout.rawValue)")
             }
         }.background(MangaUI.canvas)
+            .simultaneousGesture(MagnificationGesture()
+                .updating($isMagnifying) { _, active, _ in active = true }
+                .onChanged { factor in
+                    do { try settings.updateMagnification(Double(factor)) }
+                    catch { settings.endMagnification(); NSLog("Manga reader magnification: %@", error.localizedDescription); NSSound.beep() }
+                }
+                .onEnded { _ in settings.endMagnification() })
+            .onChange(of: isMagnifying) { _, active in if !active { settings.endMagnification() } }
+            .onDisappear { settings.endMagnification() }
     }
     private func pageSize(_ size: CGSize, count: Int) -> CGSize {
         CGSize(width: max(1, (size.width - 40 - Double(max(0, count - 1)) * 4) / Double(max(1, count))),
