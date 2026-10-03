@@ -83,10 +83,13 @@ public final class MangaPageProcessor {
         let reusable = force ? nil : storedPrior
         let migrated = reusable.flatMap { RecognitionCacheMigration.reuse($0, for: recognized.blocks) }
         let blocks: [TextBlock]
-        if let migrated { await status("기존 번역 문구 재사용 · 말풍선 배치 계산 중"); blocks = migrated }
-        else {
+        if let migrated, migrated.allSatisfy({ !$0.translatedText.isEmpty }) {
+            await status("기존 번역 문구 재사용 · 말풍선 배치 계산 중"); blocks = migrated
+        } else {
             await status("\(configuration.provider.displayName) · 페이지 문맥 번역 중")
-            blocks = try await pipeline.translate(recognized.blocks, configuration: configuration, previousContext: previousContext)
+            let reviewed = Dictionary(uniqueKeysWithValues: (migrated ?? []).filter { !$0.translatedText.isEmpty }.map { ($0.id, $0) })
+            let translated = try await pipeline.translate(migrated ?? recognized.blocks, configuration: configuration, previousContext: previousContext)
+            blocks = translated.map { reviewed[$0.id] ?? $0 }
         }
         try Task.checkCancellation()
         let translation = PageTranslation(imageURL: imageURL, imageFingerprint: keys.translation,
@@ -139,15 +142,19 @@ public final class MangaPageProcessor {
                              status: @escaping @Sendable (String) async -> Void) async throws -> PageTranslation {
         if let stored = try cache.load(fingerprint: key), FileManager.default.fileExists(atPath: cleanURL.path) { return stored }
         let prior = try previousTranslation(previousKeys)
+        let lexicon = try JapaneseSoundEffectLexicon.bundled()
+        await status("일본어 글자·효과음 위치 대조 중")
+        let observations = try await VisionOCRService().recognizeText(in: imageURL, recognitionLanguages: ["ja-JP"], effectLexicon: lexicon)
+        try Task.checkCancellation()
         await status(prior == nil ? "일본어 글자 검출 · 만화 OCR · 원문 제거 중" : "기존 일본어 인식 재사용 · 원문 복원 갱신 중")
-        var result = try await recognitionSession.recognizeAndClean(source: imageURL, runID: key, priorBlocks: prior?.blocks)
+        var result = try await recognitionSession.recognizeAndClean(source: imageURL, runID: key, priorBlocks: prior?.blocks, opticalCandidates: observations)
         try Task.checkCancellation()
         if result.blocks.contains(where: { JapaneseHorizontalOCR.canRefine($0) }) {
             await status("가로 일본어 인식 대조 중")
-            let observations = try await VisionOCRService().recognizeText(in: imageURL, recognitionLanguages: ["ja-JP"])
             result.blocks = JapaneseHorizontalOCR.reconcile(result.blocks, observations: observations)
             try Task.checkCancellation()
         }
+        result.blocks = lexicon.inferKinds(result.blocks)
         if prior == nil { result.blocks = try await GraphicalTitleRecognition.repair(in: imageURL, blocks: result.blocks) }
         try cache.save(result)
         return result

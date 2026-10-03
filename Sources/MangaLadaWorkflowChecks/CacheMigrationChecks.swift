@@ -49,6 +49,16 @@ enum CacheMigrationChecks {
         var empty = page
         empty.blocks[0].translatedText = ""
         try require(RecognitionCacheMigration.reuse(empty, for: [rawOCR]) == nil, "An empty translation was reused.")
+        let extra = TextBlock(box: .init(x: 0.1, y: 0.7, width: 0.3, height: 0.08), originalText: "カチッ", textKind: .soundEffect)
+        guard let augmented = RecognitionCacheMigration.reuse(page, for: [rawOCR, extra]) else {
+            throw CheckError.failed("A newly detected effect discarded previously reviewed Japanese and Korean.")
+        }
+        try require(augmented[0].originalText == saved.originalText && augmented[0].translatedText == saved.translatedText,
+                    "Adding an effect lost reviewed text.")
+        try require(augmented[0].userDefinedTextKind == true && augmented[0].effectStyleID == saved.effectStyleID
+                    && augmented[1] == extra, "Adding an effect lost manual style or pre-translated the new region.")
+        var moved = rawOCR; moved.box.x += 0.1
+        try require(RecognitionCacheMigration.reuse(page, for: [moved, extra]) == nil, "Moved source reused reviewed text while adding an effect.")
         print("Cache migration checks passed: edited Japanese/Korean, new contours, manual bounds/kind/style, missing/duplicate/new/moved regions, source preserved")
     }
     private static func require(_ value: Bool, _ message: String) throws {

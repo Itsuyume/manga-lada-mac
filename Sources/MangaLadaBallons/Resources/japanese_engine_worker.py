@@ -48,14 +48,20 @@ class JapaneseEngine:
         height, width = image.shape[:2]
         mask, detected = self.detector.detect(image)
         self.prepare_title_mask(image, mask, detected)
-        text_mask = mask.copy()
         blocks = request.get("blocks")
         if blocks is None:
             self.ocr.load_model()
             blocks = self.read_blocks(image, mask, detected)
+        optical_mask, optical_paint = self.add_optical_effects(image, blocks, request)
+        mask = self.cv2.bitwise_or(mask, optical_mask)
+        text_mask = mask.copy()
         self.expand_outline_mask(image, mask, detected)
-        paint_blocks = self.inpainting_blocks(detected, width, height)
+        paint_blocks = self.inpainting_blocks(detected, width, height) + optical_paint
+        original = image.copy()
         result = self.painter.inpaint(image, mask, paint_blocks, check_need_inpaint=False) if paint_blocks else image
+        result[mask == 0] = original[mask == 0]
+        from optical_effects import restore_flat_backgrounds
+        restore_flat_backgrounds(original, result, mask, [block.xyxy for block in optical_paint])
         from balloon_geometry import BalloonGeometry, separate_shared_balloons
         from text_region_kind import classify_text_kind
         geometry = BalloonGeometry(image, text_mask=text_mask)
@@ -73,6 +79,30 @@ class JapaneseEngine:
             raise OSError("Cannot save clean page")
         os.replace(temporary, destination)
         return {"blocks": blocks, "elapsed": time.monotonic() - began}
+
+    def add_optical_effects(self, image, blocks: list[dict], request: dict) -> tuple:
+        from optical_effects import plan_effects, confirmed_effects, effect_mask
+        from ballontranslator.utils.textblock import TextBlock
+        proposals, matched = plan_effects(blocks, request["opticalCandidates"],
+                                          set(request["soundEffectSources"]), request["soundEffectPatterns"])
+        verified = []
+        for start in range(0, len(proposals), 40):
+            verified.extend(self.read_proposed_regions(image, proposals[start:start + 40]))
+        extras = confirmed_effects(proposals, verified)
+        height, width = image.shape[:2]
+        for extra in extras:
+            box = extra["box"]
+            pixel_width, pixel_height = box["width"] * width, box["height"] * height
+            extra.update(detectedFontSize=min(pixel_width, pixel_height), sourceIsVertical=pixel_height > pixel_width,
+                         rotationDegrees=0)
+        mask, boxes = effect_mask(image, matched + extras)
+        blocks.extend(extras)
+        paint = []
+        for left, top, right, bottom in boxes:
+            block = TextBlock(xyxy=[left, top, right, bottom])
+            block.set_lines_by_xywh([left, top, right - left, bottom - top])
+            paint.append(block)
+        return mask, paint
 
     @staticmethod
     def inpainting_blocks(detected: list["TextBlock"], width: int, height: int) -> list["TextBlock"]:

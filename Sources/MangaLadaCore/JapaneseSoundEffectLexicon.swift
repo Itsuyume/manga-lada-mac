@@ -41,6 +41,21 @@ public struct JapaneseSoundEffectLexicon: Sendable {
         return try Self(data: Data(contentsOf: url))
     }
     public func translation(for source: String) -> String? { translations[Self.normalized(source)] }
+    public func inferKinds(_ blocks: [TextBlock]) -> [TextBlock] {
+        blocks.map { block in
+            guard block.balloonShape == nil, block.userDefinedTextKind != true, block.userDefinedBounds == nil,
+                  block.textKind != .title, recognizes(block.originalText) else { return block }
+            var effect = block; effect.textKind = .soundEffect
+            return effect
+        }
+    }
+    public func recognizes(_ source: String) -> Bool {
+        let text = Self.normalized(source)
+        return sourceForms.contains(text) || recognitionPatterns.contains { pattern in
+            guard let range = text.range(of: pattern, options: .regularExpression) else { return false }
+            return range == text.startIndex..<text.endIndex
+        }
+    }
     private static func normalized(_ text: String) -> String {
         text.precomposedStringWithCompatibilityMapping.trimmingCharacters(in: CharacterSet(charactersIn: " \t\r\n.!?。…・"))
     }

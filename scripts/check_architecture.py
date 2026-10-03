@@ -1,5 +1,6 @@
 """Verify SwiftPM's explicit layer boundaries and cycles; no runtime mocks."""
 from pathlib import Path
+import ast
 import json
 import re
 import subprocess
@@ -32,6 +33,25 @@ for target, permitted in allowed.items():
     if graph[target] - permitted:
         raise SystemExit(f"Layer violation: {target} -> {sorted(graph[target] - permitted)}")
 
+adapters = root / "Sources" / "MangaLadaBallons" / "Resources"
+python_modules = {path.stem: path for path in adapters.glob("*.py")}
+python_allowed = {
+    "japanese_engine_worker": {"balloon_geometry", "text_region_kind", "optical_effects"},
+    "optical_effects": {"erase_supplemental_text", "text_region_kind"},
+    "balloon_geometry": set(), "text_region_kind": set(), "erase_supplemental_text": set(),
+}
+for module, path in python_modules.items():
+    imports = set()
+    for node in ast.walk(ast.parse(path.read_text())):
+        if isinstance(node, ast.ImportFrom) and node.module:
+            imports.add(node.module.split(".")[0])
+        elif isinstance(node, ast.Import):
+            imports.update(alias.name.split(".")[0] for alias in node.names)
+    dependencies = imports & python_modules.keys()
+    if dependencies - python_allowed.get(module, set()):
+        raise SystemExit(f"Python adapter boundary violation: {module} -> {sorted(dependencies)}")
+    graph["python:" + module] = {"python:" + dependency for dependency in dependencies}
+
 
 def visit(name: str, active: set[str], checked: set[str]) -> None:
     if name in active:
@@ -49,4 +69,4 @@ for name in graph:
 for source in (root / "Sources" / "MangaLadaCore").glob("*.swift"):
     if re.search(r"^import (AppKit|SwiftUI|Vision|MangaLadaApp)", source.read_text(), re.MULTILINE):
         raise SystemExit(f"Core platform dependency: {source.name}")
-print("Architecture checks passed: explicit imports, layers, cycles, platform-independent Core")
+print("Architecture checks passed: Swift/Python imports, layers, cycles, platform-independent Core")

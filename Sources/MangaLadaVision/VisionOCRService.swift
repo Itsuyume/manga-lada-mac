@@ -9,7 +9,7 @@ public struct VisionOCRService: Sendable {
         try await recognizeText(in: imageURL, recognitionLanguages: sourceLanguage.visionRecognitionLanguages)
     }
 
-    public func recognizeText(in imageURL: URL, recognitionLanguages: [String]) async throws -> [TextBlock] {
+    public func recognizeText(in imageURL: URL, recognitionLanguages: [String], effectLexicon: JapaneseSoundEffectLexicon? = nil) async throws -> [TextBlock] {
         try await Task.detached(priority: .userInitiated) {
             let request = VNRecognizeTextRequest()
             request.recognitionLevel = .accurate
@@ -22,7 +22,10 @@ public struct VisionOCRService: Sendable {
 
             let observations = request.results ?? []
             return observations.compactMap { observation in
-                guard let candidate = observation.topCandidates(1).first else {
+                let candidates = observation.topCandidates(3)
+                // Preserve sentence correction, but prefer a known effect spelling among
+                // actual optical alternatives. Manga OCR independently verifies new regions.
+                guard let candidate = candidates.first(where: { effectLexicon?.recognizes($0.string) == true }) ?? candidates.first else {
                     return nil
                 }
 

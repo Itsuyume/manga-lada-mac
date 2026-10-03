@@ -8,17 +8,18 @@ public actor JapaneseEngineSession {
     private var processing = false
     public init(engine: BallonsTranslatorEngine) { self.engine = engine }
 
-    public func recognizeAndClean(source: URL, runID: String, priorBlocks: [TextBlock]? = nil) async throws -> PageTranslation {
+    public func recognizeAndClean(source: URL, runID: String, priorBlocks: [TextBlock]? = nil,
+                                  opticalCandidates: [TextBlock] = []) async throws -> PageTranslation {
         let lexicon = try JapaneseSoundEffectLexicon.bundled()
         let blocks = try await exchange(Request(source: source.path, destination: engine.inpaintedImageURL(runID: runID).path,
                                                blocks: priorBlocks, regions: nil, soundEffectSources: lexicon.sourceForms,
-                                               soundEffectPatterns: lexicon.recognitionPatterns))
+                                               soundEffectPatterns: lexicon.recognitionPatterns, opticalCandidates: opticalCandidates))
         return PageTranslation(imageURL: source, imageFingerprint: runID, sourceLanguage: .japanese, targetLanguage: .korean, blocks: blocks)
     }
     public func verifyProposedRegions(source: URL, regions: [TextBlock]) async throws -> [TextBlock] {
         guard !regions.isEmpty else { return [] }
         return try await exchange(Request(source: source.path, destination: nil, blocks: nil, regions: regions,
-                                          soundEffectSources: nil, soundEffectPatterns: nil))
+                                          soundEffectSources: nil, soundEffectPatterns: nil, opticalCandidates: nil))
     }
     private func exchange(_ value: Request) async throws -> [TextBlock] {
         guard !processing else { throw JapaneseEngineSessionError.busy }
@@ -48,6 +49,7 @@ public actor JapaneseEngineSession {
         let source: String; let destination: String?; let blocks: [TextBlock]?; let regions: [TextBlock]?
         let soundEffectSources: [String]?
         let soundEffectPatterns: [String]?
+        let opticalCandidates: [TextBlock]?
     }
     private struct Response: Decodable { let blocks: [TextBlock]?; let error: String? }
 }

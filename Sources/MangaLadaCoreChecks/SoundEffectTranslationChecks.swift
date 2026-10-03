@@ -18,10 +18,12 @@ enum SoundEffectTranslationChecks {
             ("カチッ", "(전등 스위치 소리) \"딸깍\"", "딸깍"),
             ("ｶﾁｯ", "카칫", "딸깍"),
             ("ザアア…", "(바람 소리) 자아아...", "쏴아아"),
+            ("ザアァーッ", "자아-!", "쏴아아"),
             ("バタン", "박당", "쾅"),
             ("ドキドキ", "도키도키", "두근두근"),
             ("パリン", "파링", "쨍그랑"),
             ("ポチャン", "포창", "퐁당"),
+            ("シーン", "장면.", "정적…"),
             ("ガタガタ", "(기계 소리) “덜덜”", "덜덜"),
             ("ゴロゴロ", "우르릉", "우르릉"),
             ("ゴロゴロ", "골골", "골골"),
@@ -39,7 +41,39 @@ enum SoundEffectTranslationChecks {
             } catch TranslationError.invalidPageResponse { }
         }
         try checkLexicon()
+        try checkKindRefinement()
         print("Sound-effect translation checks passed: concise Korean forms, context-dependent variants retained, commentary formatting, non-effects untouched, malformed output rejected")
+    }
+
+    private static func checkKindRefinement() throws {
+        let lexicon = try JapaneseSoundEffectLexicon.bundled()
+        try check(lexicon.inferKinds([]).isEmpty, "Empty OCR produced an effect.")
+        for source in ["カチッ", "ｶﾁｯ。", "バタンバタン", "ザアァーッ", "ゴロゴロ"] {
+            try check(lexicon.recognizes(source), "A catalog form or complete effect pattern was missed: \(source)")
+        }
+        for source in ["", "ナナ", "あっ", "カチッと音がした", "大きなバタン", "バタンと"] {
+            try check(!lexicon.recognizes(source), "Dialogue, a name, or a partial match became an effect: \(source)")
+        }
+        let bounds = TextBox(x: 0.2, y: 0.6, width: 0.5, height: 0.08)
+        let block = TextBlock(box: bounds, originalText: "バタンパタン", sourceIsVertical: false, textKind: .dialogue)
+        let observed = TextBlock(box: bounds, originalText: "バタンバタン", confidence: 1)
+        let corrected = JapaneseHorizontalOCR.reconcile([block], observations: [observed])
+        let effect = lexicon.inferKinds(corrected)[0]
+        try check(effect.originalText == "バタンバタン" && effect.textKind == .soundEffect,
+                  "Correcting OCR left a recognized effect styled as dialogue.")
+        var expected = corrected[0]; expected.textKind = .soundEffect
+        try check(effect == expected && effect.id == block.id && effect.box == block.box,
+                  "Kind refinement changed source identity, geometry, or other metadata.")
+        var protected = corrected[0]
+        protected.balloonShape = BalloonShape(bounds: bounds, rows: [.init(y: 0.64, left: 0.21, right: 0.69)])
+        try check(lexicon.inferKinds([protected]) == [protected], "Enclosed dialogue became an outside effect.")
+        protected = corrected[0]; protected.userDefinedTextKind = true
+        try check(lexicon.inferKinds([protected]) == [protected], "Automatic inference changed a reviewed kind.")
+        protected = corrected[0]; protected.userDefinedBounds = bounds
+        try check(lexicon.inferKinds([protected]) == [protected], "Automatic inference changed a manual region.")
+        protected = corrected[0]; protected.textKind = .title
+        try check(lexicon.inferKinds([protected]) == [protected], "Automatic inference changed an explicit title.")
+        try check(block.originalText == "バタンパタン" && block.textKind == .dialogue, "Refinement mutated input data.")
     }
 
     private static func checkLexicon() throws {
