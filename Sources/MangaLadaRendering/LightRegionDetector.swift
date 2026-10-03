@@ -14,52 +14,6 @@ struct LightRegionDetector {
         self.imageSize = imageSize
     }
 
-    func connectedLightRegion(around rect: NSRect, imageSize: NSSize, flow: TextFlow) -> NSRect? {
-        let searchRect = clamped(searchRect(around: rect, imageSize: imageSize, flow: flow), imageSize: imageSize)
-        guard searchRect.width >= 8, searchRect.height >= 8 else {
-            return nil
-        }
-
-        let step = CGFloat(max(6, min(14, Int(min(imageSize.width, imageSize.height) / 550))))
-        let columns = max(1, Int(ceil(searchRect.width / step)))
-        let rows = max(1, Int(ceil(searchRect.height / step)))
-        let count = columns * rows
-        var lightCells = Array(repeating: false, count: count)
-        var queue: [Int] = []
-        let seedRect = rect.insetBy(dx: -step, dy: -step)
-
-        for row in 0..<rows {
-            for column in 0..<columns {
-                let point = NSPoint(
-                    x: searchRect.minX + (CGFloat(column) + 0.5) * step,
-                    y: searchRect.minY + (CGFloat(row) + 0.5) * step
-                )
-                let index = row * columns + column
-                guard isLight(at: point) else {
-                    continue
-                }
-                lightCells[index] = true
-                if seedRect.contains(point) {
-                    queue.append(index)
-                }
-            }
-        }
-
-        guard !queue.isEmpty else {
-            return nil
-        }
-
-        return connectedComponentRect(
-            lightCells: lightCells,
-            queue: queue,
-            columns: columns,
-            rows: rows,
-            step: step,
-            searchRect: searchRect,
-            seedRect: rect
-        )
-    }
-
     func lightCoverage(in rect: NSRect) -> Double {
         let sampleRect = clamped(rect, imageSize: imageSize)
         guard sampleRect.width >= 4, sampleRect.height >= 4 else {
@@ -85,111 +39,59 @@ struct LightRegionDetector {
         }
         return Double(lightCount) / Double(max(1, totalCount))
     }
-
-    private func connectedComponentRect(
-        lightCells: [Bool],
-        queue initialQueue: [Int],
-        columns: Int,
-        rows: Int,
-        step: CGFloat,
-        searchRect: NSRect,
-        seedRect: NSRect
-    ) -> NSRect? {
-        let count = columns * rows
-        var queue = initialQueue
-        var visited = Array(repeating: false, count: count)
-        var cursor = 0
-        var minColumn = columns
-        var maxColumn = 0
-        var minRow = rows
-        var maxRow = 0
-        var componentCount = 0
-
-        while cursor < queue.count {
-            let index = queue[cursor]
-            cursor += 1
-            guard index >= 0, index < count, lightCells[index], !visited[index] else {
-                continue
+    func medianLuminance(in rect: NSRect) -> CGFloat? {
+        let samples = (0..<9).flatMap { row in
+            (0..<9).compactMap { column -> CGFloat? in
+                let point = NSPoint(x: rect.minX + rect.width * (CGFloat(column) + 0.5) / 9,
+                                    y: rect.minY + rect.height * (CGFloat(row) + 0.5) / 9)
+                guard let color = color(at: point) else { return nil }
+                return 0.2126 * color.redComponent + 0.7152 * color.greenComponent + 0.0722 * color.blueComponent
             }
-
-            visited[index] = true
-            componentCount += 1
-            let row = index / columns
-            let column = index % columns
-            minColumn = min(minColumn, column)
-            maxColumn = max(maxColumn, column)
-            minRow = min(minRow, row)
-            maxRow = max(maxRow, row)
-
-            appendNeighbors(of: index, column: column, row: row, columns: columns, rows: rows, to: &queue)
-        }
-
-        guard componentCount >= 4, minColumn <= maxColumn, minRow <= maxRow else {
-            return nil
-        }
-
-        let detectedRect = NSRect(
-            x: searchRect.minX + CGFloat(minColumn) * step,
-            y: searchRect.minY + CGFloat(minRow) * step,
-            width: CGFloat(maxColumn - minColumn + 1) * step,
-            height: CGFloat(maxRow - minRow + 1) * step
-        )
-        guard detectedRect.width >= seedRect.width * 0.60,
-              detectedRect.height >= seedRect.height * 0.60 else {
-            return nil
-        }
-
-        let coverage = (detectedRect.width * detectedRect.height) / max(1, searchRect.width * searchRect.height)
-        if coverage > 0.88,
-           (detectedRect.width > seedRect.width * 2.8 || detectedRect.height > seedRect.height * 2.8) {
-            return nil
-        }
-        return clamped(detectedRect, imageSize: imageSize)
+        }.sorted()
+        return samples.isEmpty ? nil : samples[samples.count / 2]
     }
 
-    private func appendNeighbors(
-        of index: Int,
-        column: Int,
-        row: Int,
-        columns: Int,
-        rows: Int,
-        to queue: inout [Int]
-    ) {
-        if column > 0 {
-            queue.append(index - 1)
-        }
-        if column + 1 < columns {
-            queue.append(index + 1)
-        }
-        if row > 0 {
-            queue.append(index - columns)
-        }
-        if row + 1 < rows {
-            queue.append(index + columns)
-        }
+    func horizontalLightSpan(around rect: NSRect, maximumWidth: CGFloat) -> NSRect? {
+        let center = rect.midX
+        let rowCount = max(2, min(64, Int(ceil(rect.height / 4))))
+        let ySamples = (0...rowCount).map { rect.minY + rect.height * CGFloat($0) / CGFloat(rowCount) }
+        guard ySamples.allSatisfy({ isLight(at: NSPoint(x: center, y: $0)) }) else { return nil }
+        let halfWidth = maximumWidth / 2
+        var left = center, right = center
+        while left > max(0, center - halfWidth), ySamples.allSatisfy({ isLight(at: NSPoint(x: left - 1, y: $0)) }) { left -= 1 }
+        while right < min(imageSize.width, center + halfWidth), ySamples.allSatisfy({ isLight(at: NSPoint(x: right + 1, y: $0)) }) { right += 1 }
+        guard right - left - 6 > rect.width else { return nil }
+        return NSRect(x: left + 3, y: rect.minY, width: max(1, right - left - 6), height: rect.height)
     }
 
-    private func searchRect(around rect: NSRect, imageSize: NSSize, flow: TextFlow) -> NSRect {
-        let horizontalPadding: CGFloat
-        let verticalPadding: CGFloat
-        switch flow {
-        case .horizontal:
-            horizontalPadding = max(72, rect.width * 0.65)
-            verticalPadding = max(60, rect.height * 0.28)
-        case .vertical:
-            horizontalPadding = max(54, rect.width * 1.25)
-            verticalPadding = max(48, rect.height * 0.30)
-        }
-        return rect.insetBy(dx: -horizontalPadding, dy: -verticalPadding)
+    func constrainedToPanel(_ proposed: NSRect, around ink: NSRect) -> NSRect {
+        let samples = (0...12).map { ink.minY + ink.height * CGFloat($0) / 12 }
+        let left = stride(from: Int(ink.minX), through: Int(proposed.minX), by: -1).first { isPanelRule(x: CGFloat($0), samples: samples) }
+        let right = stride(from: Int(ink.maxX), through: Int(proposed.maxX), by: 1).first { isPanelRule(x: CGFloat($0), samples: samples) }
+        let minX = left.map { max(proposed.minX, CGFloat($0) + 5) } ?? proposed.minX
+        let maxX = right.map { min(proposed.maxX, CGFloat($0) - 5) } ?? proposed.maxX
+        return NSRect(x: minX, y: proposed.minY, width: max(1, maxX - minX), height: proposed.height)
     }
 
-    private func isLight(at point: NSPoint) -> Bool {
+    private func isPanelRule(x: CGFloat, samples: [CGFloat]) -> Bool {
+        func coverage(_ column: CGFloat) -> Double {
+            Double(samples.filter { point in
+                guard let color = color(at: NSPoint(x: column, y: point)) else { return false }
+                return max(color.redComponent, color.greenComponent, color.blueComponent) < 0.2
+            }.count) / Double(samples.count)
+        }
+        return coverage(x) > 0.9 && coverage(x - 10) < 0.8 && coverage(x + 10) < 0.8
+    }
+
+    private func color(at point: NSPoint) -> NSColor? {
         let pixelX = max(0, min(bitmap.pixelsWide - 1, Int((point.x / imageSize.width) * CGFloat(bitmap.pixelsWide))))
         let yFromTop = imageSize.height - point.y
         let pixelY = max(0, min(bitmap.pixelsHigh - 1, Int((yFromTop / imageSize.height) * CGFloat(bitmap.pixelsHigh))))
-        guard let color = bitmap.colorAt(x: pixelX, y: pixelY)?.usingColorSpace(.deviceRGB) else {
-            return false
-        }
+        return bitmap.colorAt(x: pixelX, y: pixelY)?.usingColorSpace(.deviceRGB)
+    }
+
+    private func isLight(at point: NSPoint) -> Bool {
+        guard let color = color(at: point) else { return false }
 
         var red: CGFloat = 0
         var green: CGFloat = 0

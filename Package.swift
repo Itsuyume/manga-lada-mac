@@ -13,7 +13,10 @@ let package = Package(
         .executable(name: "MangaLadaCoreChecks", targets: ["MangaLadaCoreChecks"]),
         .executable(name: "MangaLadaVisionChecks", targets: ["MangaLadaVisionChecks"]),
         .executable(name: "MangaLadaRenderingChecks", targets: ["MangaLadaRenderingChecks"]),
-        .executable(name: "MangaLadaBallonsChecks", targets: ["MangaLadaBallonsChecks"])
+        .executable(name: "MangaLadaBallonsChecks", targets: ["MangaLadaBallonsChecks"]),
+        .executable(name: "MangaLadaWorkflowChecks", targets: ["MangaLadaWorkflowChecks"]),
+        .executable(name: "MangaLadaImportChecks", targets: ["MangaLadaImportChecks"]),
+        .executable(name: "MangaReader", targets: ["MangaReaderApp"])
     ],
     targets: [
         .target(
@@ -25,16 +28,24 @@ let package = Package(
         ),
         .target(
             name: "MangaLadaRendering",
-            dependencies: ["MangaLadaCore"]
+            dependencies: ["MangaLadaCore"],
+            resources: [.copy("Resources/Fonts"), .copy("Resources/sound-effect-styles.json")]
         ),
         .target(
             name: "MangaLadaBallons",
-            dependencies: ["MangaLadaCore"]
+            dependencies: ["MangaLadaCore"],
+            resources: [.copy("Resources/erase_supplemental_text.py"), .copy("Resources/japanese_engine_worker.py"), .copy("Resources/balloon_geometry.py")]
         ),
         .executableTarget(
             name: "MangaLadaApp",
-            dependencies: ["MangaLadaCore", "MangaLadaVision", "MangaLadaRendering", "MangaLadaBallons"]
+            dependencies: ["MangaLadaCore", "MangaLadaRendering", "MangaLadaWorkflow", "MangaLadaImport", "MangaLadaViewerUI"]
         ),
+        .target(name: "MangaLadaWorkflow", dependencies: ["MangaLadaCore", "MangaLadaBallons", "MangaLadaRendering", "MangaLadaVision"]),
+        .target(name: "MangaLadaImport", dependencies: ["MangaLadaCore"]),
+        .target(name: "MangaLadaViewerUI", dependencies: ["MangaLadaCore"]),
+        .executableTarget(name: "MangaReaderApp", dependencies: ["MangaLadaCore", "MangaLadaImport", "MangaLadaViewerUI"]),
+        .executableTarget(name: "MangaLadaWorkflowChecks", dependencies: ["MangaLadaCore", "MangaLadaImport", "MangaLadaRendering", "MangaLadaWorkflow"]),
+        .executableTarget(name: "MangaLadaImportChecks", dependencies: ["MangaLadaCore", "MangaLadaImport", "MangaLadaWorkflow", "MangaLadaViewerUI"]),
         .executableTarget(
             name: "MangaLadaCoreChecks",
             dependencies: ["MangaLadaCore"]

@@ -1,22 +1,20 @@
 #!/usr/bin/env bash
 set -euo pipefail
-
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-APP_NAME="Manga Lada.app"
-SOURCE_APP="$ROOT_DIR/dist/$APP_NAME"
 INSTALL_DIR="${MANGA_LADA_INSTALL_DIR:-$HOME/Applications}"
-TARGET_APP="$INSTALL_DIR/$APP_NAME"
-
-"$ROOT_DIR/scripts/build_app.sh" >/dev/null
-
-if [[ ! -d "$SOURCE_APP" ]]; then
-  echo "Built app not found: $SOURCE_APP" >&2
-  exit 1
-fi
-
+BACKUP_DIR="${MANGA_LADA_BACKUP_DIR:-$ROOT_DIR/dist/backups/$(date +%Y%m%d-%H%M%S)}"
+"$ROOT_DIR/scripts/build_app.sh" "$@"
 mkdir -p "$INSTALL_DIR"
-rm -rf "$TARGET_APP"
-ditto "$SOURCE_APP" "$TARGET_APP"
-xattr -cr "$TARGET_APP"
-codesign --verify --deep --verbose=2 "$TARGET_APP"
-echo "$TARGET_APP"
+# Preserve prior apps outside LaunchServices' app scan before installing the new names.
+for name in "Manga Lada" "Manga translator" "Manga Reader"; do
+  if [[ -d "$INSTALL_DIR/$name.app" ]]; then
+    mkdir -p "$BACKUP_DIR"
+    mv "$INSTALL_DIR/$name.app" "$BACKUP_DIR/$name.previous"
+  fi
+done
+for name in "Manga translator" "Manga Reader"; do
+  ditto "$ROOT_DIR/dist/$name.app" "$INSTALL_DIR/$name.app"
+  xattr -cr "$INSTALL_DIR/$name.app"
+  codesign --verify --deep --strict "$INSTALL_DIR/$name.app"
+  echo "$INSTALL_DIR/$name.app"
+done

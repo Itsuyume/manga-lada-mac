@@ -1,279 +1,71 @@
+import MangaLadaViewerUI
 import SwiftUI
-import UniformTypeIdentifiers
 
 struct ContentView: View {
-    @EnvironmentObject private var appState: AppState
-
+    @EnvironmentObject private var state: AppState
     var body: some View {
         VStack(spacing: 0) {
-            HeaderBar()
+            TranslatorHeader()
             Divider()
-            ViewerSurface()
-            FooterBar()
-        }
-        .background(Color(nsColor: .windowBackgroundColor))
-        .overlay(KeyCaptureView(handle: handleKeyPress).frame(width: 0, height: 0))
-        .alert(
-            "작업 실패",
-            isPresented: Binding(
-                get: { appState.errorMessage != nil },
-                set: { if !$0 { appState.errorMessage = nil } }
-            )
-        ) {
-            Button("확인", role: .cancel) {
-                appState.errorMessage = nil
-            }
-        } message: {
-            Text(appState.errorMessage ?? "")
-        }
-    }
-
-    private func handleKeyPress(_ event: NSEvent) {
-        switch event.keyCode {
-        case 49:
-            Task { await appState.translateCurrentPage(force: false) }
-        case 123:
-            appState.goToPreviousPage()
-        case 124:
-            appState.goToNextPage()
-        default:
-            break
-        }
+            TranslatorActions()
+            if state.isSelectingRegion { RegionSelectionControls(state: state) }
+            Divider()
+            ReadingControls(settings: state.reading, index: state.currentIndex, total: state.pages.count, navigate: state.select)
+            Divider()
+            TranslatorBody(state: state, reading: state.reading)
+            TranslatorFooter()
+        }.tint(MangaUI.accent).background(.background)
+            .overlay(ComicKeyboard(handle: state.handleKey).frame(width: 0, height: 0))
+            .comicFileDrop(open: { url in Task { await state.open(url) } }, failure: { state.errorMessage = $0 })
+            .sheet(isPresented: $state.showSettings) { TranslatorSettingsView(state: state) }
+            .alert("작업 확인", isPresented: Binding(get: { state.errorMessage != nil }, set: { if !$0 { state.errorMessage = nil } })) {
+                Button("확인", role: .cancel) { state.errorMessage = nil }
+            } message: { Text(state.errorMessage ?? "") }
     }
 }
 
-private struct HeaderBar: View {
-    @EnvironmentObject private var appState: AppState
-
+private struct TranslatorBody: View {
+    @ObservedObject var state: AppState
+    @ObservedObject var reading: ReadingSettings
     var body: some View {
-        HStack(spacing: 10) {
-            Text("Manga Lada")
-                .font(.system(size: 15, weight: .semibold))
-
-            Text(appState.pageLabel)
-                .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(.secondary)
-                .frame(width: 64)
-
-            Divider().frame(height: 22)
-
-            Button {
-                Task { await appState.openFileFromPanel() }
-            } label: {
-                Label("파일 열기", systemImage: "doc.viewfinder")
+        HStack(spacing: 0) {
+            if reading.showThumbnails {
+                ThumbnailSidebar(pages: state.pages.map(\.url), index: state.currentIndex, completed: state.completed, select: state.select)
+                Divider()
             }
-
-            Button {
-                Task { await appState.openFolderFromPanel() }
-            } label: {
-                Label("폴더 열기", systemImage: "folder")
-            }
-
-            Button {
-                appState.goToPreviousPage()
-            } label: {
-                Image(systemName: "chevron.left")
-            }
-            .disabled(appState.currentIndex == 0)
-            .help("이전 페이지")
-
-            Button {
-                appState.goToNextPage()
-            } label: {
-                Image(systemName: "chevron.right")
-            }
-            .disabled(appState.currentIndex + 1 >= appState.pages.count)
-            .help("다음 페이지")
-
-            Button {
-                Task { await appState.translateCurrentPage(force: false) }
-            } label: {
-                Label(appState.isBusy ? "처리 중" : "번역", systemImage: "captions.bubble")
-            }
-            .buttonStyle(.borderedProminent)
-            .disabled(appState.currentPage == nil || appState.isBusy)
-
-            Button {
-                Task { await appState.clearCurrentCacheAndRetranslate() }
-            } label: {
-                Image(systemName: "arrow.triangle.2.circlepath")
-            }
-            .disabled(appState.currentPage == nil || appState.isBusy)
-            .help("캐시 삭제 후 다시 번역")
-
-            Button {
-                Task { await appState.exportCurrentTranslatedImage() }
-            } label: {
-                Label("PNG 저장", systemImage: "square.and.arrow.down")
-            }
-            .disabled(!appState.canExportCurrentTranslation || appState.isBusy)
-            .help("번역 결과를 실제 이미지에 그려 PNG로 저장")
-
-            Spacer(minLength: 12)
-
-            Toggle("Ballons", isOn: $appState.useBallonsEngine)
-                .toggleStyle(.switch)
-                .controlSize(.small)
-                .disabled(appState.isBusy)
-                .help("끄면 내장 Vision OCR과 Swift Google 번역 경로를 사용")
-
-            Toggle("자동", isOn: $appState.autoTranslate)
-                .toggleStyle(.switch)
-                .controlSize(.small)
-                .help("페이지를 열 때 캐시 또는 번역을 자동 실행")
-
-            HStack(spacing: 6) {
-                Image(systemName: "textformat.size")
-                    .foregroundStyle(.secondary)
-                Slider(value: $appState.overlayFontScale, in: 0.8...2.4)
-                    .frame(width: 136)
-            }
-        }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
-        .buttonStyle(.bordered)
-    }
-}
-
-private struct ViewerSurface: View {
-    @EnvironmentObject private var appState: AppState
-    @State private var isDropTargeted = false
-
-    var body: some View {
-        ZStack {
-            Color(nsColor: .textBackgroundColor)
-
-            if let image = appState.currentImage {
-                let displayImage = appState.mode == .translated
-                    ? appState.renderedTranslationImage ?? image
-                    : image
-                let overlayBlocks = appState.mode == .translated && appState.renderedTranslationImage == nil
-                    ? appState.translation?.blocks ?? []
-                    : []
-
-                ImageCanvasView(
-                    image: displayImage,
-                    blocks: overlayBlocks,
-                    fontScale: appState.overlayFontScale
-                )
-                .padding(18)
-            } else {
-                EmptyStateView()
-            }
-
-            if appState.isBusy {
-                ProgressOverlay(message: appState.statusMessage)
-            }
-        }
-        .overlay {
-            if isDropTargeted {
-                RoundedRectangle(cornerRadius: 8)
-                    .stroke(Color.accentColor, lineWidth: 3)
-                    .padding(14)
-            }
-        }
-        .onDrop(of: [UTType.fileURL.identifier], isTargeted: $isDropTargeted) { providers in
-            guard let provider = providers.first else {
-                return false
-            }
-
-            provider.loadItem(forTypeIdentifier: UTType.fileURL.identifier, options: nil) { item, error in
-                if let error {
-                    Task { @MainActor in
-                        appState.errorMessage = "드롭한 항목을 읽지 못했습니다. \(error.localizedDescription)"
-                    }
-                    return
+            if state.pages.isEmpty { TranslatorEmptyState() }
+            else { VStack(spacing: 0) {
+                if (state.showInspector || state.isSelectingRegion) && state.currentResult?.translation.blocks.isEmpty == false {
+                    RecognizedRegionLegend(state: state)
                 }
-
-                guard let url = droppedFileURL(from: item) else {
-                    Task { @MainActor in
-                        appState.errorMessage = "드롭한 항목이 파일 URL이 아닙니다."
-                    }
-                    return
-                }
-
-                Task { @MainActor in
-                    await appState.openDroppedURL(url)
-                }
+                ComicPageCanvas(pages: state.displayPages, index: state.currentIndex, settings: reading, revision: state.imageRevision,
+                                   selection: state.isSelectingRegion ? Binding(get: { state.selectedRegion }, set: state.selectRegion) : nil,
+                                   regions: state.showInspector || state.isSelectingRegion ? state.currentResult?.translation.blocks ?? [] : [],
+                                   selectedRegionID: Binding(get: { state.selectedBlockID }, set: state.focusBlock), onSelect: state.select)
+                .allowsHitTesting(!state.isSelectingRegion || !state.isBusy)
+            } }
+            if state.showInspector && !state.pages.isEmpty { Divider(); TranslationInspector(state: state).frame(width: 260) }
+        }.overlay {
+            if state.isLoading { ProgressView("페이지를 여는 중…").padding(22).background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12)) }
+        }.overlay(alignment: .topLeading) {
+            if !state.pages.isEmpty && !state.isSelectingRegion && state.mode == .translated && state.currentResult == nil {
+                Label(state.isBusy ? "현재 페이지 번역 대기 중" : "아직 번역 전 · 전체 번역 시작을 누르세요", systemImage: "clock")
+                    .font(.system(size: 12, weight: .medium)).padding(10)
+                    .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8)).padding(12)
             }
-
-            return true
         }
     }
 }
 
-private func droppedFileURL(from item: NSSecureCoding?) -> URL? {
-    if let url = item as? URL {
-        return url
-    }
-
-    if let data = item as? Data {
-        return URL(dataRepresentation: data, relativeTo: nil)
-    }
-
-    if let string = item as? String {
-        return URL(string: string)
-    }
-
-    return nil
-}
-
-private struct FooterBar: View {
-    @EnvironmentObject private var appState: AppState
-
+private struct TranslatorEmptyState: View {
+    @EnvironmentObject private var state: AppState
     var body: some View {
-        HStack(spacing: 10) {
-            Circle()
-                .fill(appState.isBusy ? Color.orange : Color.green)
-                .frame(width: 8, height: 8)
-
-            Text(appState.statusMessage)
-                .font(.system(size: 12))
-                .lineLimit(1)
-                .truncationMode(.middle)
-
-            Spacer()
-
-            Text("Space: 번역   ←/→: 페이지 이동   ⌘O: 이미지/ZIP 열기")
-                .font(.system(size: 11))
-                .foregroundStyle(.secondary)
-        }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 7)
-        .background(Color(nsColor: .controlBackgroundColor))
-    }
-}
-
-private struct EmptyStateView: View {
-    var body: some View {
-        VStack(spacing: 14) {
-            Image(systemName: "photo.on.rectangle.angled")
-                .font(.system(size: 48))
-                .foregroundStyle(.secondary)
-
-            Text("이미지, ZIP, 폴더를 열면 바로 볼 수 있습니다.")
-                .font(.system(size: 17, weight: .semibold))
-
-            Text("ZIP/CBZ는 압축을 풀어 페이지 순서대로 보여줍니다.")
-                .font(.system(size: 13))
-                .foregroundStyle(.secondary)
-        }
-        .padding(28)
-    }
-}
-
-private struct ProgressOverlay: View {
-    let message: String
-
-    var body: some View {
-        VStack(spacing: 12) {
-            ProgressView()
-                .controlSize(.large)
-            Text(message)
-                .font(.system(size: 13, weight: .medium))
-        }
-        .padding(22)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8))
-        .shadow(radius: 16, y: 8)
+        VStack(spacing: 18) {
+            Image(systemName: "character.bubble.ja").font(.system(size: 50, weight: .light)).foregroundStyle(.white.opacity(0.65))
+            Text("일본어 만화를 한국어로").font(.system(size: 23, weight: .semibold)).foregroundStyle(.white)
+            Text("책을 열면 말풍선과 효과음을 번역해 자동 저장합니다.").foregroundStyle(.white.opacity(0.65))
+            Button("만화 열기", systemImage: "folder.badge.plus") { state.chooseBook() }.buttonStyle(.borderedProminent).controlSize(.large)
+            Text("ZIP · 7z · RAR · CBZ · CBR · PDF · 이미지 · 폴더").font(.system(size: 12)).foregroundStyle(.white.opacity(0.45))
+        }.frame(maxWidth: .infinity, maxHeight: .infinity).background(MangaUI.canvas)
     }
 }

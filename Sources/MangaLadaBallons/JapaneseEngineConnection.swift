@@ -1,0 +1,54 @@
+import Foundation
+
+/// File handles belong to one worker request. Only cancellation crosses threads.
+final class JapaneseEngineConnection: @unchecked Sendable {
+    private let process: Process
+    private let input: FileHandle
+    private let output: FileHandle
+    private let lock = NSLock()
+
+    init(engine: BallonsTranslatorEngine) throws {
+        guard engine.isInstalled else { throw BallonsTranslatorEngineError.engineNotInstalled }
+        guard let script = Bundle.module.url(forResource: "japanese_engine_worker", withExtension: "py") else {
+            throw CocoaError(.fileNoSuchFile)
+        }
+        try FileManager.default.createDirectory(at: engine.runsDirectoryURL, withIntermediateDirectories: true)
+        let logURL = engine.runsDirectoryURL.appendingPathComponent("japanese-worker.log")
+        if !FileManager.default.fileExists(atPath: logURL.path) { try Data().write(to: logURL) }
+        let log = try FileHandle(forWritingTo: logURL); try log.seekToEnd(); defer { try? log.close() }
+        let incoming = Pipe(), outgoing = Pipe()
+        process = Process(); process.executableURL = engine.pythonURL
+        process.arguments = ["-u", script.path, engine.sourceRootURL.path]
+        process.environment = ProcessInfo.processInfo.environment.merging([
+            "PYTHONUNBUFFERED": "1", "PYTHONDONTWRITEBYTECODE": "1", "QT_QPA_PLATFORM": "offscreen", "HF_HUB_OFFLINE": "1"
+        ]) { _, value in value }
+        process.standardInput = incoming; process.standardOutput = outgoing; process.standardError = log
+        input = incoming.fileHandleForWriting; output = outgoing.fileHandleForReading
+        try process.run()
+        try incoming.fileHandleForReading.close(); try outgoing.fileHandleForWriting.close()
+    }
+    func exchange(_ request: Data) throws -> Data {
+        try input.write(contentsOf: request + Data([10]))
+        var response = Data()
+        while let byte = try output.read(upToCount: 1), !byte.isEmpty {
+            if byte[0] == 10 { return response }
+            response.append(byte)
+            guard response.count <= 1_000_000 else { throw JapaneseEngineSessionError.invalidResponse }
+        }
+        throw JapaneseEngineSessionError.workerStopped
+    }
+    func terminate() { lock.withLock { if process.isRunning { process.terminate() } } }
+    deinit { terminate(); try? input.close(); try? output.close() }
+}
+
+enum JapaneseEngineSessionError: LocalizedError {
+    case workerStopped, invalidResponse, busy, processing(String)
+    var errorDescription: String? {
+        switch self {
+        case .workerStopped: "일본어 인식 엔진이 종료되었습니다. Japanese worker 로그를 확인해주세요."
+        case .invalidResponse: "일본어 인식 엔진 응답이 올바르지 않습니다."
+        case .busy: "일본어 인식 엔진이 이미 다른 페이지를 처리하고 있습니다."
+        case .processing(let message): "일본어 인식 실패: \(message)"
+        }
+    }
+}

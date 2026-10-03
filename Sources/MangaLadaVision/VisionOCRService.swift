@@ -5,12 +5,16 @@ import Vision
 public struct VisionOCRService: Sendable {
     public init() {}
 
-    public func recognizeText(in imageURL: URL) async throws -> [TextBlock] {
+    public func recognizeText(in imageURL: URL, sourceLanguage: LanguageCode) async throws -> [TextBlock] {
+        try await recognizeText(in: imageURL, recognitionLanguages: sourceLanguage.visionRecognitionLanguages)
+    }
+
+    public func recognizeText(in imageURL: URL, recognitionLanguages: [String]) async throws -> [TextBlock] {
         try await Task.detached(priority: .userInitiated) {
             let request = VNRecognizeTextRequest()
             request.recognitionLevel = .accurate
             request.usesLanguageCorrection = true
-            request.recognitionLanguages = ["ja-JP", "en-US"]
+            request.recognitionLanguages = recognitionLanguages
             request.minimumTextHeight = 0.01
 
             let handler = VNImageRequestHandler(url: imageURL)

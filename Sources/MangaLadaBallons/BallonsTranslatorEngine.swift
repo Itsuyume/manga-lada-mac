@@ -102,7 +102,10 @@ public struct BallonsTranslatorEngine: Sendable {
         sourceImageURL: URL,
         runID: String,
         imageFingerprint: String,
-        enableTranslation: Bool = true
+        sourceLanguage: LanguageCode,
+        targetLanguage: LanguageCode,
+        enableTranslation: Bool = true,
+        cancellation: CancellableProcess? = nil
     ) throws -> BallonsTranslationResult {
         guard isInstalled else {
             throw BallonsTranslatorEngineError.engineNotInstalled
@@ -115,9 +118,13 @@ public struct BallonsTranslatorEngine: Sendable {
         try convertToPNG(sourceImageURL: sourceImageURL, destinationURL: inputURL)
 
         let configURL = runDirectory.appendingPathComponent("manga-lada-ballons-config.json")
-        try Self.configJSON(enableTranslation: enableTranslation).write(to: configURL, atomically: true, encoding: .utf8)
+        try Self.configJSON(
+            sourceLanguage: sourceLanguage,
+            targetLanguage: targetLanguage,
+            enableTranslation: enableTranslation
+        ).write(to: configURL, atomically: true, encoding: .utf8)
 
-        try runBallons(runDirectory: runDirectory, configURL: configURL)
+        try runBallons(runDirectory: runDirectory, configURL: configURL, cancellation: cancellation)
 
         let resultURL = renderedImageURL(runID: runID)
         guard FileManager.default.fileExists(atPath: resultURL.path) else {
@@ -137,6 +144,8 @@ public struct BallonsTranslatorEngine: Sendable {
             projectURL: projectURL,
             sourceImageURL: sourceImageURL,
             imageFingerprint: imageFingerprint,
+            sourceLanguage: sourceLanguage,
+            targetLanguage: targetLanguage,
             imageSize: imageSize(for: inputURL)
         )
 
@@ -181,7 +190,7 @@ public struct BallonsTranslatorEngine: Sendable {
         }
     }
 
-    private func runBallons(runDirectory: URL, configURL: URL) throws {
+    private func runBallons(runDirectory: URL, configURL: URL, cancellation: CancellableProcess?) throws {
         let logURL = runDirectory.appendingPathComponent("ballons.log")
         FileManager.default.createFile(atPath: logURL.path, contents: nil)
         let logHandle = try FileHandle(forWritingTo: logURL)
@@ -209,10 +218,14 @@ public struct BallonsTranslatorEngine: Sendable {
         process.standardOutput = logHandle
         process.standardError = logHandle
 
-        try process.run()
         inputPipe.fileHandleForWriting.write(Data("exit\n".utf8))
-        try? inputPipe.fileHandleForWriting.close()
-        process.waitUntilExit()
+        try inputPipe.fileHandleForWriting.close()
+        if let cancellation {
+            try cancellation.run(process)
+        } else {
+            try process.run()
+            process.waitUntilExit()
+        }
 
         if process.terminationStatus != 0 {
             let log = (try? String(contentsOf: logURL, encoding: .utf8)) ?? ""
@@ -224,6 +237,8 @@ public struct BallonsTranslatorEngine: Sendable {
         projectURL: URL,
         sourceImageURL: URL,
         imageFingerprint: String,
+        sourceLanguage: LanguageCode,
+        targetLanguage: LanguageCode,
         imageSize: CGSize
     ) throws -> PageTranslation {
         let project = try JSONDecoder().decode(BallonsProject.self, from: Data(contentsOf: projectURL))
@@ -259,19 +274,16 @@ public struct BallonsTranslatorEngine: Sendable {
                 translatedText: refined,
                 confidence: 1,
                 sourceIsVertical: block.sourceIsVertical,
-                detectedFontSize: block.detectedFontSize
+                detectedFontSize: block.detectedFontSize,
+                rotationDegrees: block.angle
             )
-        }
-
-        guard !blocks.isEmpty else {
-            throw BallonsTranslatorEngineError.noTextBlocks
         }
 
         return PageTranslation(
             imageURL: sourceImageURL,
             imageFingerprint: imageFingerprint,
-            sourceLanguage: .japanese,
-            targetLanguage: .korean,
+            sourceLanguage: sourceLanguage,
+            targetLanguage: targetLanguage,
             blocks: blocks
         )
     }
@@ -311,7 +323,11 @@ public struct BallonsTranslatorEngine: Sendable {
         #endif
     }
 
-    private static func configJSON(enableTranslation: Bool) -> String {
+    private static func configJSON(
+        sourceLanguage: LanguageCode,
+        targetLanguage: LanguageCode,
+        enableTranslation: Bool
+    ) -> String {
         """
     {
       "module": {
@@ -354,8 +370,8 @@ public struct BallonsTranslatorEngine: Sendable {
             "precision": "fp32"
           }
         },
-        "translate_source": "日本語",
-        "translate_target": "한국어",
+        "translate_source": "\(sourceLanguage.ballonsLanguageName)",
+        "translate_target": "\(targetLanguage.ballonsLanguageName)",
         "translate_by_textblock": false,
         "check_need_inpaint": true,
         "empty_runcache": true,
@@ -375,6 +391,19 @@ public struct BallonsTranslatorEngine: Sendable {
     }
 }
 
+private extension LanguageCode {
+    var ballonsLanguageName: String {
+        switch self {
+        case .japanese:
+            return "日本語"
+        case .korean:
+            return "한국어"
+        case .english:
+            return "English"
+        }
+    }
+}
+
 private struct BallonsProject: Decodable {
     let pages: [String: [BallonsBlock]]
 }
@@ -385,6 +414,7 @@ private struct BallonsBlock: Decodable {
     let translation: String?
     let sourceIsVertical: Bool?
     let detectedFontSize: Double?
+    let angle: Double?
 
     private enum CodingKeys: String, CodingKey {
         case xyxy
@@ -392,5 +422,6 @@ private struct BallonsBlock: Decodable {
         case translation
         case sourceIsVertical = "src_is_vertical"
         case detectedFontSize = "_detected_font_size"
+        case angle
     }
 }

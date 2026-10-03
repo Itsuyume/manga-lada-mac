@@ -1,59 +1,39 @@
 # AGENTS.md
 
-이 프로젝트는 macOS용 일본 만화 이미지 번역 뷰어입니다.
+일본어→한국어 Manga translator와 독립 Manga Reader 프로젝트입니다.
 
-## 경계
+## 모듈과 의존 방향
 
-- `Sources/MangaLadaCore`: SwiftUI/AppKit/Vision에 의존하지 않는 모델, 캐시, 번역, 파일 스캔 로직.
-- `Sources/MangaLadaVision`: macOS Vision OCR 어댑터. Core에는 의존하지만 UI에는 의존하지 않음.
-- `Sources/MangaLadaRendering`: 번역 결과를 실제 이미지 파일로 굽는 AppKit 렌더링 계층. Ballons 원문 제거 이미지 위에 텍스트만 다시 그리는 경로와 Vision fallback용 흰 말풍선 경로를 모두 담당.
-- `Sources/MangaLadaBallons`: 외부 BallonsTranslator Python 엔진을 headless로 호출하는 경계. Core 타입과 Ballons 산출물 URL만 반환하며 UI/AppKit에는 의존하지 않음.
-- `Sources/MangaLadaApp`: macOS UI, 파일 선택, 단축키 처리.
-- `scripts`: 빌드와 검증 자동화.
+- `MangaLadaCore`: 공용 모델·TextBox·캐시·번역 제공자·읽기 순서·페이지 탐색·압축/이미지 스캔·취소 가능한 프로세스. UI/렌더링/Vision을 가져오지 않습니다.
+- `MangaLadaImport` → Core: 폴더·압축·PDF를 ComicBook으로 가져오고 CBZ로 내보냅니다. 파일 작업은 loader actor가 담당합니다.
+- `MangaLadaVision` → Core: macOS OCR 경계.
+- `MangaLadaBallons` → Core: 외부 Python 엔진과 보완 LaMa 경계. 자체 Python 어댑터만 리소스로 포함합니다.
+- `MangaLadaRendering` → Core: 원문 제거 이미지에 한국어·효과음을 렌더링합니다. 이미지 픽셀 크기를 보존합니다.
+- `MangaLadaWorkflow` → Core/Ballons/Vision/Rendering: 인식·번역·캐시·식자, 책별 출력 저장. UI 상태와 탐색은 소유하지 않습니다.
+- `MangaLadaViewerUI` → Core: 두 앱이 공유하는 읽기 설정·캔버스·썸네일·키보드·파일 열기 UI.
+- `MangaLadaApp` → Core/Import/Rendering/Workflow/ViewerUI: 번역 앱의 표시 상태·설정·작업 수명 관리.
+- `MangaReaderApp` → Core/Import/ViewerUI: AI 엔진에 의존하지 않는 뷰어.
 
-Core에서 App을 import하지 않습니다. Vision OCR은 OS 경계라 App 계층에만 둡니다. BallonsTranslator 소스와 모델은 GPL/대용량 외부 의존성이므로 앱 번들 또는 Swift 소스 트리에 vendoring하지 않고 `Application Support/Manga Lada` 아래 외부 엔진으로 둡니다.
+새 함수·타입을 만들기 전에 기존 모듈을 검색하고 SSOT를 유지합니다. 숨은 re-export, 전역 초기화 순서 계약, 모듈 간 순환을 만들지 않습니다. 구조 검사는 `scripts/check_architecture.py`와 SwiftPM의 explicit import 검사로 강제합니다.
 
-## 개발 원칙
+본문 식자 규칙의 SSOT는 `DialogueTypesettingRules`입니다. 대사·나레이션은 가로쓰기와 가운데 정렬을 유지하며 말풍선별로 임의의 세로쓰기를 선택하지 않습니다. `BalloonShape`는 원본 픽셀 좌표를 정규화한 공용 윤곽 모델입니다. 줄 폭 계산·줄바꿈과 폰트 규칙은 Rendering에만 둡니다. 한 글자짜리 단어 조각과 테두리 밖 식자를 금지하며 표지 제목과 효과음만 별도 명시적 규칙을 사용합니다.
 
-- 새 helper나 shape를 만들기 전에 `MangaLadaCore`의 기존 타입을 먼저 확인합니다.
-- 에러는 조용히 삼키지 않습니다. UI 경계에서 사용자에게 보여줄 메시지로 변환합니다.
-- 내부 구현을 mock하지 말고, Core 테스트는 실제 출력/상태 변화를 검증합니다.
-- 함수가 길어지면 guard clause와 작은 private 함수로 나눕니다.
-- `as!`, `as?` 남발과 `Any` 기반 계약을 피합니다.
-- Ballons 엔진 설치/패치는 `scripts/setup_ballons_engine.sh`에 모으고, AppState에서 임의로 Python 의존성을 설치하지 않습니다.
-- Ballons 최종 `result/001.png`는 참고 산출물이고, 앱 화면/저장은 `inpainted/001.png` 위에 Swift 렌더러가 만든 `manga-lada-rendered.png`를 기준으로 합니다.
+원본 윤곽과 배경색을 기준으로 말풍선 내부·글자 대비를 결정합니다. 원문 제거 이미지에서 테두리를 재추정하지 않습니다. 윤곽 안의 글자 포함률을 검사하고 드래그 영역도 윤곽과 교차시킵니다. 캐시 버전과 이전 인식 키의 SSOT는 `JapanesePageKeys`, 이미지와 검수 목록의 종류·색 표시는 `MangaTextKind+Presentation`입니다. 처리 버전 갱신 후 수동 영역·종류 변경·검수 문구 보존을 확인합니다.
+
+## 구현·오류 처리
+
+Strict Swift 6를 유지합니다. 강제 캐스팅·임의 Any 계약을 추가하지 않습니다. Foundation/AppKit의 필수 외부 계약은 해당 어댑터에서만 처리합니다. 모델 응답의 누락·중복·빈 번역·잘못된 좌표·HTTP 오류를 명시적으로 거부합니다. 번역/API 실패를 다른 제공자나 원문으로 조용히 대체하지 않습니다. 취소는 실패 페이지로 기록하지 않습니다.
+
+함수 본문 90줄, 파일 450줄, 복잡도 12, 함수 중첩 3단계 상한은 `.swiftlint.yml`이 관리합니다. 긴 UI나 처리 흐름은 책임별 파일로 나눕니다. 외부 리소스 정리와 사용자 취소 이외의 오류를 빈 catch/try?로 숨기지 않습니다.
+
+## 파일·호환성·게시
+
+원본과 사용자의 기존 변경을 보존합니다. 출력은 사용자가 지정한 별도 폴더에 책별로 저장하고 기존 무관한 폴더를 덮어쓰지 않습니다. 앱 이름을 바꾸어도 기존 CLI 제품·번들 ID·Application Support 경로는 README의 호환성 계획을 따릅니다. 외부 Ballons 소스/모델은 vendoring하지 않습니다.
+
+공개 저장소에 키·토큰·.env·사용자 절대 경로·원본 만화·개인 데이터·캐시·모델·앱 바이너리를 추가하지 않습니다. 변경 전후 Git 상태를 확인합니다.
 
 ## 검증
 
-가벼운 검증:
+README의 검증 명령을 실행합니다. 빈 입력, 끝 페이지, 동시 접근, 실패 경로와 파일 부작용부터 확인합니다. 테스트는 출력·상태·원본 보존을 확인하며 내부 구현을 mock하지 않습니다. HTTP 대체는 외부 네트워크 경계에만 둡니다. 실제 모델을 실행하지 않은 결과는 완료로 말하지 않습니다.
 
-```bash
-swift run MangaLadaCoreChecks
-swift run MangaLadaVisionChecks
-swift run MangaLadaRenderingChecks
-swift build
-```
-
-Ballons 엔진이 설치되어 있고 실제 페이지가 있을 때:
-
-```bash
-swift run MangaLadaBallonsChecks /path/to/manga-page.png
-```
-
-앱 번들 생성:
-
-```bash
-./scripts/build_app.sh
-```
-
-Ballons 엔진 설치 또는 갱신:
-
-```bash
-./scripts/setup_ballons_engine.sh
-```
-
-사용자 Applications 설치:
-
-```bash
-./scripts/install_local_app.sh
-```
+화면 변경은 실제 내용으로 HTML을 설계해 브라우저에서 확인하고, 설치한 네이티브 앱에서도 크기·겹침·키보드·탐색·저장을 확인합니다. 빌드 성공과 화면/번역 품질 검수를 구분합니다.

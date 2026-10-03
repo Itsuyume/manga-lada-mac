@@ -6,6 +6,7 @@ public enum TranslationError: LocalizedError, Equatable {
     case httpStatus(Int)
     case missingTranslatedText
     case missingConfiguration(String)
+    case invalidPageResponse(String)
 
     public var errorDescription: String? {
         switch self {
@@ -19,6 +20,8 @@ public enum TranslationError: LocalizedError, Equatable {
             return "번역 결과 텍스트가 없습니다."
         case .missingConfiguration(let message):
             return message
+        case .invalidPageResponse(let detail):
+            return "페이지 번역 결과가 완전하지 않습니다. \(detail)"
         }
     }
 }

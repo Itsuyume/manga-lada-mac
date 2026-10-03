@@ -4,10 +4,15 @@ import MangaLadaCore
 @main
 struct MangaLadaCoreChecks {
     static func main() async throws {
+        try JapanesePipelineChecks.run()
+        try ReadingBehaviorChecks.run()
+        try SelectionGeometryChecks.run()
+        try await NetworkBoundaryChecks.run()
         try checkImageScannerKeepsOnlySupportedImagesAndSortsNaturally()
         try checkImageScannerFindsNestedImagesNaturally()
         try checkArchiveExtractorExtractsZipForRecursiveScanning()
         try checkCacheRoundTripsTranslationByFingerprint()
+        try checkTextLanguageDetectorSeparatesEnglishAndJapanese()
         try checkLocalTranslatorConfigurationLoadsFileAndEnvironmentOverrides()
         try checkGoogleTranslatorParsesNestedResponseText()
         try checkGoogleTranslatorRejectsEmptyParsedText()
@@ -114,6 +119,21 @@ struct MangaLadaCoreChecks {
         try require(loaded.blocks == page.blocks, "Cache text blocks changed during round trip.")
     }
 
+    private static func checkTextLanguageDetectorSeparatesEnglishAndJapanese() throws {
+        try require(
+            TextLanguageDetector.detectSourceLanguage(in: ["Can you see this clearly?", "Windows News"]) == .english,
+            "Language detector did not classify Latin text as English."
+        )
+        try require(
+            TextLanguageDetector.detectSourceLanguage(in: ["こんにちは", "Windows 11"]) == .japanese,
+            "Language detector should keep Japanese text Japanese even with Latin tokens nearby."
+        )
+        try require(
+            TextLanguageDetector.detectSourceLanguage(in: [""], fallback: .english) == .english,
+            "Language detector did not use fallback for empty OCR text."
+        )
+    }
+
     private static func checkLocalTranslatorConfigurationLoadsFileAndEnvironmentOverrides() throws {
         let root = try temporaryDirectory()
         let configURL = root.appendingPathComponent("translator.local.json")
@@ -132,7 +152,7 @@ struct MangaLadaCoreChecks {
         )
 
         try require(configuration.maxConcurrentRequests == 6, "Environment did not override concurrency.")
-        try require(configuration.cacheKey == "google-web", "Google cache key mismatch.")
+        try require(configuration.provider == .ollama, "Default provider must be local Ollama.")
     }
 
     private static func checkGoogleTranslatorParsesNestedResponseText() throws {
@@ -182,7 +202,9 @@ struct MangaLadaCoreChecks {
         let blocks = [
             TextBlock(
                 box: TextBox(x: 0, y: 0, width: 0.1, height: 0.1),
-                originalText: "天王寺さんのまんこっと"
+                originalText: "天王寺さんのまんこっと",
+                sourceIsVertical: true,
+                detectedFontSize: 104
             ),
             TextBlock(
                 box: TextBox(x: 0, y: 0.2, width: 0.1, height: 0.1),
@@ -197,6 +219,8 @@ struct MangaLadaCoreChecks {
         )
 
         try require(translated.map(\.translatedText) == ["텐노지\n씨의 보지", "정액"], "Pipeline did not refine translated blocks.")
+        try require(translated[0].sourceIsVertical == true, "Pipeline dropped source orientation metadata.")
+        try require(translated[0].detectedFontSize == 104, "Pipeline dropped detected font metadata.")
         try require(await recorder.texts == ["天王寺さんのまんこっと", "子種"], "Pipeline did not preserve source block order.")
     }
 
@@ -218,7 +242,11 @@ struct MangaLadaCoreChecks {
 
         try require(translated.map(\.translatedText) == ["번역: 一", "번역: 二", "번역: 三"], "Concurrent pipeline did not preserve result order.")
         try require(await recorder.maxActive == 2, "Concurrent pipeline did not honor maxConcurrentRequests.")
-        try require(await recorder.startedTexts == ["一", "二", "三"], "Concurrent pipeline did not submit all source blocks.")
+        let startedTexts = await recorder.startedTexts
+        try require(
+            startedTexts.count == 3 && Set(startedTexts) == Set(["一", "二", "三"]),
+            "Concurrent pipeline did not submit all source blocks."
+        )
     }
 
     private static func checkKoreanTranslationRefinerFixesKnownMistranslations() throws {

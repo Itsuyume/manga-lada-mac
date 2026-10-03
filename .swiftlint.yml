@@ -1,0 +1,36 @@
+only_rules:
+  - cyclomatic_complexity
+  - function_body_length
+  - file_length
+  - nesting
+  - force_cast
+  - force_try
+  - unused_import
+excluded:
+  - .build
+  - dist
+  - Tests
+  - Sources/MangaLadaCoreChecks
+  - Sources/MangaLadaVisionChecks
+  - Sources/MangaLadaRenderingChecks
+  - Sources/MangaLadaBallonsChecks
+  - Sources/MangaLadaWorkflowChecks
+  - Sources/MangaLadaImportChecks
+cyclomatic_complexity:
+  warning: 12
+  error: 12
+  ignores_case_statements: true
+function_body_length:
+  warning: 90
+  error: 90
+file_length:
+  warning: 450
+  error: 450
+  ignore_comment_only_lines: true
+nesting:
+  type_level:
+    warning: 2
+    error: 2
+  function_level:
+    warning: 3
+    error: 3

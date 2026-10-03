@@ -1,26 +1,56 @@
 import AppKit
 import Foundation
+import MangaLadaCore
 import MangaLadaVision
 
 @main
 struct MangaLadaVisionChecks {
     static func main() async throws {
-        let sampleURL = try makeSampleImage()
-        let blocks = try await VisionOCRService().recognizeText(in: sampleURL)
-
-        guard !blocks.isEmpty else {
-            throw CheckError.failed("Vision OCR did not recognize text in generated sample image.")
+        let service = VisionOCRService()
+        if CommandLine.arguments.count > 1 {
+            let blocks = try await service.recognizeText(in: URL(fileURLWithPath: CommandLine.arguments[1]), sourceLanguage: .japanese)
+            print(String(decoding: try JSONEncoder().encode(blocks), as: UTF8.self))
+            return
         }
 
-        let recognized = blocks.map(\.originalText).joined(separator: " ")
-        guard recognized.contains("こんにちは") || recognized.contains("世界") else {
-            throw CheckError.failed("Vision OCR returned text, but not the expected Japanese sample: \(recognized)")
-        }
+        let japaneseURL = try makeSampleImage(text: "こんにちは 世界")
+        let japaneseBlocks = try await service.recognizeText(in: japaneseURL, sourceLanguage: .japanese)
+        try assertRecognition(
+            blocks: japaneseBlocks,
+            expectedTokens: ["こんにちは", "世界"],
+            label: "Japanese"
+        )
 
-        print("MangaLadaVisionChecks passed: \(recognized)")
+        let englishURL = try makeSampleImage(text: "HELLO WORLD")
+        let englishBlocks = try await service.recognizeText(in: englishURL, sourceLanguage: .english)
+        try assertRecognition(
+            blocks: englishBlocks,
+            expectedTokens: ["HELLO", "WORLD"],
+            label: "English"
+        )
+
+        let japaneseRecognized = japaneseBlocks.map(\.originalText).joined(separator: " ")
+        let englishRecognized = englishBlocks.map(\.originalText).joined(separator: " ")
+        print("MangaLadaVisionChecks passed: ja=\(japaneseRecognized) en=\(englishRecognized)")
     }
 
-    private static func makeSampleImage() throws -> URL {
+    private static func assertRecognition(
+        blocks: [TextBlock],
+        expectedTokens: [String],
+        label: String
+    ) throws {
+        guard !blocks.isEmpty else {
+            throw CheckError.failed("Vision OCR did not recognize text in generated \(label) sample image.")
+        }
+
+        let recognized = blocks.map(\.originalText).joined(separator: " ").uppercased()
+        let missingTokens = expectedTokens.filter { !recognized.contains($0.uppercased()) }
+        guard missingTokens.isEmpty else {
+            throw CheckError.failed("Vision OCR returned text, but missed expected \(label) tokens \(missingTokens): \(recognized)")
+        }
+    }
+
+    private static func makeSampleImage(text: String) throws -> URL {
         let size = NSSize(width: 900, height: 320)
         let image = NSImage(size: size)
 
@@ -38,7 +68,7 @@ struct MangaLadaVisionChecks {
         ]
 
         let textRect = NSRect(x: 40, y: 98, width: 820, height: 120)
-        "こんにちは 世界".draw(in: textRect, withAttributes: attributes)
+        text.draw(in: textRect, withAttributes: attributes)
         image.unlockFocus()
 
         guard let tiffData = image.tiffRepresentation,
@@ -49,7 +79,7 @@ struct MangaLadaVisionChecks {
 
         let outputURL = FileManager.default.temporaryDirectory
             .appendingPathComponent("MangaLadaVisionChecks")
-            .appendingPathComponent("sample.png")
+            .appendingPathComponent(UUID().uuidString + ".png")
         try FileManager.default.createDirectory(
             at: outputURL.deletingLastPathComponent(),
             withIntermediateDirectories: true

@@ -1,0 +1,23 @@
+name: Verify
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  mac:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python3 -m pip install -r scripts/requirements-checks.txt
+      - run: python3 scripts/check_balloon_geometry.py
+      - run: python3 scripts/check_supplemental_mask.py
+      - run: brew install swiftlint
+      - run: python3 scripts/check_architecture.py
+      - run: swiftlint lint --strict
+      - run: swift build --explicit-target-dependency-import-check error
+      - run: swift run MangaLadaCoreChecks
+      - run: swift run MangaLadaVisionChecks
+      - run: swift run MangaLadaRenderingChecks
+      - run: swift run MangaLadaImportChecks

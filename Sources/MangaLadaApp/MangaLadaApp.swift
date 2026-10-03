@@ -1,114 +1,33 @@
+import MangaLadaViewerUI
 import SwiftUI
 
 @main
 struct MangaLadaMacApp: App {
-    @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
-    @StateObject private var appState = AppState()
-
+    @NSApplicationDelegateAdaptor(ComicAppDelegate.self) private var delegate
+    @StateObject private var state = AppState()
     var body: some Scene {
-        WindowGroup {
-            ContentView()
-                .environmentObject(appState)
-                .frame(minWidth: 980, minHeight: 680)
-                .onAppear {
-                    appDelegate.installOpenFilesHandler { urls in
-                        guard let firstURL = urls.first else {
-                            return
-                        }
-                        Task { await appState.openDroppedURL(firstURL) }
-                    }
+        Window("Manga translator", id: "translator") {
+            ContentView().environmentObject(state).frame(minWidth: 980, minHeight: 680)
+                .onAppear { delegate.installOpenHandler { url in Task { await state.open(url) } } }
+        }.defaultSize(width: 1180, height: 820).windowStyle(.hiddenTitleBar)
+            .commands {
+                ComicPasteCommands(open: { input in Task { await state.open(input) } }, failure: { state.errorMessage = $0 })
+                CommandGroup(replacing: .newItem) { Button("만화 열기…") { state.chooseBook() }.keyboardShortcut("o") }
+                CommandMenu("번역") {
+                    Button("전체 번역 시작") { state.startTranslation() }.keyboardShortcut("t", modifiers: .command)
+                    Button("현재 페이지 다시 번역") { state.startTranslation(onlyCurrent: true, force: true) }.disabled(state.isBusy)
+                    Button("중단") { state.stop() }.disabled(!state.isBusy)
+                    Divider()
+                    Button("현재 PNG 저장…") { state.exportCurrentPNG() }.keyboardShortcut("s", modifiers: [.command, .shift])
+                    Button("완성본 CBZ 저장…") { state.exportCBZ() }
+                    Button("Manga Reader로 읽기") { state.openInReader() }
                 }
-        }
-        .windowStyle(.hiddenTitleBar)
-        .commands {
-            CommandGroup(replacing: .newItem) {}
-            CommandMenu("Viewer") {
-                Button("Open Image or ZIP...") {
-                    Task { await appState.openFileFromPanel() }
+                CommandMenu("화면") {
+                    Button("확대") { state.reading.zoomIn() }.keyboardShortcut("+", modifiers: .command)
+                    Button("축소") { state.reading.zoomOut() }.keyboardShortcut("-", modifiers: .command)
+                    Button("전체화면") { state.reading.toggleFullScreen() }.keyboardShortcut("f", modifiers: [.command, .control])
                 }
-                .keyboardShortcut("o", modifiers: [.command])
-
-                Button("Translate Current Page") {
-                    Task { await appState.translateCurrentPage(force: true) }
-                }
-                .keyboardShortcut(.space, modifiers: [])
-
-                Button("Save Translated PNG...") {
-                    Task { await appState.exportCurrentTranslatedImage() }
-                }
-                .keyboardShortcut("s", modifiers: [.command, .shift])
-
-                Button("Previous Page") {
-                    appState.goToPreviousPage()
-                }
-                .keyboardShortcut(.leftArrow, modifiers: [])
-
-                Button("Next Page") {
-                    appState.goToNextPage()
-                }
-                .keyboardShortcut(.rightArrow, modifiers: [])
+                CommandGroup(replacing: .appSettings) { Button("설정…") { state.showSettings = true }.keyboardShortcut(",").disabled(state.isBusy) }
             }
-        }
-    }
-}
-
-@MainActor
-final class AppDelegate: NSObject, NSApplicationDelegate {
-    private var pendingOpenURLs: [URL] = []
-    private var openFilesHandler: (([URL]) -> Void)?
-
-    func applicationDidFinishLaunching(_ notification: Notification) {
-        let argumentURLs = CommandLine.arguments
-            .dropFirst()
-            .map { URL(fileURLWithPath: $0) }
-            .filter { FileManager.default.fileExists(atPath: $0.path) }
-        routeOpenURLs(argumentURLs)
-        ensureWindowIsVisible()
-    }
-
-    func applicationShouldOpenUntitledFile(_ sender: NSApplication) -> Bool {
-        true
-    }
-
-    func application(_ sender: NSApplication, openFiles filenames: [String]) {
-        let urls = filenames.map { URL(fileURLWithPath: $0) }
-        routeOpenURLs(urls)
-        ensureWindowIsVisible()
-        sender.reply(toOpenOrPrint: .success)
-    }
-
-    func application(_ application: NSApplication, open urls: [URL]) {
-        routeOpenURLs(urls)
-        ensureWindowIsVisible()
-    }
-
-    func installOpenFilesHandler(_ handler: @escaping ([URL]) -> Void) {
-        openFilesHandler = handler
-        if !pendingOpenURLs.isEmpty {
-            let urls = pendingOpenURLs
-            pendingOpenURLs.removeAll()
-            handler(urls)
-        }
-    }
-
-    private func routeOpenURLs(_ urls: [URL]) {
-        guard !urls.isEmpty else {
-            return
-        }
-
-        if let openFilesHandler {
-            openFilesHandler(urls)
-        } else {
-            pendingOpenURLs.append(contentsOf: urls)
-        }
-    }
-
-    private func ensureWindowIsVisible() {
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
-            if NSApp.windows.isEmpty {
-                NSApp.sendAction(#selector(NSWindow.newWindowForTab(_:)), to: nil, from: nil)
-            }
-            NSApp.activate(ignoringOtherApps: true)
-        }
     }
 }

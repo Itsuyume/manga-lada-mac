@@ -8,11 +8,16 @@ struct MangaLadaRenderingChecks {
     @MainActor
     static func main() throws {
         let root = try temporaryDirectory()
+        try checkCurvedLineWrapping()
+        try checkSoundEffects(in: root)
+        try checkDarkCaptionAndManualContour()
         let sourceURL = root.appendingPathComponent("source.png")
         let inpaintedSourceURL = root.appendingPathComponent("inpainted-source.png")
         let outputURL = root.appendingPathComponent("translated.png")
         let textOnlyOutputURL = root.appendingPathComponent("translated-text-only.png")
+        let largeTextOnlyOutputURL = root.appendingPathComponent("translated-text-only-large.png")
         let readabilityOutputURL = root.appendingPathComponent("translated-readable.png")
+        let koreanHorizontalOutputURL = root.appendingPathComponent("translated-korean-horizontal.png")
         try makeSourceImage(at: sourceURL)
         try makeInpaintedSourceImage(at: inpaintedSourceURL)
 
@@ -79,6 +84,67 @@ struct MangaLadaRenderingChecks {
             "Text-only renderer unexpectedly replaced untouched background."
         )
 
+        var scalableTranslation = translation
+        scalableTranslation.blocks = [translation.blocks[0]]
+        _ = try TranslatedImageRenderer().writePNG(
+            sourceImageURL: inpaintedSourceURL,
+            translation: scalableTranslation,
+            destinationURL: largeTextOnlyOutputURL,
+            fontScale: 1.8,
+            backgroundStyle: .none
+        )
+        guard let largeTextOnlyImage = NSImage(contentsOf: largeTextOnlyOutputURL) else {
+            throw CheckError.failed("Scaled text-only PNG could not be loaded for inspection.")
+        }
+        let regularDarkPixels = darkPixelCount(
+            image: textOnlyImage,
+            normalizedArea: CGRect(x: 0.30, y: 0.38, width: 0.40, height: 0.18)
+        )
+        let largeDarkPixels = darkPixelCount(
+            image: largeTextOnlyImage,
+            normalizedArea: CGRect(x: 0.30, y: 0.38, width: 0.40, height: 0.18)
+        )
+        try require(
+            largeDarkPixels > regularDarkPixels,
+            "Font scale did not increase rendered text pixel coverage."
+        )
+
+        let verticalSourceKoreanTranslation = PageTranslation(
+            imageURL: inpaintedSourceURL,
+            imageFingerprint: "korean-horizontal-check",
+            sourceLanguage: .japanese,
+            targetLanguage: .korean,
+            blocks: [
+                TextBlock(
+                    box: TextBox(x: 0.76, y: 0.12, width: 0.10, height: 0.58),
+                    originalText: "僕の産まれてきた場所",
+                    translatedText: "내가 태어난 곳",
+                    confidence: 0.99,
+                    sourceIsVertical: true,
+                    detectedFontSize: 54
+                )
+            ]
+        )
+        _ = try TranslatedImageRenderer().writePNG(
+            sourceImageURL: inpaintedSourceURL,
+            translation: verticalSourceKoreanTranslation,
+            destinationURL: koreanHorizontalOutputURL,
+            backgroundStyle: .none
+        )
+        guard let koreanHorizontalImage = NSImage(contentsOf: koreanHorizontalOutputURL) else {
+            throw CheckError.failed("Korean horizontal PNG could not be loaded for inspection.")
+        }
+        guard let koreanBounds = darkPixelBounds(
+            image: koreanHorizontalImage,
+            normalizedArea: CGRect(x: 0.72, y: 0.12, width: 0.20, height: 0.60)
+        ) else {
+            throw CheckError.failed("Korean vertical-source translation area appears blank.")
+        }
+        try require(
+            koreanBounds.width >= 48,
+            "Korean translation was laid out as narrow vertical characters."
+        )
+
         let readabilityResult = try TranslatedImageRenderer().writePNG(
             sourceImageURL: inpaintedSourceURL,
             translation: translation,
@@ -97,6 +163,9 @@ struct MangaLadaRenderingChecks {
             containsTintedPixel(image: readabilityImage, normalizedArea: CGRect(x: 0.10, y: 0.10, width: 0.10, height: 0.10)),
             "Readability renderer unexpectedly replaced untouched background."
         )
+        try checkShortVerticalSource(in: root)
+        try checkShapeAndConsistency(in: root)
+        try checkFloatingText()
         print("MangaLadaRenderingChecks passed: \(outputURL.path)")
     }
 
@@ -152,9 +221,13 @@ struct MangaLadaRenderingChecks {
     }
 
     private static func containsDarkPixel(image: NSImage, normalizedArea: CGRect) -> Bool {
+        darkPixelCount(image: image, normalizedArea: normalizedArea) > 0
+    }
+
+    private static func darkPixelCount(image: NSImage, normalizedArea: CGRect) -> Int {
         guard let tiffData = image.tiffRepresentation,
               let bitmap = NSBitmapImageRep(data: tiffData) else {
-            return false
+            return 0
         }
 
         let area = NSRect(
@@ -168,6 +241,7 @@ struct MangaLadaRenderingChecks {
         let minY = max(0, Int(area.minY))
         let maxY = min(bitmap.pixelsHigh - 1, Int(area.maxY))
 
+        var count = 0
         for y in minY...maxY {
             for x in minX...maxX {
                 guard let color = bitmap.colorAt(x: x, y: y)?.usingColorSpace(.deviceRGB) else {
@@ -177,12 +251,61 @@ struct MangaLadaRenderingChecks {
                 if color.redComponent < 0.35,
                    color.greenComponent < 0.35,
                    color.blueComponent < 0.35 {
-                    return true
+                    count += 1
                 }
             }
         }
 
-        return false
+        return count
+    }
+
+    static func darkPixelBounds(image: NSImage, normalizedArea: CGRect) -> CGRect? {
+        guard let tiffData = image.tiffRepresentation,
+              let bitmap = NSBitmapImageRep(data: tiffData) else {
+            return nil
+        }
+
+        let area = NSRect(
+            x: normalizedArea.minX * Double(bitmap.pixelsWide),
+            y: normalizedArea.minY * Double(bitmap.pixelsHigh),
+            width: normalizedArea.width * Double(bitmap.pixelsWide),
+            height: normalizedArea.height * Double(bitmap.pixelsHigh)
+        )
+        let minX = max(0, Int(area.minX))
+        let maxX = min(bitmap.pixelsWide - 1, Int(area.maxX))
+        let minY = max(0, Int(area.minY))
+        let maxY = min(bitmap.pixelsHigh - 1, Int(area.maxY))
+
+        var darkMinX = Int.max
+        var darkMinY = Int.max
+        var darkMaxX = Int.min
+        var darkMaxY = Int.min
+        for y in minY...maxY {
+            for x in minX...maxX {
+                guard let color = bitmap.colorAt(x: x, y: y)?.usingColorSpace(.deviceRGB) else {
+                    continue
+                }
+
+                if color.redComponent < 0.35,
+                   color.greenComponent < 0.35,
+                   color.blueComponent < 0.35 {
+                    darkMinX = min(darkMinX, x)
+                    darkMinY = min(darkMinY, y)
+                    darkMaxX = max(darkMaxX, x)
+                    darkMaxY = max(darkMaxY, y)
+                }
+            }
+        }
+
+        guard darkMinX <= darkMaxX, darkMinY <= darkMaxY else {
+            return nil
+        }
+        return CGRect(
+            x: darkMinX,
+            y: darkMinY,
+            width: darkMaxX - darkMinX + 1,
+            height: darkMaxY - darkMinY + 1
+        )
     }
 
     private static func containsTintedPixel(image: NSImage, normalizedArea: CGRect) -> Bool {
@@ -261,7 +384,7 @@ struct MangaLadaRenderingChecks {
         return url
     }
 
-    private static func require(_ condition: Bool, _ message: String) throws {
+    static func require(_ condition: Bool, _ message: String) throws {
         if !condition {
             throw CheckError.failed(message)
         }

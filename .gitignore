@@ -6,3 +6,14 @@ dist/
 *.xcuserstate
 *.moved-aside
 Package.resolved
+
+# Local translation data and credentials
+work/
+outputs/
+.env
+.env.*
+*.safetensors
+*.onnx
+*.pt
+*.pth
+__pycache__/

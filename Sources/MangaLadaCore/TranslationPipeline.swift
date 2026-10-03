@@ -33,8 +33,20 @@ public struct TranslationPipeline: Sendable {
     public func translate(
         _ blocks: [TextBlock],
         configuration: LocalTranslatorConfiguration,
-        translator injectedTranslator: TextTranslating? = nil
+        translator injectedTranslator: TextTranslating? = nil,
+        previousContext: String = ""
     ) async throws -> [TextBlock] {
+        guard !blocks.isEmpty else { return [] }
+        if injectedTranslator == nil, configuration.provider != .googleWeb {
+            let ordered = MangaReadingOrder.sorted(blocks)
+            await progress?(TranslationProgress(provider: configuration.provider, completed: 0, total: ordered.count))
+            let translator: any MangaPageTranslating = configuration.provider == .ollama
+                ? OllamaPageTranslator(configuration: configuration.ollama)
+                : GeminiPageTranslator(configuration: configuration.gemini)
+            let translated = try await translator.translatePage(ordered, previousContext: previousContext)
+            await progress?(TranslationProgress(provider: configuration.provider, completed: ordered.count, total: ordered.count))
+            return translated
+        }
         let translator = injectedTranslator ?? TranslatorFactory.makeTranslator(
             configuration: configuration
         )

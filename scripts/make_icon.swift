@@ -2,6 +2,7 @@ import AppKit
 import Foundation
 
 let outputURL: URL
+let isReader = CommandLine.arguments.count >= 3 && CommandLine.arguments[2] == "reader"
 if CommandLine.arguments.count >= 2 {
     outputURL = URL(filePath: CommandLine.arguments[1])
 } else {
@@ -28,7 +29,7 @@ let iconSpecs: [(name: String, pixels: Int)] = [
 ]
 
 for spec in iconSpecs {
-    let image = drawIcon(pixels: spec.pixels)
+    let image = try drawIcon(pixels: spec.pixels)
     guard let tiffData = image.tiffRepresentation,
           let bitmap = NSBitmapImageRep(data: tiffData),
           let pngData = bitmap.representation(using: .png, properties: [:]) else {
@@ -58,13 +59,18 @@ if process.terminationStatus != 0 {
     throw IconError.iconutilFailed(process.terminationStatus)
 }
 
-func drawIcon(pixels: Int) -> NSImage {
+func drawIcon(pixels: Int) throws -> NSImage {
     let size = NSSize(width: pixels, height: pixels)
     let image = NSImage(size: size)
     let scale = CGFloat(pixels) / 1024
 
-    image.lockFocus()
-    defer { image.unlockFocus() }
+    guard let bitmap = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: pixels, pixelsHigh: pixels,
+                                        bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
+                                        colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0),
+          let context = NSGraphicsContext(bitmapImageRep: bitmap) else { throw IconError.renderFailed("bitmap") }
+    bitmap.size = size; image.addRepresentation(bitmap)
+    NSGraphicsContext.saveGraphicsState(); defer { NSGraphicsContext.restoreGraphicsState() }
+    NSGraphicsContext.current = context
 
     let canvas = NSRect(origin: .zero, size: size)
     let background = NSGradient(colors: [
@@ -98,20 +104,21 @@ func drawIcon(pixels: Int) -> NSImage {
     NSColor.white.setFill()
     bubble.fill()
 
-    let tail = NSBezierPath()
-    tail.move(to: NSPoint(x: 380 * scale, y: 236 * scale))
-    tail.line(to: NSPoint(x: 306 * scale, y: 134 * scale))
-    tail.line(to: NSPoint(x: 488 * scale, y: 236 * scale))
-    tail.close()
-    NSColor.white.setFill()
-    tail.fill()
+    if isReader {
+        let spine = NSBezierPath(); spine.move(to: NSPoint(x: 512 * scale, y: 260 * scale)); spine.line(to: NSPoint(x: 512 * scale, y: 670 * scale))
+        NSColor.gray.withAlphaComponent(0.25).setStroke(); spine.lineWidth = 6 * scale; spine.stroke()
+    } else {
+        let tail = NSBezierPath(); tail.move(to: NSPoint(x: 380 * scale, y: 236 * scale))
+        tail.line(to: NSPoint(x: 306 * scale, y: 134 * scale)); tail.line(to: NSPoint(x: 488 * scale, y: 236 * scale))
+        tail.close(); NSColor.white.setFill(); tail.fill()
+    }
 
     let teal = NSColor(calibratedRed: 0.05, green: 0.58, blue: 0.62, alpha: 1)
     teal.setFill()
     NSBezierPath(ovalIn: NSRect(x: 704 * scale, y: 656 * scale, width: 92 * scale, height: 92 * scale)).fill()
 
-    drawCentered("文", rect: NSRect(x: 232 * scale, y: 346 * scale, width: 276 * scale, height: 240 * scale), size: 178 * scale)
-    drawCentered("가", rect: NSRect(x: 520 * scale, y: 346 * scale, width: 276 * scale, height: 240 * scale), size: 178 * scale)
+    drawCentered(isReader ? "漫" : "文", rect: NSRect(x: 232 * scale, y: 346 * scale, width: 276 * scale, height: 240 * scale), size: 178 * scale)
+    drawCentered(isReader ? "画" : "가", rect: NSRect(x: 520 * scale, y: 346 * scale, width: 276 * scale, height: 240 * scale), size: 178 * scale)
 
     return image
 }

@@ -1,8 +1,9 @@
 import Foundation
 
 public struct ImageFileScanner {
+    public static let generatedBookMarker = ".manga-translator-book"
     public static let supportedExtensions: Set<String> = [
-        "jpg", "jpeg", "png", "webp", "tif", "tiff", "bmp", "gif"
+        "jpg", "jpeg", "png", "webp", "tif", "tiff", "bmp", "gif", "heic", "heif", "avif"
     ]
 
     private let fileManager: FileManager
@@ -36,10 +37,10 @@ public struct ImageFileScanner {
     private func directImages(in folderURL: URL) throws -> [URL] {
         try fileManager.contentsOfDirectory(
             at: folderURL,
-            includingPropertiesForKeys: [.isRegularFileKey],
+            includingPropertiesForKeys: [.isRegularFileKey, .isDirectoryKey],
             options: [.skipsHiddenFiles]
         )
-        .filter(Self.isSupportedImage)
+        .filter { url in try url.resourceValues(forKeys: [.isRegularFileKey]).isRegularFile == true && Self.isSupportedImage(url) }
     }
 
     private func recursiveImages(in folderURL: URL) throws -> [URL] {
@@ -57,7 +58,10 @@ public struct ImageFileScanner {
                 continue
             }
 
-            let values = try fileURL.resourceValues(forKeys: [.isRegularFileKey])
+            let values = try fileURL.resourceValues(forKeys: [.isRegularFileKey, .isDirectoryKey])
+            if values.isDirectory == true && fileManager.fileExists(atPath: fileURL.appendingPathComponent(Self.generatedBookMarker).path) {
+                enumerator.skipDescendants(); continue
+            }
             guard values.isRegularFile == true, Self.isSupportedImage(fileURL) else {
                 continue
             }
