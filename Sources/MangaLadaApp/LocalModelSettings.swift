@@ -13,7 +13,7 @@ struct LocalModelSettings: View {
         _customModel = State(initialValue: model.wrappedValue)
     }
     var body: some View {
-        Picker("로컬 모델", selection: Binding(get: { selection }, set: select)) {
+        Picker("로컬 모델", selection: Binding(get: { selection }, set: { select($0) })) {
             ForEach(Preset.allCases, id: \.self) { Text($0.label).tag($0) }
         }
         if selection == .custom {
