@@ -7,6 +7,7 @@ extension MangaLadaRenderingChecks {
     static func checkSoundEffects(in root: URL) throws {
         stage("Registering bundled fonts")
         try SoundEffectFonts.registerBundledFonts()
+        try SoundEffectFonts.registerBundledFonts()
         stage("Creating sound effect source image")
         let library = try SoundEffectLibrary.standard()
         try require(library.styles.count == 12, "The effect library is incomplete.")
