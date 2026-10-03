@@ -12,8 +12,6 @@ def run() -> None:
     engine_root, clean_path, regions_path = map(Path, sys.argv[1:4])
     sys.path.insert(0, str(engine_root))
     os.chdir(engine_root)
-    from ballontranslator.modules.inpaint.inpaint_default import LamaLarge
-
     image = cv2.imread(str(clean_path), cv2.IMREAD_COLOR)
     if image is None:
         raise ValueError(f"Cannot decode image: {clean_path.name}")
@@ -23,19 +21,28 @@ def run() -> None:
     if source is None or source.shape != image.shape:
         raise ValueError("Mask source and clean image dimensions differ")
     mask, boxes = glyph_mask(source, regions, bounded=request["bounded"])
-    import torch
-    device = "mps" if torch.backends.mps.is_available() else "cpu"
-    painter = LamaLarge(device=device, inpaint_size=1536, precision="fp32")
-    painter.check_need_inpaint = False
-    from ballontranslator.utils.textblock import TextBlock
-    result = painter.inpaint(image, mask, [TextBlock(xyxy=box) for box in boxes])
+    from flat_background import prepare_flat_backgrounds
+    prepared, pending = prepare_flat_backgrounds(source, image, mask, boxes)
+    unresolved = [box for box in boxes if pending[box[1]:box[3], box[0]:box[2]].any()]
+    result, method = prepared.copy(), "measured solid background"
+    if unresolved:
+        import torch
+        from ballontranslator.modules.inpaint.inpaint_default import LamaLarge
+        from ballontranslator.utils.textblock import TextBlock
+        device = "mps" if torch.backends.mps.is_available() else "cpu"
+        painter = LamaLarge(device=device, inpaint_size=1536, precision="fp32")
+        painter.check_need_inpaint = False
+        result = painter.inpaint(prepared, pending.copy(), [TextBlock(xyxy=box) for box in unresolved])
+        method = f"LaMa/{device}"
     if request["bounded"]:
-        result[mask == 0] = image[mask == 0]
+        result[pending == 0] = prepared[pending == 0]
+    restored = (mask > 0) & (pending == 0)
+    result[restored] = prepared[restored]
     temporary = clean_path.with_name("supplemental-clean.partial.png")
     if not cv2.imwrite(str(temporary), result):
         raise OSError("Cannot save supplemental inpainting")
     os.replace(temporary, clean_path)
-    print(f"Erased {len(regions)} supplemental regions using LaMa/{device}")
+    print(f"Erased {len(regions)} supplemental regions using {method}")
 
 
 def glyph_mask(image: np.ndarray, regions: list[dict], bounded: bool = False) -> tuple[np.ndarray, list[list[int]]]:

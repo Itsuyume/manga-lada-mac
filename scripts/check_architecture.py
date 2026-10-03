@@ -36,9 +36,9 @@ for target, permitted in allowed.items():
 adapters = root / "Sources" / "MangaLadaBallons" / "Resources"
 python_modules = {path.stem: path for path in adapters.glob("*.py")}
 python_allowed = {
-    "japanese_engine_worker": {"balloon_geometry", "text_region_kind", "optical_effects"},
+    "japanese_engine_worker": {"balloon_geometry", "text_region_kind", "optical_effects", "flat_background"},
     "optical_effects": {"erase_supplemental_text", "text_region_kind"},
-    "balloon_geometry": set(), "text_region_kind": set(), "erase_supplemental_text": set(),
+    "balloon_geometry": set(), "text_region_kind": set(), "erase_supplemental_text": {"flat_background"}, "flat_background": set(),
 }
 for module, path in python_modules.items():
     imports = set()

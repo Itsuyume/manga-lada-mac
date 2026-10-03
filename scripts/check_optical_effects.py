@@ -9,7 +9,7 @@ import numpy as np
 sys.dont_write_bytecode = True
 root = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(root / "Sources/MangaLadaBallons/Resources"))
-from optical_effects import plan_effects, confirmed_effects, effect_mask, restore_flat_backgrounds
+from optical_effects import plan_effects, confirmed_effects, effect_mask
 
 catalog = json.loads((root / "Sources/MangaLadaCore/Resources/sound-effect-lexicon.json").read_text())
 sources = {source for entry in catalog["entries"] for source in entry["sources"]}
@@ -76,8 +76,17 @@ def run():
     _, voiced = plan([region("old", "バタンパタン", w=.2)], [region("native", "バタンバタン")])
     assert len(voiced) == 1, "Dakuten OCR disagreement prevented cleanup of the same located glyphs"
     assert confirmed_effects([region("new", "バタンバタン")], [region("new", "バタンパタン")]) == [], "Fuzzy OCR created a new region"
+    caption = region("caption", "雷が近づいてきた。", w=.2)
+    caption["textKind"] = "caption"
+    missing, matching_caption = plan([caption], [region("native", "雷が近づいてきた。")])
+    assert not missing and len(matching_caption) == 1, "Confirmed caption extent left terminal punctuation behind"
+    assert caption["textKind"] == "caption" and caption["box"]["width"] == .2, "Caption mask extension changed kind or placement"
+    assert plan([caption], [region("native", "雷が遠ざかってきた。")]) == ([], []), "Different sentence widened a mask"
+    assert plan([], [region("native", "雷が近づいてきた。")]) == ([], []), "Unmatched caption was added as an effect"
+    assert plan([region("empty", "")], [region("native", "")]) == ([], []), "Empty strings confirmed an erase region"
+    reviewed = dict(caption, userDefinedBounds=caption["box"])
+    assert plan([reviewed], [region("native", caption["originalText"])]) == ([], []), "Caption cleanup crossed manual bounds"
     check_masks(matching)
-    check_flat_backgrounds()
     print("Optical effect checks passed: missing effects, dual OCR agreement, clipped glyph extent, duplicate/weak/invalid evidence, manual/dialogue protection, bounded dark/light masks, source/art preservation")
 
 
@@ -102,32 +111,6 @@ def check_masks(regions):
         pass
     else:
         raise AssertionError("A blank area silently became an erase rectangle")
-
-
-def check_flat_backgrounds():
-    for color in [(240, 240, 240), (16, 16, 16), (190, 220, 235)]:
-        source = np.full((100, 160, 3), color, np.uint8)
-        source[30:70, 40:60] = 120
-        mask = np.zeros((100, 160), np.uint8)
-        mask[30:70, 40:60] = 255
-        original, original_mask = source.copy(), mask.copy()
-        result = source.copy(); result[mask > 0] = np.array(color) - 3
-        restore_flat_backgrounds(source, result, mask, [[25, 20, 75, 80]])
-        assert np.all(result[mask > 0] == color), "Flat background retained a neural glyph-shaped color shift"
-        assert np.array_equal(result[mask == 0], source[mask == 0]), "Flat restoration filled unmasked artwork"
-        assert np.array_equal(source, original) and np.array_equal(mask, original_mask), "Restoration mutated its evidence"
-    source[20:80, 30:35] = (90, 90, 90)
-    result = source.copy(); before = result.copy()
-    restore_flat_backgrounds(source, result, mask, [[25, 20, 75, 80]])
-    assert np.array_equal(result, before), "Textured background was replaced by a uniform fill"
-    source = np.broadcast_to(np.arange(160, dtype=np.uint8)[None, :, None], (100, 160, 3)).copy()
-    result = source.copy(); before = result.copy()
-    restore_flat_backgrounds(source, result, mask, [[25, 20, 75, 80]])
-    assert np.array_equal(result, before), "A gradient was flattened"
-    restore_flat_backgrounds(source, result, np.full_like(mask, 255), [[25, 20, 75, 80]])
-    assert np.array_equal(result, before), "Missing background evidence was assumed uniform"
-    restore_flat_backgrounds(source, result, mask, [])
-    assert np.array_equal(result, before), "Empty optical regions changed the result"
 
 
 if __name__ == "__main__":

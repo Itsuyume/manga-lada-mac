@@ -151,7 +151,14 @@ public final class MangaPageProcessor {
         try Task.checkCancellation()
         if result.blocks.contains(where: { JapaneseHorizontalOCR.canRefine($0) }) {
             await status("가로 일본어 인식 대조 중")
-            result.blocks = JapaneseHorizontalOCR.reconcile(result.blocks, observations: observations)
+            let refined = JapaneseHorizontalOCR.reconcile(result.blocks, observations: observations)
+            if refined != result.blocks {
+                // The first erase pass used uncorrected manga OCR. Reconcile its
+                // ink extent too, using the resident engine and the same source.
+                await status("보완한 원문의 끝 글자까지 제거 중")
+                result = try await recognitionSession.recognizeAndClean(source: imageURL, runID: key,
+                    priorBlocks: refined, opticalCandidates: observations)
+            }
             try Task.checkCancellation()
         }
         result.blocks = lexicon.inferKinds(result.blocks)

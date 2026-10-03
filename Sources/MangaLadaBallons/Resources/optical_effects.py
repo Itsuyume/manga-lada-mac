@@ -2,33 +2,34 @@
 import math
 import unicodedata
 
-import numpy as np
-
 from erase_supplemental_text import glyph_mask
 from text_region_kind import is_sound_effect, normalized_source
 
 
 def plan_effects(blocks, observations, sources, patterns):
+    """New regions require known effects; matched existing text may widen its ink mask."""
     missing, matching = [], []
     for observation in observations:
         confidence = observation["confidence"]
         if not math.isfinite(confidence) or not 0 <= confidence <= 1:
             raise ValueError("Invalid optical confidence")
         validate_box(observation["box"])
-        if confidence < .3 or not is_sound_effect(observation["originalText"], sources, patterns):
+        if confidence < .3:
             continue
         if any(overlaps(observation["box"], used["box"]) for used in missing + matching):
             continue
         nearby = [block for block in blocks if overlaps(observation["box"], block["box"])]
         if not nearby:
-            missing.append(dict(observation))
+            if is_sound_effect(observation["originalText"], sources, patterns):
+                missing.append(dict(observation))
             continue
         if len(nearby) != 1:
             continue
         existing = nearby[0]
         if existing.get("userDefinedBounds") is not None or existing.get("userDefinedTextKind") is True:
             continue
-        if glyph_key(existing["originalText"]) == glyph_key(observation["originalText"]):
+        key = glyph_key(existing["originalText"])
+        if key and key == glyph_key(observation["originalText"]):
             matching.append(dict(observation))
     return missing, matching
 
@@ -54,23 +55,6 @@ def effect_mask(image, effects):
         bottom = min(1, box["y"] + box["height"] + pad / height)
         regions.append({"x": left, "y": top, "width": right - left, "height": bottom - top})
     return glyph_mask(image, regions, bounded=True)
-
-
-def restore_flat_backgrounds(original, result, mask, boxes):
-    """Replace neural color drift only inside ink masks on measured solid backgrounds.
-
-    Textured/gradient backgrounds remain the neural result. The caller owns result;
-    original and mask are read-only. No rectangle is filled in its entirety.
-    """
-    for left, top, right, bottom in boxes:
-        source = original[top:bottom, left:right]
-        ink = mask[top:bottom, left:right] > 0
-        background = source[~ink]
-        if len(background) < max(32, ink.size * .2):
-            continue
-        if np.max(np.ptp(background.astype(np.int16), axis=0)) > 2:
-            continue
-        result[top:bottom, left:right][ink] = np.median(background, axis=0).astype(np.uint8)
 
 
 def glyph_key(text):

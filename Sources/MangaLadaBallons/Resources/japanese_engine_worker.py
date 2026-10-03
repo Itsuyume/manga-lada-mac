@@ -57,11 +57,11 @@ class JapaneseEngine:
         text_mask = mask.copy()
         self.expand_outline_mask(image, mask, detected)
         paint_blocks = self.inpainting_blocks(detected, width, height) + optical_paint
-        original = image.copy()
-        result = self.painter.inpaint(image, mask, paint_blocks, check_need_inpaint=False) if paint_blocks else image
-        result[mask == 0] = original[mask == 0]
-        from optical_effects import restore_flat_backgrounds
-        restore_flat_backgrounds(original, result, mask, [block.xyxy for block in optical_paint])
+        from flat_background import prepare_flat_backgrounds
+        prepared, pending = prepare_flat_backgrounds(image, image, mask, [block.xyxy for block in paint_blocks])
+        unresolved = [block for block in paint_blocks if pending[block.xyxy[1]:block.xyxy[3], block.xyxy[0]:block.xyxy[2]].any()]
+        result = self.painter.inpaint(prepared, pending.copy(), unresolved, check_need_inpaint=False) if unresolved else prepared.copy()
+        result[pending == 0] = prepared[pending == 0]
         from balloon_geometry import BalloonGeometry, separate_shared_balloons
         from text_region_kind import classify_text_kind
         geometry = BalloonGeometry(image, text_mask=text_mask)
