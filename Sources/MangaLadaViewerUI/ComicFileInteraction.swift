@@ -16,7 +16,9 @@ public enum ComicOpenPanel {
     /// Attach system file dialogs to the app window without blocking its event loop.
     public static func present(_ panel: NSSavePanel) async -> NSApplication.ModalResponse {
         await withCheckedContinuation { continuation in
-            if let window = NSApp.keyWindow ?? NSApp.mainWindow {
+            // Accessibility actions can arrive while the app has no active key/main window.
+            let host = NSApp.keyWindow ?? NSApp.mainWindow ?? NSApp.windows.first { $0.isVisible && $0.canBecomeMain }
+            if let window = host {
                 panel.beginSheetModal(for: window) { continuation.resume(returning: $0) }
             } else {
                 panel.begin { continuation.resume(returning: $0) }
