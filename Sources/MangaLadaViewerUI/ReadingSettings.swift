@@ -23,8 +23,11 @@ public final class ReadingSettings: ObservableObject {
     public func navigation(count: Int) -> PageNavigation {
         PageNavigation(count: count, layout: layout, direction: direction, coverAlone: coverAlone)
     }
-    public func zoomIn() { endMagnification(); zoom = clampedZoom(zoom + 0.2) }
-    public func zoomOut() { endMagnification(); zoom = clampedZoom(zoom - 0.2) }
+    public var zoomPercent: Int { Int((zoom * 100).rounded()) }
+    public var canZoomIn: Bool { zoom < zoomRange.upperBound }
+    public var canZoomOut: Bool { zoom > zoomRange.lowerBound }
+    public func zoomIn() { endMagnification(); zoom = clampedZoom(((zoom + 0.2) * 100).rounded() / 100) }
+    public func zoomOut() { endMagnification(); zoom = clampedZoom(((zoom - 0.2) * 100).rounded() / 100) }
     public func updateMagnification(_ factor: Double) throws {
         guard factor.isFinite, factor > 0, zoom.isFinite, zoom > 0 else { throw ReadingGestureError.invalidMagnification }
         let start = magnificationStart ?? zoom

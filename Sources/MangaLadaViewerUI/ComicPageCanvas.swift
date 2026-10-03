@@ -50,7 +50,7 @@ public struct ComicPageCanvas: View {
                height: max(1, size.height - 40))
     }
     private func continuous(in size: CGSize) -> some View {
-        ScrollView {
+        ScrollView([.horizontal, .vertical]) {
             LazyVStack(spacing: 12) {
                 ForEach(pages.indices, id: \.self) { number in
                     ComicPageImage(url: pages[number], maximumSize: pageSize(size, count: 1),
@@ -58,7 +58,8 @@ public struct ComicPageCanvas: View {
                                    regions: number == index ? regions : [], selectedRegionID: selectedRegionID)
                         .id(number).onTapGesture { onSelect(number) }
                 }
-            }.scrollTargetLayout().padding(20)
+            }.frame(width: pageSize(size, count: 1).width * max(1, settings.zoom))
+                .scrollTargetLayout().padding(20)
         }
         .scrollPosition(id: $scrollPage, anchor: .top)
         .onAppear { scrollPage = index }

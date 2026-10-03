@@ -25,9 +25,11 @@ enum ReadingGestureChecks {
         settings.endMagnification()
         try settings.updateMagnification(100)
         try check(settings.zoom == 4, "Outward pinch escaped the maximum zoom.")
+        try check(!settings.canZoomIn && settings.canZoomOut, "Maximum zoom did not disable only zoom-in.")
         settings.endMagnification()
         try settings.updateMagnification(0.001)
         try check(settings.zoom == 0.4, "Inward pinch escaped the minimum zoom.")
+        try check(!settings.canZoomOut && settings.canZoomIn, "Minimum zoom did not disable only zoom-out.")
         settings.endMagnification()
         settings.zoom = 1
         try settings.updateMagnification(2)
@@ -38,6 +40,15 @@ enum ReadingGestureChecks {
         try settings.updateMagnification(0.5)
         try check(abs(settings.zoom - 1.15) < 0.0001, "Zoom button did not end the prior pinch session.")
         settings.endMagnification()
+        settings.zoom = 1
+        for _ in 0..<5 { settings.zoomIn() }
+        try check(settings.zoomPercent == 200, "Repeated zoom-in displayed 199% instead of 200%.")
+        for _ in 0..<6 { settings.zoomOut() }
+        try check(settings.zoomPercent == 80, "Repeated zoom-out did not display the expected percentage.")
+        settings.zoomOut(); settings.zoomOut()
+        try check(settings.zoom == 0.4 && !settings.canZoomOut, "Button arithmetic kept zoom-out enabled at 40%.")
+        for _ in 0..<18 { settings.zoomIn() }
+        try check(settings.zoom == 4 && !settings.canZoomIn, "Button arithmetic did not stop at 400%.")
         try check(settings.layout == originalLayout && settings.direction == originalDirection, "Pinch zoom changed reading preferences.")
         print("Reading gesture checks passed: pinch in/out, stable per-gesture baseline, cancellation, bounds, invalid inputs, reading preferences preserved")
     }
