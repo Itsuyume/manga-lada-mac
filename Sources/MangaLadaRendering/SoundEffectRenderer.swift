@@ -23,8 +23,15 @@ enum SoundEffectRenderer {
         let deformation = NSAffineTransform()
         deformation.transformStruct = NSAffineTransformStruct(m11: layout.widthScale, m12: 0, m21: layout.shear, m22: 1, tX: 0, tY: 0)
         transform.concat(); deformation.concat()
-        layout.text.draw(in: NSRect(x: -layout.bounds.width / 2, y: -layout.bounds.height / 2,
-                                   width: layout.bounds.width, height: layout.bounds.height))
+        let drawingRect = NSRect(x: -layout.bounds.width / 2, y: -layout.bounds.height / 2,
+                                 width: layout.bounds.width, height: layout.bounds.height)
+        layout.text.draw(in: drawingRect)
+        // A centered outline covers fine glyph strokes. Repaint the original fill over it.
+        let fill = NSMutableAttributedString(attributedString: layout.text)
+        let range = NSRange(location: 0, length: fill.length)
+        fill.removeAttribute(.strokeWidth, range: range)
+        fill.removeAttribute(.strokeColor, range: range)
+        fill.draw(in: drawingRect)
     }
     private static func selectedStyle(_ block: TextBlock, typography: MangaTypography) throws -> SoundEffectStyle? {
         guard let id = block.effectStyleID ?? typography.effectStyleID, id != "custom" else { return nil }

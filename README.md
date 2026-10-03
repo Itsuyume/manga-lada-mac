@@ -84,6 +84,8 @@ ollama pull qwen3.5:9b
 
 Rendering 리소스의 `sound-effect-styles.json`이 12가지 스타일의 단일 출처입니다. Black Han Sans, Nanum Brush Script, Nanum Myeongjo 3개 글꼴은 [Google Fonts](https://github.com/google/fonts)에서 제공하는 SIL Open Font License 글꼴이며 라이선스를 함께 포함합니다. 총 글꼴 용량은 약 7.6MB입니다. 새 커스텀 TTF 12개를 만든 것이 아니라 3개 글꼴의 조판을 12가지로 구성했습니다. 글꼴은 번역 앱 내부에만 포함하고 Reader에는 복제하지 않으며 Mac 전체에 설치하지 않습니다. 설정의 **폰트집 보기**는 iCloud에 별도로 저장한 오프라인 표본집을 엽니다.
 
+효과음은 외곽선을 그린 뒤 원래 글자 획을 다시 채웁니다. 흰 외곽선이 명조체·붓글씨의 가는 획을 덮지 않도록 하며, 속이 흰 스타일도 같은 순서를 사용합니다. 글꼴·문구·좌표·줄바꿈은 유지합니다. 기존 결과에는 원본을 다시 열어 저장하거나 검수 창의 **수정 적용**을 누르면 반영됩니다. 저장된 번역 캐시가 있으면 식자만 갱신하므로 모델을 다시 호출하지 않습니다.
+
 ## 저장·호환성
 
 앱 표시 이름은 **Manga translator**로 바뀌었지만 번들 ID `local.mangalada.mac`, Swift 제품/명령 `MangaLada`, `Application Support/Manga Lada` 경로를 유지합니다. 기존 외부 엔진·원본·캐시를 삭제하지 않습니다. 새 처리 버전은 별도의 캐시 키를 사용합니다. Reader ID는 `local.mangareader.mac`입니다.
