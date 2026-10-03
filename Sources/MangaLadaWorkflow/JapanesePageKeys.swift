@@ -6,8 +6,8 @@ struct JapanesePageKeys {
     let recognition: String
     let previousRecognition: [String]
     let previous: [String]
-    private static let translationVersion = 21
-    private static let recognitionVersion = 20
+    private static let translationVersion = 22
+    private static let recognitionVersion = 21
     init(imageURL: URL, configuration: LocalTranslatorConfiguration, context: String, title: String) throws {
         let fingerprints = ImageFingerprint()
         let image = try fingerprints.make(for: imageURL)

@@ -75,6 +75,21 @@ assert lower["right"] < upper["right"] - .05, "Jagged balloon lost the narrower 
 wrong_ink = ink.copy()
 wrong_ink[350:405, 535:555] = 255
 assert BalloonGeometry(jagged, text_mask=wrong_ink).shape(jagged_text, 25) is None, "A candidate excluding actual source letters was accepted"
+diagonal = np.full_like(image, 145)
+lobes = np.zeros(image.shape[:2], np.uint8)
+cv2.ellipse(lobes, (375, 170), (80, 105), 0, 0, 360, 255, -1)
+cv2.ellipse(lobes, (250, 300), (105, 118), 0, 0, 360, 255, -1)
+diagonal[lobes > 0] = (240, 230, 250)
+outlines, _ = cv2.findContours(lobes, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+cv2.drawContours(diagonal, outlines, -1, (0, 0, 0), 3)
+diagonal_geometry = BalloonGeometry(diagonal)
+diagonal_blocks = [{"id": str(i), "box": {"x": x / 640, "y": y / 640, "width": 35 / 640, "height": 140 / 640}}
+                   for i, (x, y) in enumerate([(357, 95), (230, 230)])]
+for block in diagonal_blocks:
+    block["balloonShape"] = diagonal_geometry.shape(block["box"], 32)
+    assert block["balloonShape"] is not None, "Panel rejection also rejected a narrow-text lobe in a diagonally joined balloon"
+separate_shared_balloons(diagonal_blocks)
+assert diagonal_blocks[0]["balloonShape"]["bounds"] != diagonal_blocks[1]["balloonShape"]["bounds"], "Diagonal lobes still share the whole compound balloon"
 joined_mask = np.zeros((640, 640), np.uint8)
 cv2.ellipse(joined_mask, (265, 320), (90, 125), 0, 0, 360, 255, -1)
 cv2.ellipse(joined_mask, (375, 320), (90, 125), 0, 0, 360, 255, -1)

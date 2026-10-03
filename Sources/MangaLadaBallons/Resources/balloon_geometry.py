@@ -57,11 +57,13 @@ class BalloonGeometry:
             minimum_area = .45 if text_points is not None else .9
             if not w * h * minimum_area <= area <= self.width * self.height * .20 or bw < w * .8 or bh < h * .75:
                 continue
-            if bw > max(w * 3, font_size * 9) or bh > max(h * 3, font_size * 9):
+            # Leave room for two connected lobes with narrow Japanese columns;
+            # separate_shared_balloons partitions their individual reading areas.
+            if bw > max(w * 4, font_size * 12) or bh > max(h * 4, font_size * 12):
                 continue
             # A panel can be mostly white and contain the text, but its center is
             # unrelated to that dialogue. Keep placement anchored to the source ink.
-            if abs(bx + bw / 2 - center_x) > max(w * .75, font_size * 2) or abs(by + bh / 2 - center_y) > max(h * .75, font_size * 2):
+            if abs(bx + bw / 2 - center_x) > max(w, font_size * 3) or abs(by + bh / 2 - center_y) > max(h, font_size * 3):
                 continue
             local = np.zeros((bh, bw), np.uint8)
             cv2.drawContours(local, [contour - [bx, by]], -1, 255, -1)
