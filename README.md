@@ -76,7 +76,11 @@ Rendering 리소스의 `sound-effect-styles.json`이 12가지 스타일의 단�
 
 두 앱의 페이지 위에서 **트랙패드 두 손가락을 벌리면 확대, 오므리면 축소**합니다. 배율은 40–400%이며 한 번의 제스처가 시작한 배율을 기준으로 움직입니다. 중단되거나 페이지에서 나간 제스처는 종료하고, 배율 숫자를 누르면 100%로 돌아갑니다.
 
+연속 스크롤에서도 확대 후 좌우로 이동해 페이지의 양끝을 볼 수 있습니다. 배율 표시는 반올림하며 40%에서는 축소, 400%에서는 확대 버튼을 비활성화합니다. 버튼과 제스처는 같은 배율 상태를 사용합니다.
+
 말풍선은 OCR 사각형뿐 아니라 **실제 일본어 글자 마스크**가 내부에 들어가는지 확인합니다. 들쭉날쭉한 말풍선도 줄마다 폭을 구하고, 원문에 비해 지나치게 크거나 멀리 떨어진 컷 테두리를 거부해 문장이 얼굴로 옮겨지는 문제를 막습니다. 글자 마스크가 없는 경우에는 원문 사각형의 내부 포함률로 판단합니다.
+
+원문 제거 단계에는 OCR 줄의 좁은 다각형 대신 여유를 둔 전용 범위를 전달합니다. 기존 글자 마스크의 끝이 잘리는 것을 막으며, 이 사각형 자체를 지우는 영역으로 사용하지 않습니다. OCR 좌표와 말풍선 윤곽은 따로 보존합니다.
 
 ```bash
 python3 scripts/check_architecture.py
@@ -92,6 +96,8 @@ swift run MangaLadaImportChecks --export /path/to/completed-folder /path/to/outp
 # 외부 엔진의 Python 환경에서
 python scripts/check_balloon_geometry.py
 python scripts/check_supplemental_mask.py
+# 실제 설치된 Ballons의 마스크 필터와 어댑터 계약 검사 (모델 실행 없음)
+python scripts/check_inpaint_contract.py /path/to/BallonsTranslator-dev
 # 외부 엔진과 로컬 모델을 준비한 경우 실제 페이지 전체 처리
 swift run MangaLadaWorkflowChecks /path/to/japanese-page.png /path/to/result.png
 # 실제 지정 영역 OCR·번역·식자·재실행 보존 검사 (정규화 좌표)

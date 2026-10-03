@@ -8,6 +8,10 @@ import sys
 import time
 import traceback
 import uuid
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from ballontranslator.utils.textblock import TextBlock
 
 sys.dont_write_bytecode = True
 
@@ -51,7 +55,8 @@ class JapaneseEngine:
             self.ocr.load_model()
             blocks = self.read_blocks(image, mask, detected)
         self.expand_outline_mask(image, mask, detected)
-        result = self.painter.inpaint(image, mask, detected, check_need_inpaint=False) if detected else image
+        paint_blocks = self.inpainting_blocks(detected, width, height)
+        result = self.painter.inpaint(image, mask, paint_blocks, check_need_inpaint=False) if paint_blocks else image
         from balloon_geometry import BalloonGeometry, separate_shared_balloons
         geometry = BalloonGeometry(image, text_mask=text_mask)
         for block in blocks:
@@ -71,6 +76,25 @@ class JapaneseEngine:
             raise OSError("Cannot save clean page")
         os.replace(temporary, destination)
         return {"blocks": blocks, "elapsed": time.monotonic() - began}
+
+    @staticmethod
+    def inpainting_blocks(detected: list["TextBlock"], width: int, height: int) -> list["TextBlock"]:
+        """Give LaMa padded crop polygons without changing the original OCR geometry.
+
+        Ballons filters the erase mask using each block's line polygons, not its
+        xyxy crop alone. Tight OCR polygons can cut off glyph tips at high resolution.
+        These rectangles bound the existing ink mask; they do not fill or erase it.
+        """
+        from ballontranslator.utils.textblock import TextBlock
+        regions = []
+        for block in detected:
+            x1, y1, x2, y2 = map(int, block.xyxy)
+            pad = max(3, int(block._detected_font_size * .22))
+            x1, y1, x2, y2 = max(0, x1 - pad), max(0, y1 - pad), min(width, x2 + pad), min(height, y2 + pad)
+            region = TextBlock(xyxy=[x1, y1, x2, y2])
+            region.set_lines_by_xywh([x1, y1, x2 - x1, y2 - y1])
+            regions.append(region)
+        return regions
 
     def read_proposed_regions(self, image, regions: list[dict]) -> list[dict]:
         if len(regions) > 40:

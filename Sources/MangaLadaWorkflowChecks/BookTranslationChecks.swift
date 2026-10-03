@@ -10,7 +10,7 @@ enum BookTranslationChecks {
     static func run(source: URL, output: URL, configuration: LocalTranslatorConfiguration = LocalTranslatorConfiguration()) async throws {
         let began = Date()
         let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("Manga Lada")
-        let original = try ImageFingerprint().make(for: source)
+        let original = try sourceFingerprints(source)
         let loader = ComicBookLoader(extractionRoot: support.appendingPathComponent("Archives"))
         let input = try await loader.load(source)
         let store = TranslationBookStore()
@@ -42,11 +42,17 @@ enum BookTranslationChecks {
             fflush(stdout)
         }
         let encoder = JSONEncoder(); encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-        let report = Report(pages: reports, elapsed: Date().timeIntervalSince(began), sourcePreserved: try ImageFingerprint().make(for: source) == original)
+        let report = Report(pages: reports, elapsed: Date().timeIntervalSince(began), sourcePreserved: try sourceFingerprints(source) == original)
         try encoder.encode(report).write(to: output.appendingPathComponent("translation-checks.json"), options: .atomic)
         guard report.sourcePreserved else { throw BookCheckError.sourceChanged }
         guard book.manifest.failures.isEmpty else { throw BookCheckError.failedPages(book.manifest.failures.count) }
         print("Book checks passed: \(reports.count) pages, source preserved, \(String(format: "%.1f", report.elapsed))s")
+    }
+    private static func sourceFingerprints(_ source: URL) throws -> [URL: String] {
+        let isDirectory = try source.resourceValues(forKeys: [.isDirectoryKey]).isDirectory == true
+        let files = isDirectory ? try ImageFileScanner().images(in: source, recursive: true).map(\.url) : [source]
+        let fingerprint = ImageFingerprint()
+        return try Dictionary(uniqueKeysWithValues: files.map { ($0, try fingerprint.make(for: $0)) })
     }
     private struct PageReport: Encodable { let page: Int; let regions: Int; let shaped: Int; let elapsed: Double; let failure: String? }
     private struct Report: Encodable { let pages: [PageReport]; let elapsed: Double; let sourcePreserved: Bool }
