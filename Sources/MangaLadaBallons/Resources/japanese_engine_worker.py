@@ -2,7 +2,6 @@
 import contextlib
 import json
 import os
-import re
 from pathlib import Path
 import sys
 import time
@@ -58,16 +57,13 @@ class JapaneseEngine:
         paint_blocks = self.inpainting_blocks(detected, width, height)
         result = self.painter.inpaint(image, mask, paint_blocks, check_need_inpaint=False) if paint_blocks else image
         from balloon_geometry import BalloonGeometry, separate_shared_balloons
+        from text_region_kind import classify_text_kind
         geometry = BalloonGeometry(image, text_mask=text_mask)
         for block in blocks:
             block["balloonShape"] = geometry.shape(block["box"], block["detectedFontSize"])
-            if block.get("textKind") is None:
-                box = block["box"]
-                patch = image[int(box["y"] * height):int((box["y"] + box["height"]) * height), int(box["x"] * width):int((box["x"] + box["width"]) * width)]
-                if block["balloonShape"] is not None and patch.mean() < 90:
-                    block["textKind"] = "caption"
-                elif block["balloonShape"] is None and re.fullmatch(r"[ぁ-ゖァ-ヺー]{1,8}", block["originalText"]) and block["originalText"].endswith(("っ", "ッ")):
-                    block["textKind"] = "soundEffect"
+            kind = classify_text_kind(block)
+            if kind is not None:
+                block["textKind"] = kind
         separate_shared_balloons(blocks)
         destination = Path(request["destination"])
         destination.parent.mkdir(parents=True, exist_ok=True)

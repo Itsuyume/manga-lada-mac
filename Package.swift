@@ -34,7 +34,8 @@ let package = Package(
         .target(
             name: "MangaLadaBallons",
             dependencies: ["MangaLadaCore"],
-            resources: [.copy("Resources/erase_supplemental_text.py"), .copy("Resources/japanese_engine_worker.py"), .copy("Resources/balloon_geometry.py")]
+            resources: [.copy("Resources/erase_supplemental_text.py"), .copy("Resources/japanese_engine_worker.py"),
+                        .copy("Resources/balloon_geometry.py"), .copy("Resources/text_region_kind.py")]
         ),
         .executableTarget(
             name: "MangaLadaApp",

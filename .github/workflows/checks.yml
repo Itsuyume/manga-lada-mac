@@ -13,6 +13,7 @@ jobs:
           python-version: '3.12'
       - run: python3 -m pip install -r scripts/requirements-checks.txt
       - run: python3 scripts/check_balloon_geometry.py
+      - run: python3 scripts/check_text_region_kind.py
       - run: python3 scripts/check_supplemental_mask.py
       - run: brew install swiftlint
       - run: python3 scripts/check_architecture.py

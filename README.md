@@ -66,6 +66,8 @@ ollama pull qwen3.5:9b
 
 전체 자동 처리와 편집을 함께 제공합니다. 그림 위에 겹친 손글씨 효과음, 낮은 해상도, 비정형 말풍선은 인식·원문 제거·위치가 틀릴 수 있습니다. 읽기 순서는 영역 위치를 기반으로 한 휴리스틱입니다. 효과음은 3개 공개 글꼴을 재사용하는 12가지 스타일(굵기·기울기·압축·자간·외곽선) 중 전체 또는 문구별 설정을 적용하며 원본의 모든 커스텀 레터링을 복제하지는 않습니다. 원문과 검수 창을 대조해 필요한 문구를 수정하세요.
 
+글자 종류는 먼저 인식한 윤곽과 원문에서 보완합니다. 거의 직사각형인 설명 상자는 밝기와 관계없이 나레이션으로, 말풍선 밖의 일부 명확한 소리 표기(ザアア, カチッ, バタン 등)는 효과음으로 분류합니다. 짧은 가나라는 이유만으로 감탄사·대답·이름을 효과음으로 바꾸지는 않습니다. 이 규칙은 모든 표현을 아우르는 의미 분류기가 아니므로 애매한 문구는 모델 결과나 검수에서 정한 종류를 사용합니다. 직접 수정한 종류·표지 제목·검수 번역은 버전 갱신 때 보존합니다. 추가 모델 호출은 없습니다.
+
 ## 효과음 폰트집
 
 Rendering 리소스의 `sound-effect-styles.json`이 12가지 스타일의 단일 출처입니다. Black Han Sans, Nanum Brush Script, Nanum Myeongjo 3개 글꼴은 [Google Fonts](https://github.com/google/fonts)에서 제공하는 SIL Open Font License 글꼴이며 라이선스를 함께 포함합니다. 총 글꼴 용량은 약 7.6MB입니다. 새 커스텀 TTF 12개를 만든 것이 아니라 3개 글꼴의 조판을 12가지로 구성했습니다. 글꼴은 번역 앱 내부에만 포함하고 Reader에는 복제하지 않으며 Mac 전체에 설치하지 않습니다. 설정의 **폰트집 보기**는 iCloud에 별도로 저장한 오프라인 표본집을 엽니다.
@@ -101,6 +103,7 @@ swift run MangaLadaWorkflowChecks --cache-migration
 swift run MangaLadaImportChecks --export /path/to/completed-folder /path/to/output.cbz
 # 외부 엔진의 Python 환경에서
 python scripts/check_balloon_geometry.py
+python scripts/check_text_region_kind.py
 python scripts/check_supplemental_mask.py
 # 실제 설치된 Ballons의 마스크 필터와 어댑터 계약 검사 (모델 실행 없음)
 python scripts/check_inpaint_contract.py /path/to/BallonsTranslator-dev

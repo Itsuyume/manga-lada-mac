@@ -36,6 +36,16 @@ enum CacheMigrationChecks {
         try require(migrated.textKind == saved.textKind && migrated.effectStyleID == saved.effectStyleID,
                     "Edited kind or effect style was lost.")
         try require(rawOCR == before && page.blocks == [saved], "Migration mutated its source data.")
+        var automatic = page
+        automatic.blocks[0].userDefinedTextKind = nil
+        automatic.blocks[0].textKind = .dialogue
+        rawOCR.textKind = .caption
+        let reclassified = RecognitionCacheMigration.reuse(automatic, for: [rawOCR])?.first
+        try require(reclassified?.textKind == .caption && reclassified?.translatedText == saved.translatedText,
+                    "A new detected caption was lost or retranslated while migrating an automatic dialogue kind.")
+        rawOCR.textKind = .soundEffect
+        try require(RecognitionCacheMigration.reuse(automatic, for: [rawOCR])?.first?.textKind == .soundEffect,
+                    "An old automatic dialogue kind suppressed an updated sound-effect hint.")
         var empty = page
         empty.blocks[0].translatedText = ""
         try require(RecognitionCacheMigration.reuse(empty, for: [rawOCR]) == nil, "An empty translation was reused.")
