@@ -3,6 +3,7 @@ import MangaLadaCore
 
 enum SoundEffectTranslationChecks {
     static func run() throws {
+        try checkPunctuationEffects()
         for invalid in ["", "  ", "カチッ", "그弁当"] {
             do {
                 _ = try decode(source: "カチッ", text: invalid)
@@ -43,6 +44,29 @@ enum SoundEffectTranslationChecks {
         try checkLexicon()
         try checkKindRefinement()
         print("Sound-effect translation checks passed: concise Korean forms, context-dependent variants retained, commentary formatting, non-effects untouched, malformed output rejected")
+    }
+
+    private static func checkPunctuationEffects() throws {
+        for (source, text) in [("…", "..."), ("!?", "!?"), ("……", "……"), ("！？", "!?"),
+                               ("．．．っ！", "...!"), ("｢!?｣", "!?"), ("ッ", "!"), ("｢…｣", "…"), ("・・・", "…"), ("ー", "—")] {
+            for kind in MangaTextKind.allCases {
+                try check(try decode(source: source, text: text, kind: kind).translatedText == text,
+                          "Expressive punctuation failed for \(kind): \(source).")
+            }
+        }
+        for (source, text) in [("", "..."), (" ", "..."), ("「」", "..."), ("123", "..."), ("click", "..."),
+                               ("カチッ", "..."), ("急いで！", "!"), ("っ12", "!"), ("っa", "!"),
+                               ("…", ""), ("…", " "), ("…", "「」"), ("…", "(효과음)"), ("…", "click"), ("…", "ッ"), ("…", "12")] {
+            do {
+                _ = try decode(source: source, text: text)
+                throw CheckError.failed("Punctuation exception accepted an empty, untranslated or unrelated effect: \(source) / \(text)")
+            } catch TranslationError.invalidPageResponse { }
+        }
+        let context = TextBlock(box: TextBox(x: 0.1, y: 0.1, width: 0.4, height: 0.2), originalText: "静かになった。", translatedText: "검수한 문구", textKind: .caption)
+        let effect = TextBlock(box: TextBox(x: 0.6, y: 0.6, width: 0.2, height: 0.1), originalText: "…", textKind: .soundEffect)
+        let payload = Response(translations: [.init(id: 0, text: "静かになった。", kind: "caption"), .init(id: 1, text: "...", kind: "soundEffect")])
+        let result = try MangaPageResponse.decode(JSONEncoder().encode(payload), blocks: [context, effect], selectedIDs: [effect.id])
+        try check(result[0] == context && result[1].translatedText == "...", "Punctuation selection changed unrelated reviewed text.")
     }
 
     private static func checkKindRefinement() throws {

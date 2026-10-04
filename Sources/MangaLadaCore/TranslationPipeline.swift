@@ -66,7 +66,9 @@ public struct TranslationPipeline: Sendable {
         translator injectedTranslator: TextTranslating? = nil,
         previousContext: String = ""
     ) async throws -> [TextBlock] {
+        try Task.checkCancellation()
         guard !blocks.isEmpty else { return [] }
+        guard Set(blocks.map(\.id)).count == blocks.count else { throw TranslationSelectionError.duplicateRegions }
         if injectedTranslator == nil, configuration.provider != .googleWeb {
             return try await translatePage(blocks, configuration: configuration, previousContext: previousContext, selectedIDs: nil)
         }
@@ -78,6 +80,7 @@ public struct TranslationPipeline: Sendable {
             translator: translator,
             maxConcurrentRequests: configuration.maxConcurrentRequests
         )
+        try Task.checkCancellation()
 
         return zip(blocks, translatedTexts).map { block, translatedText in
             var translatedBlock = block
@@ -94,12 +97,31 @@ public struct TranslationPipeline: Sendable {
         let ordered = MangaReadingOrder.sorted(blocks)
         let count = selectedIDs?.count ?? ordered.count
         await progress?(TranslationProgress(provider: configuration.provider, completed: 0, total: count))
-        let translator: any MangaPageTranslating = configuration.provider == .ollama
-            ? OllamaPageTranslator(configuration: configuration.ollama, session: session, selectedIDs: selectedIDs)
-            : GeminiPageTranslator(configuration: configuration.gemini, session: session, selectedIDs: selectedIDs)
-        let translated = try await translator.translatePage(ordered, previousContext: previousContext)
+        try Task.checkCancellation()
+        let input = ordered.filter { !TextLanguageDetector.isPunctuationOnly($0.originalText) }
+        let selectedWords = selectedIDs.map { $0.intersection(Set(input.map(\.id))) }
+        var translated: [TextBlock] = []
+        if !input.isEmpty, selectedWords?.isEmpty != true {
+            let translator: any MangaPageTranslating = configuration.provider == .ollama
+                ? OllamaPageTranslator(configuration: configuration.ollama, session: session, selectedIDs: selectedWords)
+                : GeminiPageTranslator(configuration: configuration.gemini, session: session, selectedIDs: selectedWords)
+            translated = try await translator.translatePage(input, previousContext: previousContext)
+        }
+        let result = try ordered.map { block in
+            guard selectedIDs?.contains(block.id) != false else { return block }
+            if TextLanguageDetector.isPunctuationOnly(block.originalText) {
+                var preserved = block
+                preserved.translatedText = block.originalText.trimmingCharacters(in: .whitespacesAndNewlines)
+                return preserved
+            }
+            guard let updated = translated.first(where: { $0.id == block.id }) else {
+                throw TranslationError.invalidPageResponse("번역한 문구의 영역이 빠졌습니다.")
+            }
+            return updated
+        }
         await progress?(TranslationProgress(provider: configuration.provider, completed: count, total: count))
-        return translated
+        try Task.checkCancellation()
+        return result
     }
 
     private func translateTexts(
@@ -119,6 +141,10 @@ public struct TranslationPipeline: Sendable {
                     let source = sourceLanguage
                     let target = targetLanguage
                     group.addTask {
+                        try Task.checkCancellation()
+                        if TextLanguageDetector.isPunctuationOnly(text) {
+                            return (index, text.trimmingCharacters(in: .whitespacesAndNewlines))
+                        }
                         let translated = try await translator.translate(text, source: source, target: target)
                         return (index, translated)
                     }

@@ -78,6 +78,8 @@ ollama pull qwen3.5:9b
 
 새 모델 응답에서 효과음으로 확정된 문구만 보정합니다. `(전등 스위치 소리) "딸깍"`처럼 분명한 설명 접두어·겉따옴표도 제거합니다. 일본어만 반환하거나 효과음 없이 설명만 반환한 응답은 오류로 처리하며 사전으로 모델 실패를 숨기지 않습니다. 기존 번역 캐시와 사용자의 수정문은 유지하므로 과거 결과에 보정을 적용하려면 해당 문구를 다시 번역합니다. 추가 모델 호출은 없습니다.
 
+0.2.16부터 `…`, `・`, `!?`처럼 기호만 인식된 영역은 번역 모델에 보내지 않고 앞뒤 공백만 제거하여 원형을 유지합니다. 모델이 기호를 빈 문장으로 반환하거나 한국어 글자가 없다는 이유로 페이지 전체가 실패하던 문제를 수정했습니다. 기호만 선택해 다시 번역하면 모델 요청이 없으며, 일반 문구와 함께 선택하면 문구만 번역한 뒤 원래 영역 번호·좌표로 합칩니다. 선택하지 않은 검수 내용은 보존합니다. `っ/ッ`는 계속 번역하고 감탄 부호로 옮긴 결과도 허용합니다. 빈 입력·숫자·단어를 기호로 대체한 응답은 이 예외에 포함하지 않으며 일반 번역의 누락·HTTP 오류는 그대로 알립니다. OCR이 기호 개수나 문자를 잘못 읽은 경우는 원문 검수가 필요합니다.
+
 ゴロゴロ처럼 [상황에 따라 한국어 표현이 달라지는 효과음](https://www2.ninjal.ac.jp/Onomatope/column/kankokugo_1.html)은 한 단어로 치환하지 않습니다. 이 항목은 종류만 인식하고 번역 모델이 만든 문맥별 표현을 유지합니다. 따라서 모델이 고양이 소리를 다른 소리로 잘못 옮기는 등의 의미 오류는 사전 밖에 남을 수 있습니다.
 
 가로 대사·설명문은 macOS의 일본어 문자 인식과 위치를 대조합니다. 동일 영역에서 한 문장 전체를 읽었다고 판단할 수 있을 때만 원문을 보완하며, 줄이 나뉜 일본어도 위에서 아래로 연결합니다. 세로 글자·기울어진 글자·제목·효과음·수동 검수는 이 보완에서 제외합니다. 원래 좌표·말풍선 윤곽·번호를 유지하고 인식 오류를 고치기 위해 그림 위로 배치 공간을 옮기지 않습니다. 추가 유료 API나 모델 다운로드는 없습니다.
@@ -157,6 +159,7 @@ swift run MangaLadaWorkflowChecks --text-benchmark fixtures/translation-quality-
 swift run MangaLadaWorkflowChecks --text-benchmark fixtures/translation-quality-extra-ja-ko.json /path/to/new-extra-report.json --model=qwen3.5:9b
 swift run MangaLadaWorkflowChecks --text-benchmark fixtures/translation-selection-ja-ko.json /path/to/new-selection-report.json --model=translategemma:12b
 swift run MangaLadaWorkflowChecks --text-benchmark fixtures/translation-effect-edge-ja-ko.json /path/to/new-effect-edge-report.json --model=translategemma:12b
+swift run -c release MangaLadaWorkflowChecks --text-benchmark fixtures/translation-punctuation-ja-ko.json /path/to/new-punctuation-report.json --model=translategemma:12b
 ```
 
 선택 번역 비교 사례에는 문구별 `kinds`, 기존 검수 내용인 `reviewedTexts`, 0부터 시작하는 `selectedIndices`를 선택적으로 지정합니다. 문구 수·선택 번호를 검증하고 선택하지 않은 전체 영역 정보가 그대로인지 비교합니다. 같은 효과음을 단독 번역한 결과와 페이지 문맥으로 재번역한 결과가 나란히 저장됩니다. 속도에는 OCR·식자 시간이 포함되지 않습니다.
@@ -173,6 +176,8 @@ swift run MangaLadaWorkflowChecks --text-benchmark fixtures/translation-effect-e
 ```
 
 두 앱은 `dist/`에 생성되고 설치 스크립트는 사용자 `Applications`에 설치합니다. 기존 앱은 `dist/backups/`에 복구 가능한 사본으로 보관합니다. 빌드는 동기화 폴더의 리소스 코드 서명 문제를 피하도록 임시 폴더를 사용합니다. `MANGA_LADA_BUILD_ROOT`, `MANGA_LADA_INSTALL_DIR`, `MANGA_LADA_BACKUP_DIR`로 경로를 지정할 수 있습니다.
+
+앱 묶음을 만들기 전에 배포용으로 최적화한 `MangaLadaCoreChecks`를 실행합니다. 개발용 검사만 통과하고 배포용 실행에서 다르게 동작하는 회귀를 확인하며, 실패하면 기존 설치 앱을 교체하기 전에 중단합니다. 이 검사는 외부 모델이나 실제 API 요청을 사용하지 않습니다.
 
 설치된 기본 SDK의 SwiftUI 매크로가 누락된 환경은 사용 가능한 SDK를 명시합니다. 스크립트는 추가 빌드 인자를 전달합니다.
 

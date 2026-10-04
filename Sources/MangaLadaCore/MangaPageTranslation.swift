@@ -57,8 +57,8 @@ public enum MangaPageResponse {
             let text = entry.text.trimmingCharacters(in: .whitespacesAndNewlines)
             let hasKorean = TextLanguageDetector.containsKorean(text)
             let sourceHasJapanese = TextLanguageDetector.containsJapanese(block.originalText)
-            let interruptionOnly = block.originalText.filter(\.isLetter).allSatisfy { $0 == "っ" || $0 == "ッ" }
-            guard !text.isEmpty, (!sourceHasJapanese || interruptionOnly || hasKorean), text.range(of: #"[\p{Hiragana}\p{Katakana}\p{Han}]"#, options: .regularExpression) == nil else {
+            let nonverbal = TextLanguageDetector.isNonverbalTranslation(text, source: block.originalText)
+            guard !text.isEmpty, (!sourceHasJapanese || nonverbal || hasKorean), text.range(of: #"[\p{Hiragana}\p{Katakana}\p{Han}]"#, options: .regularExpression) == nil else {
                 throw TranslationError.invalidPageResponse("영역 \(index)에 한국어 번역이 없습니다. 원문: \(block.originalText) / 모델 응답: \(text)")
             }
             var translated = block

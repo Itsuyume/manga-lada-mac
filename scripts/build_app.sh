@@ -6,6 +6,7 @@ BUILD_ROOT="${MANGA_LADA_BUILD_ROOT:-${TMPDIR:-/tmp}/manga-translator-build}"
 cd "$ROOT_DIR"
 swift build --scratch-path "$BUILD_ROOT" -c release "$@"
 BIN_DIR="$(swift build --scratch-path "$BUILD_ROOT" -c release "$@" --show-bin-path)"
+"$BIN_DIR/MangaLadaCoreChecks"
 
 bundle_app() {
   local name="$1" executable="$2" identifier="$3" icon_variant="$4"
@@ -43,8 +44,8 @@ bundle_app() {
     </dict>
   </array>
   <key>CFBundlePackageType</key><string>APPL</string>
-  <key>CFBundleShortVersionString</key><string>0.2.15</string>
-  <key>CFBundleVersion</key><string>18</string>
+  <key>CFBundleShortVersionString</key><string>0.2.16</string>
+  <key>CFBundleVersion</key><string>19</string>
   <key>LSMinimumSystemVersion</key><string>14.0</string>
   <key>NSHighResolutionCapable</key><true/>
   <key>NSSupportsAutomaticGraphicsSwitching</key><true/>

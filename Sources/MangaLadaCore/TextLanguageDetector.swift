@@ -1,11 +1,31 @@
 import Foundation
 
 public enum TextLanguageDetector {
+    private static let punctuation = CharacterSet(charactersIn: ".…‥⋯・·!?,。、？！‼⁇⁈⁉—–―ー〜~")
+    private static let wrappers = CharacterSet(charactersIn: "\"'“”‘’「」『』()[]【】〈〉《》").union(.whitespacesAndNewlines)
+
     public static func containsKorean(_ text: String) -> Bool {
         text.unicodeScalars.contains { (0xAC00...0xD7A3).contains($0.value) || (0x3130...0x318F).contains($0.value) }
     }
     public static func containsJapanese(_ text: String) -> Bool {
         text.unicodeScalars.contains { (0x3040...0x30FF).contains($0.value) || (0x4E00...0x9FFF).contains($0.value) }
+    }
+    /// Speech pauses, surprise marks and standalone sokuon may translate to punctuation.
+    /// Words, digits, empty quotes and commentary cannot use this exception.
+    static func isNonverbalTranslation(_ text: String, source: String) -> Bool {
+        let sourceMarks = punctuation.union(CharacterSet(charactersIn: "っッ"))
+        return containsOnlyMarks(source, marks: sourceMarks) && isPunctuationOnly(text)
+    }
+
+    /// Pure symbols have no language to translate. Standalone kana still require translation.
+    static func isPunctuationOnly(_ text: String) -> Bool {
+        containsOnlyMarks(text, marks: punctuation)
+    }
+
+    private static func containsOnlyMarks(_ text: String, marks: CharacterSet) -> Bool {
+        let scalars = text.precomposedStringWithCompatibilityMapping.unicodeScalars
+        let allowed = marks.union(wrappers)
+        return scalars.contains { marks.contains($0) } && scalars.allSatisfy { allowed.contains($0) }
     }
     public static func detectSourceLanguage(
         in texts: [String],

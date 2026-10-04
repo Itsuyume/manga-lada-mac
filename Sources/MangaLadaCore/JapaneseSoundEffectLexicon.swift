@@ -76,7 +76,7 @@ enum SoundEffectTranslation {
         for (opening, closing) in [("\"", "\""), ("“", "”"), ("'", "'"), ("‘", "’")] where text.hasPrefix(opening) && text.hasSuffix(closing) && text.count >= 2 {
             text = String(text.dropFirst().dropLast()).trimmingCharacters(in: .whitespacesAndNewlines)
         }
-        guard TextLanguageDetector.containsKorean(text) else {
+        guard TextLanguageDetector.containsKorean(text) || TextLanguageDetector.isNonverbalTranslation(text, source: source) else {
             throw TranslationError.invalidPageResponse("효과음 번역에 설명만 있거나 한국어 효과음이 없습니다: \(source)")
         }
         return lexicon.translation(for: source) ?? text

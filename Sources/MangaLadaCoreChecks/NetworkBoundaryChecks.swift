@@ -6,6 +6,7 @@ enum NetworkBoundaryChecks {
         let configuration = URLSessionConfiguration.ephemeral; configuration.protocolClasses = [FixtureProtocol.self]
         let session = URLSession(configuration: configuration)
         defer { session.invalidateAndCancel() }
+        try await checkPunctuationPreservation(session: session)
         try await checkSelections(session: session)
         try await checkUnselectedLanguageErrors(session: session)
         try await checkMultipleSelectedRegions(session: session)
@@ -330,7 +331,7 @@ enum NetworkBoundaryChecks {
         try check(result[0].translatedText == "고마워" && result[0].textKind == .dialogue && FixtureProtocol.state.count == 2,
                   "A missing classification did not recover with one targeted retry.")
     }
-    private static func body(_ request: URLRequest) throws -> Data {
+    static func body(_ request: URLRequest) throws -> Data {
         if let data = request.httpBody { return data }
         guard let stream = request.httpBodyStream else { throw BoundaryCheckError.failed("No request body.") }
         stream.open(); defer { stream.close() }
@@ -342,21 +343,21 @@ enum NetworkBoundaryChecks {
         }
         return data
     }
-    private static func check(_ condition: Bool, _ message: String) throws { if !condition { throw BoundaryCheckError.failed(message) } }
+    static func check(_ condition: Bool, _ message: String) throws { if !condition { throw BoundaryCheckError.failed(message) } }
     private struct OllamaProbe: Decodable { let model: String; let think: Bool; let stream: Bool; let format: Schema; let messages: [Message]; struct Schema: Decodable { let type: String } }
-    private struct Message: Codable { let role: String; let content: String }
-    private struct GemmaProbe: Decodable {
+    struct Message: Codable { let role: String; let content: String }
+    struct GemmaProbe: Decodable {
         let model: String; let messages: [UserMessage]; let format: String?; let think: Bool?
         let keep_alive: String
         struct UserMessage: Decodable { let role: String; let content: String }
     }
     private struct RetentionProbe: Decodable { let model: String; let keep_alive: String }
-    private struct ChatReply: Encodable {
+    struct ChatReply: Encodable {
         let message: Message
         var done: Bool? = true
         var done_reason: String? = "stop"
     }
-    private struct GeminiReply: Encodable {
+    struct GeminiReply: Encodable {
         let candidates: [Candidate]
         struct Candidate: Encodable { let content: Content }
         struct Content: Encodable { let parts: [Part] }
@@ -364,7 +365,7 @@ enum NetworkBoundaryChecks {
     }
 }
 
-private final class FixtureProtocol: URLProtocol, @unchecked Sendable {
+final class FixtureProtocol: URLProtocol, @unchecked Sendable {
     static let state = FixtureState()
     override class func canInit(with request: URLRequest) -> Bool { true }
     override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
@@ -378,7 +379,7 @@ private final class FixtureProtocol: URLProtocol, @unchecked Sendable {
     }
     override func stopLoading() { }
 }
-private final class FixtureState: @unchecked Sendable {
+final class FixtureState: @unchecked Sendable {
     typealias Handler = @Sendable (URLRequest) throws -> (Int, Data)
     private let lock = NSLock(); private var handler: Handler?; private var requests = 0
     var count: Int { lock.withLock { requests } }
@@ -388,4 +389,4 @@ private final class FixtureState: @unchecked Sendable {
         return try handler(request)
     }
 }
-private enum BoundaryCheckError: Error { case failed(String) }
+enum BoundaryCheckError: Error { case failed(String) }
