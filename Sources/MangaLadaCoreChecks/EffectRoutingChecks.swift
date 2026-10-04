@@ -27,10 +27,29 @@ extension NetworkBoundaryChecks {
         try check(direct.count == 1 && direct[0].id == click.id && direct[0].textKind == .soundEffect
                   && direct[0].translatedText == "질척" && FixtureProtocol.state.count == 0,
                   "Known effect was not applied locally without a model call.")
+        let simple = ["バシャバシャ", "ポタポタ", "ガヤガヤ"].map { TextBlock(box: box, originalText: $0, textKind: .dialogue) }
+        let locallyTranslated = try await pipeline.translate(simple, configuration: LocalTranslatorConfiguration())
+        try check(locallyTranslated.map(\.translatedText) == ["첨벙첨벙", "똑똑", "웅성웅성"]
+                  && locallyTranslated.map(\.id) == simple.map(\.id) && FixtureProtocol.state.count == 0,
+                  "Reading-specific defaults changed identities or called the model.")
+        try await checkReadingSpecificContext(pipeline: pipeline, box: box)
         try check(try await pipeline.translateSelected([], in: [stale], configuration: LocalTranslatorConfiguration()) == [stale],
                   "Empty selection reclassified a cache entry.")
         try await checkEffectOverrides(session: session, pipeline: pipeline, stale: stale)
         print("Effect routing passed: selected legacy classification, dictionary context, no-call fixed effects, explicit overrides and neighbor preservation")
+    }
+
+    private static func checkReadingSpecificContext(pipeline: TranslationPipeline, box: TextBox) async throws {
+        FixtureProtocol.state.install { request in
+            let prompt = try JSONDecoder().decode(EffectPrompt.self, from: body(request))
+            let content = prompt.messages.map(\.content).joined(separator: "\n")
+            try check(content.contains("camera shutter"), "The camera reading lost its specific meaning.")
+            return (200, try JSONEncoder().encode(ChatReply(message: Message(role: "assistant", content: "[R0] 찰칵찰칵"))))
+        }
+        let camera = TextBlock(box: box, originalText: "パシャパシャ", textKind: .soundEffect)
+        let translated = try await pipeline.translate([camera], configuration: LocalTranslatorConfiguration())
+        try check(translated.first?.translatedText == "찰칵찰칵" && translated.first?.id == camera.id && FixtureProtocol.state.count == 1,
+                  "A context-dependent camera reading used the fixed water sound.")
     }
 
     private static func checkEffectOverrides(session: URLSession, pipeline: TranslationPipeline, stale: TextBlock) async throws {

@@ -1,0 +1,8 @@
+[
+  {"id":"water-splash","texts":["川の浅瀬を歩くたびに、水が足元で跳ねる。","バシャバシャ"],"kinds":["caption","soundEffect"],"reviewedTexts":["얕은 강을 걸을 때마다 발밑에서 물이 튄다. (검수)","기존 효과음"],"selectedIndices":[1],"reviewPoints":["물이 튀는 소리를 철벅철벅·첨벙첨벙 계열로 번역한다. 카메라 셔터 소리를 만들지 않는다.","선택하지 않은 검수 문구·원문·좌표를 보존한다."]},
+  {"id":"camera-shutter","texts":["写真家が連続でシャッターを切った。","パシャパシャ"],"kinds":["caption","soundEffect"],"reviewedTexts":["사진가가 연속으로 셔터를 눌렀다. (검수)","기존 효과음"],"selectedIndices":[1],"reviewPoints":["카메라의 찰칵찰칵 계열로 번역한다. 물소리와 구분한다.","선택하지 않은 검수 문구·원문·좌표를 보존한다."]},
+  {"id":"thin-water-drops","texts":["蛇口から小さな水滴が落ちている。","ポタポタ"],"kinds":["caption","soundEffect"],"reviewedTexts":["수도꼭지에서 작은 물방울이 떨어진다. (검수)","기존 효과음"],"selectedIndices":[1],"reviewPoints":["물방울이 떨어지는 똑똑·뚝뚝 계열로 번역한다. 느리게 걷는다는 뜻을 만들지 않는다."]},
+  {"id":"heavy-water-drops","texts":["濡れたタオルから大きな水滴が落ちている。","ボタボタ"],"kinds":["caption","soundEffect"],"reviewedTexts":["젖은 수건에서 굵은 물방울이 떨어진다. (검수)","기존 효과음"],"selectedIndices":[1],"reviewPoints":["굵은 물방울이 떨어지는 뚝뚝·뚝뚝뚝 계열로 번역한다. 점토나 눈이 있다고 지어내지 않는다."]},
+  {"id":"crowd-chatter","texts":["大勢の客が店内で話している。","ガヤガヤ"],"kinds":["caption","soundEffect"],"reviewedTexts":["많은 손님이 가게 안에서 이야기하고 있다. (검수)","기존 효과음"],"selectedIndices":[1],"reviewPoints":["사람들이 이야기하는 웅성웅성 계열로 번역한다. 모두 크게 웃는 장면으로 바꾸지 않는다."]},
+  {"id":"loud-laughter","texts":["観客が声を上げて笑った。","カヤカヤ"],"kinds":["caption","soundEffect"],"reviewedTexts":["관객이 소리 내어 웃었다. (검수)","기존 효과음"],"selectedIndices":[1],"reviewPoints":["웃음 문맥을 반영한다. 대화의 웅성거림이나 일본어 발음 전사로만 처리하지 않는다."]}
+]

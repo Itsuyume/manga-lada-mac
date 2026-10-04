@@ -35,6 +35,8 @@
 
 0.2.30은 검수창의 효과음에 **뜻별 표기 선택**을 추가합니다. ゴロゴロ는 천둥·고양이·굴러감, パチパチ는 박수·눈 깜빡임·불·전기처럼 장면에 맞는 한국어를 직접 고를 수 있습니다. 8개 묶음·24개 일본어 표기를 우선 지원하며 히라가나·반각 표기도 등록된 범위에서 동일하게 처리합니다. 후보를 고르면 해당 한국어만 기존 임시 수정에 저장하고 **수정 적용**에서 이미지에 반영합니다. 원문·번호·좌표·효과음 스타일·다른 검수 문구는 유지하며 모델 호출은 없습니다. 후보 데이터는 약 2.2KB입니다. 자동 번역의 의미 정확도가 개선됐다는 뜻은 아니며 자동 번역·인식 사전은 그대로 유지합니다.
 
+0.2.31은 JMdict의 읽기별 뜻 제한을 적용합니다. `バシャバシャ`에 다른 읽기의 카메라 뜻을 붙이는 오류를 고쳤고, `バシャバシャ→첨벙첨벙`, `ポタポタ→똑똑`, `ガヤガヤ→웅성웅성`은 히라가나와 함께 로컬 기본형으로 처리합니다. `パシャパシャ`의 카메라·물소리처럼 뜻이 여러 개인 읽기는 문맥 번역을 유지합니다. 기존 저장 이미지·검수·캐시는 자동으로 덮어쓰지 않으므로, 이전 문구는 **이 문구 다시 번역 → 수정 적용**으로 갱신합니다. 사전의 뜻 연결 수정이 모든 모델 오역을 해결한다는 뜻은 아닙니다.
+
 ## 파일 형식
 
 폴더(하위 폴더 포함), ZIP/CBZ, 7z/CB7, RAR/CBR, TAR 및 gzip/bzip2/xz 압축 TAR, PDF, PNG/JPEG/WebP/GIF/TIFF/BMP/HEIC/HEIF/AVIF를 가져옵니다. 0.2.22부터 파일 열기 창에서 이미지를 고르면 기본적으로 그 한 장만 바로 가져옵니다. **이미지의 앞뒤 페이지도 함께 열기**를 선택한 경우에만 이미지가 있는 폴더를 한 번 더 선택합니다. **이 폴더 열기**를 누르면 같은 폴더의 이미지를 자연스러운 숫자 순서로 읽고 고른 페이지에서 시작합니다. 긴 파일명이나 사진 앱의 임시 폴더명이 추가 선택창을 화면 밖까지 늘리지 않도록 안내문에 경로를 붙이지 않습니다. 파일 한 장에 대한 접근만으로 상위 폴더를 암묵적으로 읽지 않습니다. 폴더 선택을 취소하면 현재 책을 유지하며, 다른 폴더를 고르거나 선택한 이미지가 사라졌으면 오류를 표시합니다. **폴더 열기**는 한 번의 선택으로 책 전체를 읽습니다.
@@ -96,9 +98,9 @@ ollama pull qwen3.5:9b
 
 글자 종류는 먼저 인식한 윤곽과 원문에서 보완합니다. 거의 직사각형인 설명 상자는 밝기와 관계없이 나레이션으로, 말풍선 밖의 일부 명확한 소리 표기(ザアア, カチッ, バタン 등)는 효과음으로 분류합니다. 짧은 가나라는 이유만으로 감탄사·대답·이름을 효과음으로 바꾸지는 않습니다. 이 규칙은 모든 표현을 아우르는 의미 분류기가 아니므로 애매한 문구는 모델 결과나 검수에서 정한 종류를 사용합니다. 직접 수정한 종류·표지 제목·검수 번역은 버전 갱신 때 보존합니다. 추가 모델 호출은 없습니다.
 
-효과음 번역에는 `MangaLadaCore/Resources/sound-effect-lexicon.json`을 사용합니다. 2026-10-04 [JMdict](https://www.edrdg.org/wiki/index.php/JMdict-EDICT_Dictionary_Project)의 효과음·의태어 1,341개 항목에서 추출한 표기와 앱의 보완 표기를 합쳐 3,514개를 저장합니다. 약 0.53MB이며, 이 중 독립 효과음 형태 1,812개만 자동 분류에 사용합니다. `きっと`, 짧은 일반 감탄사, 말풍선 안의 대사, 문장 일부는 목록과 비슷하다는 이유만으로 효과음으로 바꾸지 않습니다. 모든 만화 효과음을 망라하거나 모든 OCR 오독을 교정하는 목록은 아닙니다.
+효과음 번역에는 `MangaLadaCore/Resources/sound-effect-lexicon.json`을 사용합니다. 2026-10-04 [JMdict](https://www.edrdg.org/wiki/index.php/JMdict-EDICT_Dictionary_Project)의 효과음·의태어 1,341개 항목에서 읽기별 뜻을 대조한 표기와 앱의 보완 표기를 합쳐 3,494개를 저장합니다. 약 0.53MB이며, 이 중 독립 효과음 형태 1,816개만 자동 분류에 사용합니다. `きっと`, 짧은 일반 감탄사, 말풍선 안의 대사, 문장 일부는 목록과 비슷하다는 이유만으로 효과음으로 바꾸지 않습니다. 모든 만화 효과음을 망라하거나 모든 OCR 오독을 교정하는 목록은 아닙니다.
 
-18개 표현군·55개 표기는 한국어 기본형을 바로 적용합니다. 예: カチッ→딸깍, バタン→쾅, ドキドキ→두근두근, にちっ→질척, キラキラ→반짝반짝. 이들은 앱이 정한 편집 가능한 기본 식자형이며 모든 그림에서 유일한 정답을 뜻하지 않습니다. `ゴロゴロ`, `パチパチ`, `にちゃにちゃ`처럼 문맥에 따라 달라지는 말은 뜻 후보를 제공하되 하나의 번역으로 고정하지 않습니다. 분류 사전은 좌표·OCR 철자를 변경하지 않고 이전 검수 캐시를 일괄 덮어쓰지 않습니다. `にちゃにちゃ` 계열의 의미는 [일본어 사전 설명](https://kotobank.jp/word/%E3%81%AB%E3%81%A1%E3%82%83%E3%81%AB%E3%81%A1%E3%82%83-3215446), シーン의 무음 의미는 [교토산업대의 설명](https://www.cc.kyoto-su.ac.jp/~hiratuka/essays/shiin.html)을 참고했습니다.
+21개 표현군·61개 표기는 한국어 기본형을 바로 적용합니다. 예: カチッ→딸깍, バタン→쾅, ドキドキ→두근두근, にちっ→질척, キラキラ→반짝반짝, バシャバシャ→첨벙첨벙, ポタポタ→똑똑, ガヤガヤ→웅성웅성. 이들은 앱이 정한 편집 가능한 기본 식자형이며 모든 그림에서 유일한 정답을 뜻하지 않습니다. `ゴロゴロ`, `パチパチ`, `にちゃにちゃ`처럼 문맥에 따라 달라지는 말은 뜻 후보를 제공하되 하나의 번역으로 고정하지 않습니다. 분류 사전은 좌표·OCR 철자를 변경하지 않고 이전 검수 캐시를 일괄 덮어쓰지 않습니다. `にちゃにちゃ` 계열의 의미는 [일본어 사전 설명](https://kotobank.jp/word/%E3%81%AB%E3%81%A1%E3%82%83%E3%81%AB%E3%81%A1%E3%82%83-3215446), シーン의 무음 의미는 [교토산업대의 설명](https://www.cc.kyoto-su.ac.jp/~hiratuka/essays/shiin.html)을 참고했습니다.
 
 JMdict 데이터의 저작권자는 James William Breen과 EDRDG입니다. 추출 사전과 보완 데이터는 [CC BY-SA 4.0](https://www.edrdg.org/edrdg/licence.html)으로 배포하며, 앱에 출처·변경 내역·라이선스 전문을 포함합니다. 사전은 릴리스 전에 공식 `JMdict_e.gz`를 임시 작업 폴더에 내려받아 `python3 scripts/update_effect_lexicon.py <download.gz> Sources/MangaLadaCore/Resources/sound-effect-lexicon.json`으로 갱신합니다. 원본 전체 사전은 앱에 넣지 않으며, 등록된 한국어 기본형과 사용자 검수는 보존합니다.
 
@@ -204,6 +206,7 @@ swift run -c release MangaLadaWorkflowChecks --text-benchmark fixtures/translati
 swift run -c release MangaLadaWorkflowChecks --text-benchmark fixtures/translation-masked-context-ja-ko.json /path/to/new-context-report.json --masked-context
 swift run -c release MangaLadaWorkflowChecks --text-benchmark fixtures/translation-masked-routing-ja-ko.json /path/to/new-routing-report.json --masked-context
 swift run -c release MangaLadaWorkflowChecks --text-benchmark fixtures/translation-effect-catalog-ja-ko.json /path/to/new-catalog-report.json --model=translategemma:12b
+swift run -c release MangaLadaWorkflowChecks --text-benchmark fixtures/translation-effect-readings-ja-ko.json /path/to/new-readings-report.json --model=translategemma:12b
 ```
 
 선택 번역 비교 사례에는 문구별 `kinds`, 기존 검수 내용인 `reviewedTexts`, 0부터 시작하는 `selectedIndices`를 선택적으로 지정합니다. 문구 수·선택 번호를 검증하고 선택하지 않은 전체 영역 정보가 그대로인지 비교합니다. 같은 효과음을 단독 번역한 결과와 페이지 문맥으로 재번역한 결과가 나란히 저장됩니다. 속도에는 OCR·식자 시간이 포함되지 않습니다.

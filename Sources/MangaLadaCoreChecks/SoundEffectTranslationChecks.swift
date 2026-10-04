@@ -165,6 +165,13 @@ enum SoundEffectTranslationChecks {
                   "An ambiguous ordinary adverb became an automatic effect.")
         try check(lexicon.meaning(for: "ニャー")?.contains("meow") == true && lexicon.translation(for: "ニャー") == nil,
                   "Cat sound meaning was confused with the sticky effect family.")
+        try check(lexicon.meaning(for: "バシャバシャ") == "splish-splash; with a splash"
+                  && lexicon.meaning(for: "パシャパシャ")?.contains("camera shutter") == true,
+                  "A camera-only sense leaked to the water-only reading or was lost from its own reading.")
+        try check(lexicon.meaning(for: "ヌーヴォー") == nil && !lexicon.recognizes("ヌーヴォー"),
+                  "An unrelated reading retained an imported effect meaning.")
+        try check(lexicon.recognizes("コロンコロン") && !lexicon.recognizes("コロコロ"),
+                  "A noun sense restricted to another reading changed automatic classification.")
     }
 
     private static func decode(source: String, text: String, kind: MangaTextKind = .soundEffect) throws -> TextBlock {

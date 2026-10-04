@@ -30,6 +30,8 @@ Python OCR 프로세스의 대기 종료는 Ballons의 `JapaneseEngineSession`�
 
 효과음 인식 표기·뜻 후보·한국어 기본형은 Core의 `Resources/sound-effect-lexicon.json`이 단일 출처입니다. Core는 목록을 검증하고, Ballons 요청은 `recognition != false`인 원문만 Python에 명시적으로 전달합니다. Python에 같은 단어 목록을 복제하지 않습니다. `scripts/update_effect_lexicon.py`는 공식 JMdict의 효과음·의태어 읽기와 뜻만 추출하며 원본 날짜·해시·항목 번호를 남깁니다. 일반 부사·짧은 발화는 자동 후보에서 제외하고 수동 항목이 내려받은 표기보다 우선합니다. 갱신 전후와 실패 시 파일 부작용은 `scripts/check_effect_catalog.py`로 검사합니다. 사전 데이터의 CC BY-SA 출처·라이선스는 앱과 문서에 함께 배포합니다.
 
+사전의 `stagr`는 해당 원문 읽기의 뜻에만 적용하며 가나 변형 생성 전에 대조합니다. 일반 명사·발화 의미도 읽기별로 대조해 자동 후보 여부를 결정하고, 생성한 가나 표기가 일반 단어의 읽기와 겹치면 모호성을 유지합니다. `korean` 기본형이 있는 항목은 `jmdictIDs` 출처 번호가 있어도 수동 항목으로 보존합니다. 사전에서 관찰한 같은 항목의 모든 뜻을 모든 읽기에 퍼뜨리지 않으며, `reviewGroups`와 기존 수동 한국어·모델 캐시는 갱신 도구가 덮어쓰지 않습니다. 단어별 뜻 보정과 실제 모델의 의미 정확도를 구분하고 읽기별 반례는 `translation-effect-readings-ja-ko.json`으로 검수합니다.
+
 `TranslationPipeline`은 새 번역 및 선택 재번역에서 같은 `inferKinds`를 재사용합니다. 선택하지 않은 문구, 말풍선 안의 대사, 수동 종류·영역, 제목은 자동 변경하지 않습니다. 확정 한국어 기본형의 효과음은 페이지 모델 요청에서 제외하고 UUID로 합치며 문맥으로는 유지합니다. 다의어의 뜻 후보는 `MangaTranslationPrompt.soundEffectGuidance`를 통해 TranslateGemma/Qwen/Gemini에 공통 전달합니다. 원문 철자·좌표는 바꾸지 않고 기존 검수 캐시를 사전으로 일괄 덮어쓰지 않습니다. 개별 재번역의 자동 분류 갱신도 검수 임시본에만 저장하며 수정 적용 전에는 이미지·번역 캐시를 바꾸지 않습니다.
 
 효과음 검수 후보는 같은 사전의 `reviewGroups`와 Core의 `JapaneseSoundEffectLexicon.ReviewOption`이 소유합니다. 등록된 원문 전체가 일치할 때만 후보를 반환하며, 후보가 없는 구버전 사전은 허용합니다. 미등록 원문·중복 후보·빈 한국어는 사전 경계에서 거부합니다. 이 수동 후보는 자동 분류·모델 안내·확정 번역과 분리하며, 사전 갱신 도구가 그대로 보존합니다. AppState는 사전을 시작할 때 한 번 읽고 `SoundEffectReviewMenu`는 선택한 한국어만 기존 `editReviewBlock`에 전달합니다. 별도의 검수 캐시나 렌더링 경로를 만들지 않습니다. 원문·배치·스타일·다른 검수는 보존하고, 적용 전 취소·재실행·페이지 이동·처리 중 입력을 검증합니다.
