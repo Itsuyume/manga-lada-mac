@@ -44,12 +44,12 @@ enum SupplementalResourceChecks {
     private static func makeImage() throws -> Data {
         guard let bitmap = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: 120, pixelsHigh: 120,
             bitsPerSample: 8, samplesPerPixel: 3, hasAlpha: false, isPlanar: false, colorSpaceName: .calibratedRGB,
-            bytesPerRow: 360, bitsPerPixel: 24) else { throw CocoaError(.coderInvalidValue) }
+            bytesPerRow: 360, bitsPerPixel: 24), let pixels = bitmap.bitmapData else { throw CocoaError(.coderInvalidValue) }
         for y in 0..<120 {
             for x in 0..<120 {
                 let ink = (40..<60).contains(x) && (40..<80).contains(y) || (5..<10).contains(x) && (5..<10).contains(y)
-                var pixel = [UInt](repeating: ink ? 0 : 255, count: 3)
-                bitmap.setPixel(&pixel, atX: x, y: y)
+                let offset = y * bitmap.bytesPerRow + x * bitmap.samplesPerPixel
+                for channel in 0..<3 { pixels[offset + channel] = ink ? 0 : 255 }
             }
         }
         guard let data = bitmap.representation(using: .png, properties: [:]) else { throw CocoaError(.coderInvalidValue) }
@@ -57,14 +57,15 @@ enum SupplementalResourceChecks {
     }
 
     private static func checkImage(_ url: URL) throws {
-        guard let bitmap = NSBitmapImageRep(data: try Data(contentsOf: url)) else { throw CocoaError(.coderReadCorrupt) }
+        guard let bitmap = NSBitmapImageRep(data: try Data(contentsOf: url)), let pixels = bitmap.bitmapData else { throw CocoaError(.coderReadCorrupt) }
         try require(bitmap.pixelsWide == 120 && bitmap.pixelsHigh == 120, "Pixel dimensions changed.")
-        var pixel = [UInt](repeating: 0, count: bitmap.samplesPerPixel)
+        try require(bitmap.bitsPerSample == 8 && bitmap.samplesPerPixel >= 3 && !bitmap.isPlanar
+                    && !bitmap.bitmapFormat.contains(.alphaFirst), "Expected an interleaved 8-bit RGB PNG.")
         for y in 0..<120 {
             for x in 0..<120 {
-                bitmap.getPixel(&pixel, atX: x, y: y)
-                let expected: UInt = (5..<10).contains(x) && (5..<10).contains(y) ? 0 : 255
-                try require(pixel.prefix(3).allSatisfy { $0 == expected }, "Glyph remained or unrelated artwork changed.")
+                let offset = y * bitmap.bytesPerRow + x * bitmap.samplesPerPixel
+                let expected: UInt8 = (5..<10).contains(x) && (5..<10).contains(y) ? 0 : 255
+                try require((0..<3).allSatisfy { pixels[offset + $0] == expected }, "Glyph remained or unrelated artwork changed.")
             }
         }
     }
