@@ -14,9 +14,13 @@ extension AppState {
         }
         change(&edited.blocks[index])
         do {
-            try reviewStore.save(edited, comparedTo: saved)
-            reviewDrafts[currentIndex] = edited == saved ? nil : edited
+            try saveReview(edited, comparedTo: saved, at: currentIndex)
         } catch { errorMessage = "임시 수정을 저장하지 못했습니다. \(error.localizedDescription)" }
+    }
+
+    func saveReview(_ edited: PageTranslation, comparedTo saved: PageTranslation, at index: Int) throws {
+        try reviewStore.save(edited, comparedTo: saved)
+        reviewDrafts[index] = edited == saved ? nil : edited
     }
 
     func discardCurrentReview() {

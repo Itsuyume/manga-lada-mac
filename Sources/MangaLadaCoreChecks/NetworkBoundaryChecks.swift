@@ -72,6 +72,10 @@ enum NetworkBoundaryChecks {
         let selected = try await pipeline.translateSelected([effect.id], in: blocks, configuration: LocalTranslatorConfiguration())
         var expected = blocks; expected[0].translatedText = "우르릉"
         try check(selected == expected, "Selected retry changed another draft, metadata or array order.")
+        var emptyDraft = blocks; emptyDraft[1].translatedText = ""
+        let selectedWithEmptyDraft = try await pipeline.translateSelected([effect.id], in: emptyDraft, configuration: LocalTranslatorConfiguration())
+        var expectedEmptyDraft = expected; expectedEmptyDraft[1].translatedText = ""
+        try check(selectedWithEmptyDraft == expectedEmptyDraft, "Selected retry filled or rejected an unrelated unfinished review.")
         let multiple = try await pipeline.translateSelected(Set(blocks.map(\.id)), in: blocks, configuration: LocalTranslatorConfiguration())
         expected[1].translatedText = "모델이 새로 쓴 천둥 설명"
         try check(multiple == expected, "Multiple selection failed to update only the requested text fields.")

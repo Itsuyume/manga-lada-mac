@@ -36,10 +36,12 @@ extension AppState {
                     .translateSelected([translation.blocks[blockIndex].id], in: translation.blocks, configuration: configuration)
                 try Task.checkCancellation()
                 guard sessionID == id else { return }
-                try finishReview(processor.applyEdits(to: result, translation: updated, typography: typography), at: page)
-                statusMessage = "이 문구를 다시 번역해 저장했습니다."
-            } catch is CancellationError { statusMessage = "문구 번역을 중단했습니다." }
-            catch { errorMessage = error.localizedDescription }
+                try saveReview(updated, comparedTo: result.translation, at: page)
+                statusMessage = "\(page + 1)쪽 문구를 다시 번역했습니다. ‘수정 적용’을 눌러 이미지에 저장하세요."
+            } catch {
+                if Task.isCancelled || error is CancellationError { statusMessage = "문구 번역을 중단했습니다." }
+                else { errorMessage = error.localizedDescription }
+            }
         }
     }
     func translateSelectedRegion() {

@@ -100,6 +100,7 @@ struct TranslationInspector: View {
                     state.retranslateBlock(in: draft, at: index)
                 }
             }.font(.system(size: 10)).disabled(editingDisabled)
+                .help("이 문구의 번역만 검수창에서 갱신합니다. ‘수정 적용’을 누르면 이미지에 저장됩니다.")
             if block.textKind == .soundEffect {
                 Picker("효과음 스타일", selection: effectStyleBinding(block)) {
                     Text("전체 설정 따르기").tag("")
