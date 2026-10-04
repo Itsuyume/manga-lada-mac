@@ -1,6 +1,7 @@
 """Source outlines locate balloon interiors; clean pixels never define their boundaries."""
 import cv2
 import numpy as np
+import text_region_geometry as geometry
 
 
 def light_background(image: np.ndarray) -> np.ndarray:
@@ -63,20 +64,46 @@ class BalloonGeometry:
                 continue
             # A panel can be mostly white and contain the text, but its center is
             # unrelated to that dialogue. Keep placement anchored to the source ink.
-            if abs(bx + bw / 2 - center_x) > max(w, font_size * 3) or abs(by + bh / 2 - center_y) > max(h, font_size * 3):
-                continue
+            anchored = abs(bx + bw / 2 - center_x) <= max(w, font_size * 3) and abs(by + bh / 2 - center_y) <= max(h, font_size * 3)
             local = np.zeros((bh, bw), np.uint8)
             cv2.drawContours(local, [contour - [bx, by]], -1, 255, -1)
             if not self.contains_text(local, bx, by, (x, y, w, h), text_points):
                 continue
             colors = self.source[by:by + bh, bx:bx + bw][local > 0]
             uniform = (np.abs(colors.astype(np.float32) - background).max(axis=1) <= 30).mean()
-            if uniform >= .75:
-                candidates.append((area, bx, by, local))
+            if uniform < .75:
+                continue
+            shape = sampled_shape(local, bx, by, self.width, self.height, center_x - bx)
+            if shape is None or not anchored and not self.caption_space(shape, (bx, by, bw, bh), (x, y, w, h), font_size, background):
+                continue
+            candidates.append((area, shape))
         if not candidates:
             return None
-        _, bx, by, mask = min(candidates, key=lambda item: item[0])
-        return sampled_shape(mask, bx, by, self.width, self.height, center_x - bx)
+        return min(candidates, key=lambda item: item[0])[1]
+
+    def caption_space(self, shape: dict, bounds: tuple, text: tuple, font_size: float, background: np.ndarray) -> bool:
+        """Only a wide, centered line in an otherwise empty rectangle may relax the center anchor."""
+        bx, by, bw, bh = bounds
+        x, y, w, h = text
+        if w < h * 3 or w < bw * .65 or abs(x + w / 2 - bx - bw / 2) > bw * .1 or not geometry.rectangular_enclosure(shape):
+            return False
+        inset = max(2, int(np.ceil(font_size * .2)))
+        patch = self.source[by + inset:by + bh - inset, bx + inset:bx + bw - inset]
+        if patch.size == 0:
+            return False
+        outside = np.ones(patch.shape[:2], np.uint8)
+        pad = max(2, font_size * .35)
+        left, top = max(0, int(x - pad - bx - inset)), max(0, int(y - pad - by - inset))
+        right, bottom = min(patch.shape[1], int(np.ceil(x + w + pad - bx - inset))), min(patch.shape[0], int(np.ceil(y + h + pad - by - inset)))
+        outside[top:bottom, left:right] = 0
+        count = np.count_nonzero(outside)
+        if count < outside.size * .5:
+            return False
+        different = ((np.abs(patch.astype(np.float32) - background).max(axis=2) > 30) & (outside > 0)).astype(np.uint8)
+        if np.count_nonzero(different) > count * .01:
+            return False
+        _, _, sizes, _ = cv2.connectedComponentsWithStats(different, 8)
+        return len(sizes) == 1 or sizes[1:, 4].max() <= max(4, font_size * font_size * .25)
 
     def text_points(self, x: float, y: float, w: float, h: float) -> tuple | None:
         if self.text_mask is None:

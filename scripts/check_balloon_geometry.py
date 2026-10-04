@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Behavior checks for curved, open and empty balloon interiors."""
 from pathlib import Path
+from itertools import product
 import sys
 
 sys.dont_write_bytecode = True
@@ -9,6 +10,38 @@ import cv2
 import numpy as np
 from balloon_geometry import balloon_shape
 from balloon_geometry import BalloonGeometry, separate_shared_balloons
+
+
+def check_offset_caption():
+    """A long line near a box edge can have a reliable enclosure without a nearby center."""
+    for scale, color, top in product((.5, 1, 2), (20, 245), (180, 200, 380)):
+        width, height = int(900 * scale), int(1200 * scale)
+        page = np.full((height, width, 3), 145, np.uint8)
+        cv2.rectangle(page, (int(100*scale), int(160*scale)), (int(800*scale), int(430*scale)), (color,)*3, -1)
+        mask = np.zeros((height, width), np.uint8)
+        for left in range(145, 733, 14):
+            cv2.rectangle(mask, (int(left*scale), int(top*scale)), (int((left+3)*scale), int((top+24)*scale)), 255, -1)
+        page[mask > 0] = 255 - color
+        box = dict(x=145/900, y=top/1200, width=595/900, height=27/1200)
+        original, ink = page.copy(), mask.copy()
+        shape = BalloonGeometry(page, text_mask=mask).shape(box, 27*scale)
+        assert shape is not None, "An offset line lost its closed caption enclosure"
+        bounds = shape["bounds"]
+        assert abs(bounds["y"] - 160/1200) < .005 and bounds["height"] > .22, "Caption retained only the narrow source line"
+        assert np.array_equal(page, original) and np.array_equal(mask, ink), "Caption detection altered the source or text mask"
+        # A small central drawing occupies under 1% of the box. Uniformity alone cannot authorize moving text onto it.
+        artwork = page.copy()
+        cv2.circle(artwork, (int(450*scale), int(295*scale)), int(15*scale), (255-color,)*3, -1)
+        assert BalloonGeometry(artwork, text_mask=mask).shape(box, 27*scale) is None, "A small central drawing became writable caption space"
+        short = dict(box, width=160/900)
+        assert BalloonGeometry(page).shape(short, 27*scale) is None, "A small side label claimed the whole caption area"
+    clipped = np.full((600, 900, 3), 145, np.uint8)
+    cv2.rectangle(clipped, (100, 0), (800, 230), (20,)*3, -1)
+    box = dict(x=145/900, y=15/600, width=595/900, height=27/600)
+    assert BalloonGeometry(clipped).shape(box, 27) is None, "Oversized edge artwork bypassed the page-area limit"
+
+
+check_offset_caption()
 
 image = np.full((640, 640, 3), 255, dtype=np.uint8)
 cv2.ellipse(image, (320, 320), (110, 140), 0, 0, 360, (0, 0, 0), 4)
@@ -124,4 +157,4 @@ edge = np.full_like(image, 255)
 cv2.ellipse(edge, (320, 30), (110, 140), 0, 0, 360, (0, 0, 0), 4)
 edge_shape = balloon_shape(edge, {"x": 300 / 640, "y": 10 / 640, "width": 40 / 640, "height": 80 / 640}, 35)
 assert edge_shape is not None and edge_shape["bounds"]["y"] < .01, "Balloon clipped at the page edge was lost"
-print("Balloon geometry checks passed: source outlines, curved/pastel/dark/staggered interiors, joined lobes, panel/art rejection, empty/invalid masks, source preserved")
+print("Balloon geometry checks passed: offset captions at multiple scales, small central-art rejection, source outlines, curved/pastel/dark/staggered interiors, joined lobes, panel/art rejection, empty/invalid masks, source preserved")
