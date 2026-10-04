@@ -9,6 +9,8 @@ import MangaLadaWorkflow
 @MainActor
 struct TranslationStateTests {
     static func main() async throws {
+        try await checkFailedPageReview()
+        try await checkBlankPageRecovery()
         let fixture = try Fixture()
         defer { try? FileManager.default.removeItem(at: fixture.root) }
         let state = fixture.state
@@ -91,7 +93,7 @@ struct TranslationStateTests {
         let sources: [(URL, Data)]
         let preferences: [String: Any]
 
-        init() throws {
+        init(blocks: [TextBlock] = []) throws {
             root = FileManager.default.temporaryDirectory.appendingPathComponent("manga-state-" + UUID().uuidString)
             support = root.appendingPathComponent("support")
             let sourceFolder = root.appendingPathComponent("source")
@@ -113,17 +115,23 @@ struct TranslationStateTests {
             var records: [(URL, Data)] = [], pageKeys: [JapanesePageKeys] = []
             for index in 0..<3 {
                 let image = sourceFolder.appendingPathComponent("\(index).png")
-                let bitmap = try unwrap(NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: 2, pixelsHigh: 2,
-                    bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: 8, bitsPerPixel: 32))
-                for x in 0..<2 { for y in 0..<2 { bitmap.setColor(NSColor(deviceWhite: 1 - Double(index) * 0.1, alpha: 1), atX: x, y: y) } }
+                let width = blocks.isEmpty ? 2 : 480, height = blocks.isEmpty ? 2 : 640
+                let bitmap = try unwrap(NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: width, pixelsHigh: height,
+                    bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 32))
+                NSGraphicsContext.saveGraphicsState()
+                NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: bitmap)
+                NSColor(deviceWhite: 1 - Double(index) * 0.1, alpha: 1).setFill()
+                NSRect(x: 0, y: 0, width: width, height: height).fill()
+                NSGraphicsContext.restoreGraphicsState()
                 let bytes = try unwrap(bitmap.representation(using: .png, properties: [:]))
                 try bytes.write(to: image)
                 records.append((image, bytes))
                 let key = try JapanesePageKeys(imageURL: image, configuration: state.configuration, context: "", title: state.title)
                 pageKeys.append(key)
                 for fingerprint in [key.translation, key.recognition] {
+                    if !blocks.isEmpty && fingerprint == key.translation { continue }
                     try cache.save(PageTranslation(imageURL: image, imageFingerprint: fingerprint,
-                        sourceLanguage: .japanese, targetLanguage: .korean, blocks: []))
+                        sourceLanguage: .japanese, targetLanguage: .korean, blocks: blocks))
                 }
                 let clean = engine.inpaintedImageURL(runID: key.recognition)
                 try FileManager.default.createDirectory(at: clean.deletingLastPathComponent(), withIntermediateDirectories: true)

@@ -33,6 +33,6 @@ done
 swiftc -parse-as-library -swift-version 6 -package-name MangaLadaMac "${compiler_flags[@]}" \
   -I "$binary_directory" -I "$binary_directory/Modules" \
   "${sources[@]}" Sources/MangaLadaWorkflow/JapanesePageKeys.swift \
-  Tests/MangaLadaAppTests/TranslationStateTests.swift \
+  Tests/MangaLadaAppTests/*.swift \
   "${objects[@]}" -o "$check_directory/checks"
 "$check_directory/checks"

@@ -30,7 +30,7 @@ extension AppState {
             guard sessionID == id else { return }
             pages = book.pages; currentIndex = book.initialIndex; title = book.title; sourceURL = book.sourceURL
             isSelectingRegion = false; selectedRegion = nil; selectedBlockID = nil
-            results = [:]; reviewDrafts = [:]; reviewErrors = [:]; failures = [:]; outputBook = nil; imageRevision += 1; isLoading = false
+            results = [:]; pendingPages = [:]; reviewDrafts = [:]; reviewErrors = [:]; failures = [:]; outputBook = nil; imageRevision += 1; isLoading = false
             statusMessage = "\(pages.count)페이지를 열었습니다."
             if autoTranslate { startTranslation() }
         } catch { if sessionID == id { isLoading = false; statusMessage = "열기 실패"; errorMessage = error.localizedDescription } }
@@ -49,7 +49,7 @@ extension AppState {
         }
     }
     private func applyOutputFolder(_ url: URL) {
-        if outputRoot != url { results = [:]; reviewDrafts = [:]; reviewErrors = [:]; failures = [:]; imageRevision += 1 }
+        if outputRoot != url { results = [:]; pendingPages = [:]; reviewDrafts = [:]; reviewErrors = [:]; failures = [:]; imageRevision += 1 }
         outputRoot = url; outputBook = nil; UserDefaults.standard.set(url.path, forKey: "translator.outputRoot")
         statusMessage = "완성본 저장 위치: \(url.lastPathComponent)"
     }

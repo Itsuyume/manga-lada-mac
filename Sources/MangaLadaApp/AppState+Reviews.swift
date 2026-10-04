@@ -3,12 +3,13 @@ import MangaLadaCore
 import MangaLadaWorkflow
 
 extension AppState {
-    var currentReview: PageTranslation? { reviewDrafts[currentIndex] ?? currentResult?.translation }
+    var currentReviewBaseline: PageTranslation? { currentResult?.translation ?? pendingPages[currentIndex]?.translation }
+    var currentReview: PageTranslation? { reviewDrafts[currentIndex] ?? currentReviewBaseline }
     var hasCurrentReview: Bool { reviewDrafts[currentIndex] != nil || reviewErrors[currentIndex] != nil }
 
     func editReviewBlock(_ id: UUID, change: (inout TextBlock) -> Void) {
         guard !isBusy, !isLoading, reviewErrors[currentIndex] == nil,
-              let saved = currentResult?.translation, var edited = currentReview else { return }
+              let saved = currentReviewBaseline, var edited = currentReview else { return }
         guard let index = edited.blocks.firstIndex(where: { $0.id == id }) else {
             errorMessage = "편집할 문구가 바뀌었습니다. 현재 페이지의 문구를 다시 선택해주세요."; return
         }
@@ -24,7 +25,7 @@ extension AppState {
     }
 
     func discardCurrentReview() {
-        guard !isBusy, let saved = currentResult?.translation else { return }
+        guard !isBusy, let saved = currentReviewBaseline else { return }
         do {
             try reviewStore.discard(fingerprint: saved.imageFingerprint)
             reviewDrafts.removeValue(forKey: currentIndex); reviewErrors.removeValue(forKey: currentIndex)
@@ -33,9 +34,20 @@ extension AppState {
     }
 
     func recordResult(_ result: ProcessedMangaPage, at index: Int) {
-        results[index] = result
+        results[index] = result; pendingPages.removeValue(forKey: index)
+        restoreReview(for: result.translation, at: index)
+    }
+
+    func recordPending(_ draft: MangaPageDraft, at index: Int) {
+        // A failed retranslation must keep the last saved image and its review baseline.
+        guard results[index] == nil else { return }
+        pendingPages[index] = draft
+        restoreReview(for: draft.translation, at: index)
+    }
+
+    private func restoreReview(for translation: PageTranslation, at index: Int) {
         do {
-            reviewDrafts[index] = try reviewStore.load(for: result.translation)
+            reviewDrafts[index] = try reviewStore.load(for: translation)
             reviewErrors.removeValue(forKey: index)
         } catch {
             reviewDrafts.removeValue(forKey: index)
@@ -44,7 +56,15 @@ extension AppState {
     }
 
     func finishReview(_ result: ProcessedMangaPage, at index: Int) throws {
-        results[index] = result; imageRevision += 1
+        var remainingFailures = failures
+        remainingFailures.removeValue(forKey: index)
+        if var updated = outputBook {
+            updated.manifest.completedPages = Set(results.keys).union([index]).subtracting(remainingFailures.keys).sorted()
+            updated.manifest.failures = remainingFailures
+            try bookStore.save(updated); outputBook = updated
+        }
+        results[index] = result; failures = remainingFailures; imageRevision += 1
+        pendingPages.removeValue(forKey: index)
         try reviewStore.discard(fingerprint: result.translation.imageFingerprint)
         reviewDrafts.removeValue(forKey: index); reviewErrors.removeValue(forKey: index)
     }

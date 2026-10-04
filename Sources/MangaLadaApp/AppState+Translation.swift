@@ -53,6 +53,7 @@ extension AppState {
         catch {
             if Task.isCancelled { throw CancellationError() }
             guard sessionID == session else { return }
+            if let failure = error as? MangaPageFailure { recordPending(failure.draft, at: index) }
             failures[index] = error.localizedDescription
             if var updated = outputBook {
                 updated.manifest.completedPages = completed.sorted(); updated.manifest.failures = failures
@@ -64,8 +65,14 @@ extension AppState {
         guard sessionID == session else { return }; statusMessage = "\(page + 1)/\(pages.count) · \(message)"
     }
     func updateCurrentTranslation(_ translation: PageTranslation) throws {
-        guard !isBusy, let result = currentResult else { return }
-        try finishReview(processor.applyEdits(to: result, translation: translation, typography: typography), at: currentIndex)
+        guard !isBusy else { return }
+        let edited: ProcessedMangaPage
+        if let result = currentResult {
+            edited = try processor.applyEdits(to: result, translation: translation, typography: typography)
+        } else if let draft = pendingPages[currentIndex], let book = outputBook {
+            edited = try processor.finishReview(of: draft, translation: translation, destinationURL: book.pageURL(at: currentIndex), typography: typography)
+        } else { return }
+        try finishReview(edited, at: currentIndex)
         statusMessage = "문구와 글꼴 수정을 이미지에 저장했습니다."
     }
 }

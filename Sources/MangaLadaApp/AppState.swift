@@ -19,6 +19,7 @@ final class AppState: ObservableObject {
     @Published var showInspector = true
     @Published var mode: AppMode = .translated
     @Published var results: [Int: ProcessedMangaPage] = [:]
+    @Published var pendingPages: [Int: MangaPageDraft] = [:]
     @Published var reviewDrafts: [Int: PageTranslation] = [:]
     @Published var reviewErrors: [Int: String] = [:]
     @Published var failures: [Int: String] = [:]
@@ -91,7 +92,7 @@ final class AppState: ObservableObject {
             let typographyChanged = self.typography != typography
             self.configuration = configuration; self.typography = typography; showSettings = false
             if translatorChanged {
-                results = [:]; reviewDrafts = [:]; reviewErrors = [:]; failures = [:]; imageRevision += 1
+                results = [:]; pendingPages = [:]; reviewDrafts = [:]; reviewErrors = [:]; failures = [:]; imageRevision += 1
                 statusMessage = "번역 방식이 바뀌었습니다. 전체 번역 시작을 눌러 새 설정으로 번역해주세요."
             } else if renderCompleted && typographyChanged { rerenderCompletedPages() }
             else { statusMessage = "설정을 저장했습니다. 기존 번역과 검수 수정은 유지됩니다." }

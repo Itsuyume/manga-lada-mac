@@ -81,6 +81,9 @@ public struct PageTranslation: Codable, Equatable, Sendable {
     public var targetLanguage: LanguageCode
     public var createdAt: Date
     public var blocks: [TextBlock]
+    public var untranslatedBlockIDs: Set<UUID> {
+        Set(blocks.filter { $0.translatedText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }.map(\.id))
+    }
 
     public init(
         imageURL: URL,

@@ -24,9 +24,3 @@ package struct JapanesePageKeys {
         }
     }
 }
-
-struct MangaPageDraft {
-    var translation: PageTranslation
-    let cleanImageURL: URL
-    let wasCached: Bool
-}

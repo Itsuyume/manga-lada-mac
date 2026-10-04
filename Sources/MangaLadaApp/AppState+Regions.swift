@@ -4,12 +4,12 @@ import MangaLadaWorkflow
 
 extension AppState {
     var selectedRegionNumbers: [Int] {
-        guard let selectedRegion, let blocks = currentResult?.translation.blocks else { return [] }
+        guard let selectedRegion, let blocks = currentReview?.blocks else { return [] }
         return blocks.indices.filter { ImageRegionSelection.containsCenter(selectedRegion, of: blocks[$0].box) }.map { $0 + 1 }
     }
     func isBlockSelected(_ id: UUID) -> Bool {
         guard id != selectedBlockID else { return true }
-        guard let selectedRegion, let block = currentResult?.translation.blocks.first(where: { $0.id == id }) else { return false }
+        guard let selectedRegion, let block = currentReview?.blocks.first(where: { $0.id == id }) else { return false }
         return ImageRegionSelection.containsCenter(selectedRegion, of: block.box)
     }
     func focusBlock(_ id: UUID?) {
@@ -18,11 +18,19 @@ extension AppState {
     func selectRegion(_ box: TextBox?) {
         selectedRegion = box
         guard let box else { focusBlock(nil); return }
-        let match = currentResult?.translation.blocks.first { ImageRegionSelection.containsCenter(box, of: $0.box) }
+        let match = currentReview?.blocks.first { ImageRegionSelection.containsCenter(box, of: $0.box) }
         if selectedBlockID != match?.id { focusBlock(match?.id) }
     }
     func retranslateBlock(in translation: PageTranslation, at blockIndex: Int) {
-        guard !isBusy, !isLoading, let result = currentResult, translation.blocks.indices.contains(blockIndex) else { return }
+        guard translation.blocks.indices.contains(blockIndex) else { return }
+        retranslateBlocks([translation.blocks[blockIndex].id], in: translation)
+    }
+    func translatePendingWords() {
+        guard pendingPages[currentIndex] != nil, let translation = currentReview else { return }
+        retranslateBlocks(translation.untranslatedBlockIDs, in: translation)
+    }
+    private func retranslateBlocks(_ selectedIDs: Set<UUID>, in translation: PageTranslation) {
+        guard !isBusy, !isLoading, !selectedIDs.isEmpty, let baseline = currentReviewBaseline else { return }
         guard reviewErrors[currentIndex] == nil else { _ = requireAppliedReviews(at: [currentIndex]); return }
         let page = currentIndex, id = sessionID
         isBusy = true
@@ -33,12 +41,13 @@ extension AppState {
                 statusMessage = "페이지 문맥을 참고해 선택한 문구를 다시 번역하는 중…"
                 var updated = translation
                 updated.blocks = try await processor.textTranslator.translateSelected(
-                    [translation.blocks[blockIndex].id], in: translation.blocks, configuration: configuration)
+                    selectedIDs, in: translation.blocks, configuration: configuration)
                 try Task.checkCancellation()
                 guard sessionID == id else { return }
-                try saveReview(updated, comparedTo: result.translation, at: page)
+                try saveReview(updated, comparedTo: baseline, at: page)
                 statusMessage = "\(page + 1)쪽 문구를 다시 번역했습니다. ‘수정 적용’을 눌러 이미지에 저장하세요."
             } catch {
+                guard sessionID == id else { return }
                 if Task.isCancelled || error is CancellationError { statusMessage = "문구 번역을 중단했습니다." }
                 else { errorMessage = error.localizedDescription }
             }

@@ -8,7 +8,7 @@ struct RecognizedRegionLegend: View {
         HStack(spacing: 12) {
             Text("인식 영역").foregroundStyle(.secondary)
             ForEach(MangaTextKind.allCases, id: \.self) { kind in
-                let blocks = state.currentResult?.translation.blocks.filter { ($0.textKind ?? .dialogue) == kind } ?? []
+                let blocks = state.currentReview?.blocks.filter { ($0.textKind ?? .dialogue) == kind } ?? []
                 if !blocks.isEmpty {
                     Button { state.focusBlock(blocks[0].id) } label: {
                         HStack(spacing: 4) {

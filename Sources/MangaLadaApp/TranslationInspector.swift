@@ -6,12 +6,14 @@ import SwiftUI
 struct TranslationInspector: View {
     @ObservedObject var state: AppState
     private var draft: PageTranslation? { state.currentReview }
+    private var isPending: Bool { state.pendingPages[state.currentIndex] != nil }
     private var editingDisabled: Bool { state.isBusy || state.isLoading || state.reviewErrors[state.currentIndex] != nil }
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack { Text("번역 검수").font(.system(size: 13, weight: .semibold)); Spacer(); Text("\(state.currentIndex + 1)쪽").foregroundStyle(.secondary) }
-            if state.currentResult != nil {
-                Text("번호로 위치를 확인하세요. 분류가 다르면 종류를 바꾼 뒤 ‘수정 적용’을 누르세요.")
+            if draft != nil {
+                Text(isPending ? "인식한 원문을 수정하거나 번역을 직접 입력할 수 있습니다. 모든 문구를 채운 뒤 ‘수정 적용’을 누르세요."
+                     : "번호로 위치를 확인하세요. 분류가 다르면 종류를 바꾼 뒤 ‘수정 적용’을 누르세요.")
                     .font(.system(size: 10)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             }
             ForEach(state.currentResult?.warnings ?? [], id: \.self) { warning in
@@ -20,22 +22,35 @@ struct TranslationInspector: View {
             }
             reviewNotice
             if let draft, !draft.blocks.isEmpty {
+                if isPending, !draft.untranslatedBlockIDs.isEmpty {
+                    Button("빈 문구 \(draft.untranslatedBlockIDs.count)개 번역", systemImage: "character.bubble") {
+                        state.translatePendingWords()
+                    }.disabled(editingDisabled).help("입력한 번역은 유지하고, 번역이 비어 있는 문구만 처리합니다.")
+                }
                 editors(draft)
                 HStack {
                     Button("수정 적용", systemImage: "checkmark") { apply() }.disabled(editingDisabled)
                     if state.hasCurrentReview { discardButton }
                 }
-            } else if state.currentResult != nil {
+            } else if draft != nil {
                 Text("인식된 글자가 없는 페이지입니다.").foregroundStyle(.secondary)
+                if isPending {
+                    Button("이미지 다시 저장", systemImage: "square.and.arrow.down") { apply() }.disabled(editingDisabled)
+                }
                 if state.hasCurrentReview { discardButton }
             } else {
                 Text(state.processingIndex == state.currentIndex ? "일본어를 인식하고 번역하는 중입니다." : "이 페이지가 번역되면 문구를 수정할 수 있습니다.")
                     .foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             }
             if let failure = state.failures[state.currentIndex] {
-                Text(failure).font(.system(size: 11)).foregroundStyle(.red).textSelection(.enabled)
+                DisclosureGroup("처리 실패 내용") {
+                    ScrollView {
+                        Text(failure).font(.system(size: 11)).foregroundStyle(.red)
+                            .fixedSize(horizontal: false, vertical: true).textSelection(.enabled)
+                    }.frame(maxHeight: 120)
+                }.font(.system(size: 11)).foregroundStyle(.red)
             }
-            if state.currentResult != nil || state.failures[state.currentIndex] != nil {
+            if !isPending && (state.currentResult != nil || state.failures[state.currentIndex] != nil) {
                 Button(state.failures[state.currentIndex] == nil ? "현재 페이지 다시 번역" : "이 페이지 재시도", systemImage: "arrow.clockwise") {
                     state.startTranslation(onlyCurrent: true, force: true)
                 }.disabled(state.isBusy || state.isLoading)
@@ -149,9 +164,6 @@ struct TranslationInspector: View {
     }
     private func apply() {
         guard let draft else { return }
-        guard draft.blocks.allSatisfy({ !$0.translatedText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }) else {
-            state.errorMessage = "빈 번역 문구가 있습니다. 문구를 채워주세요."; return
-        }
         do { try state.updateCurrentTranslation(draft) } catch { state.errorMessage = error.localizedDescription }
     }
 }

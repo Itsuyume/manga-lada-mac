@@ -35,29 +35,30 @@ private struct TranslatorBody: View {
             }
             if state.pages.isEmpty { TranslatorEmptyState() }
             else { VStack(spacing: 0) {
-                if (state.showInspector || state.isSelectingRegion) && state.currentResult?.translation.blocks.isEmpty == false {
+                if (state.showInspector || state.isSelectingRegion) && state.currentReview?.blocks.isEmpty == false {
                     RecognizedRegionLegend(state: state)
+                }
+                if !state.isSelectingRegion && state.mode == .translated
+                    && (state.currentResult == nil || state.failures[state.currentIndex] != nil) {
+                    pageNotice.font(.system(size: 12, weight: .medium))
+                        .frame(maxWidth: .infinity, alignment: .leading).padding(10)
+                        .background(.regularMaterial)
                 }
                 ComicPageCanvas(pages: state.displayPages, index: state.currentIndex, settings: reading, revision: state.imageRevision,
                                    selection: state.isSelectingRegion ? Binding(get: { state.selectedRegion }, set: { state.selectRegion($0) }) : nil,
-                                   regions: state.showInspector || state.isSelectingRegion ? state.currentResult?.translation.blocks ?? [] : [],
+                                   regions: state.showInspector || state.isSelectingRegion ? state.currentReview?.blocks ?? [] : [],
                                    selectedRegionID: Binding(get: { state.selectedBlockID }, set: { state.focusBlock($0) }), onSelect: state.select)
                 .allowsHitTesting(!state.isSelectingRegion || !state.isBusy)
             } }
             if state.showInspector && !state.pages.isEmpty { Divider(); TranslationInspector(state: state).frame(width: 260) }
         }.overlay {
             if state.isLoading { ProgressView("페이지를 여는 중…").padding(22).background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12)) }
-        }.overlay(alignment: .topLeading) {
-            if !state.pages.isEmpty && !state.isSelectingRegion && state.mode == .translated
-                && (state.currentResult == nil || state.failures[state.currentIndex] != nil) {
-                pageNotice
-                    .font(.system(size: 12, weight: .medium)).padding(10)
-                    .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8)).padding(12)
-            }
         }
     }
     @ViewBuilder private var pageNotice: some View {
-        if state.failures[state.currentIndex] != nil {
+        if state.pendingPages[state.currentIndex] != nil {
+            Label("번역 미완료 · 검수창에서 원문과 번역을 수정하세요", systemImage: "pencil.circle")
+        } else if state.failures[state.currentIndex] != nil {
             Label(state.currentResult == nil ? "번역 실패 · 검수창에서 재시도하세요" : "재번역 실패 · 이전 저장본 표시 중", systemImage: "exclamationmark.triangle")
         } else if state.currentResult == nil {
             Label(state.isBusy ? "현재 페이지 번역 대기 중" : "아직 번역 전 · 전체 번역 시작을 누르세요", systemImage: "clock")
