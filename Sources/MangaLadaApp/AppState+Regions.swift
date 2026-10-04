@@ -68,7 +68,7 @@ extension AppState {
                 isSelectingRegion = false; selectedRegion = nil; mode = .translated
                 focusBlock(result.translation.blocks.first { ImageRegionSelection.containsCenter(box, of: $0.box) }?.id)
                 if var updated = outputBook {
-                    updated.manifest.completedPages = results.keys.sorted(); updated.manifest.failures = failures
+                    updated.manifest.completedPages = completed.sorted(); updated.manifest.failures = failures
                     try bookStore.save(updated); outputBook = updated
                 }
                 statusMessage = "지정한 영역을 번역하고 페이지를 저장했습니다."

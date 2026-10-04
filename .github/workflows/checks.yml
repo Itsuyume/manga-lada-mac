@@ -50,3 +50,5 @@ jobs:
         timeout-minutes: 4
       - run: scripts/check_file_panel.sh
         timeout-minutes: 4
+      - run: scripts/check_translation_state.sh
+        timeout-minutes: 4

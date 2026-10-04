@@ -25,7 +25,6 @@ struct TranslationInspector: View {
                     Button("수정 적용", systemImage: "checkmark") { apply() }.disabled(editingDisabled)
                     if state.hasCurrentReview { discardButton }
                 }
-                Button("현재 페이지 다시 번역", systemImage: "arrow.clockwise") { state.startTranslation(onlyCurrent: true, force: true) }.disabled(state.isBusy)
             } else if state.currentResult != nil {
                 Text("인식된 글자가 없는 페이지입니다.").foregroundStyle(.secondary)
                 if state.hasCurrentReview { discardButton }
@@ -35,6 +34,11 @@ struct TranslationInspector: View {
             }
             if let failure = state.failures[state.currentIndex] {
                 Text(failure).font(.system(size: 11)).foregroundStyle(.red).textSelection(.enabled)
+            }
+            if state.currentResult != nil || state.failures[state.currentIndex] != nil {
+                Button(state.failures[state.currentIndex] == nil ? "현재 페이지 다시 번역" : "이 페이지 재시도", systemImage: "arrow.clockwise") {
+                    state.startTranslation(onlyCurrent: true, force: true)
+                }.disabled(state.isBusy || state.isLoading)
             }
             Spacer(minLength: 0)
             if !state.failures.isEmpty { failureList }

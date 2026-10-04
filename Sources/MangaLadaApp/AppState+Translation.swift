@@ -5,8 +5,9 @@ import MangaLadaWorkflow
 extension AppState {
     func startTranslation(onlyCurrent: Bool = false, force: Bool = false) {
         guard !isBusy, !isLoading, !pages.isEmpty else { return }
-        let indices = onlyCurrent ? [currentIndex] : Array(pages.indices)
-        guard !force || requireAppliedReviews(at: indices) else { return }
+        let requested = onlyCurrent ? [currentIndex] : Array(pages.indices)
+        let indices = requested.filter { force || results[$0] == nil || failures[$0] != nil }
+        guard !indices.isEmpty, requireAppliedReviews(at: indices) else { return }
         if outputRoot == nil {
             chooseOutputFolder { [weak self] in self?.startTranslation(onlyCurrent: onlyCurrent, force: force) }
             return
@@ -14,7 +15,7 @@ extension AppState {
         guard let outputRoot, let sourceURL else { statusMessage = "완성본 저장 폴더를 먼저 지정해주세요."; return }
         do { outputBook = try bookStore.prepare(sourceURL: sourceURL, title: title, pages: pages, outputRoot: outputRoot) }
         catch { errorMessage = error.localizedDescription; return }
-        let id = sessionID; isBusy = true; failures = [:]
+        let id = sessionID; isBusy = true
         job = Task { await translate(indices: indices, force: force, session: id) }
     }
     private func translate(indices: [Int], force: Bool, session: UUID) async {
@@ -25,11 +26,11 @@ extension AppState {
             if configuration.provider == .ollama { statusMessage = "로컬 모델 확인 중…"; try await runtime.ensureReady(model: configuration.ollama.model) }
             for index in indices {
                 try Task.checkCancellation(); guard sessionID == session else { return }
-                if !force, results[index] != nil { continue }
-                try await translatePage(at: index, force: force, session: session)
+                let retrySavedPage = results[index] != nil && failures[index] != nil
+                try await translatePage(at: index, force: force || retrySavedPage, session: session)
             }
             let warnings = results.values.filter { !$0.warnings.isEmpty }.count
-            statusMessage = failures.isEmpty ? "번역 완료 · \(results.count)페이지 자동 저장" : "처리 완료 · 성공 \(results.count) · 실패 \(failures.count)"
+            statusMessage = failures.isEmpty ? "번역 저장 완료 · \(completed.count)/\(pages.count)페이지" : "처리 완료 · 성공 \(completed.count) · 실패 \(failures.count)"
             if warnings > 0 { statusMessage += " · 효과음 확인 \(warnings)페이지" }
         } catch is CancellationError { if sessionID == session { statusMessage = "중단됨 · 완성한 \(results.count)페이지는 저장되어 있습니다." } }
         catch { if sessionID == session { statusMessage = "번역을 시작하지 못했습니다."; errorMessage = error.localizedDescription } }
@@ -45,14 +46,18 @@ extension AppState {
             guard sessionID == session else { return }
             recordResult(result, at: index); failures.removeValue(forKey: index); imageRevision += 1
             if var updated = outputBook {
-                updated.manifest.completedPages = results.keys.sorted(); updated.manifest.failures = failures
+                updated.manifest.completedPages = completed.sorted(); updated.manifest.failures = failures
                 try bookStore.save(updated); outputBook = updated
             }
         } catch is CancellationError { throw CancellationError() }
         catch {
             if Task.isCancelled { throw CancellationError() }
+            guard sessionID == session else { return }
             failures[index] = error.localizedDescription
-            if var updated = outputBook { updated.manifest.failures = failures; try bookStore.save(updated); outputBook = updated }
+            if var updated = outputBook {
+                updated.manifest.completedPages = completed.sorted(); updated.manifest.failures = failures
+                try bookStore.save(updated); outputBook = updated
+            }
         }
     }
     private func updateStatus(_ message: String, page: Int, session: UUID) {

@@ -61,7 +61,7 @@ struct TranslatorFooter: View {
                 Circle().fill(state.isBusy ? .orange : state.failures.isEmpty ? .green : .red).frame(width: 6, height: 6)
                 Text(state.statusMessage).lineLimit(1).truncationMode(.middle)
                 Spacer(minLength: 12)
-                Text("완료 \(state.results.count) · 실패 \(state.failures.count)").monospacedDigit().foregroundStyle(.secondary)
+                Text("완료 \(state.completed.count) · 실패 \(state.failures.count)").monospacedDigit().foregroundStyle(.secondary)
             }.font(.system(size: 11)).padding(.horizontal, 18).padding(.vertical, 9)
         }.background(.bar)
     }

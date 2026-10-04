@@ -21,6 +21,8 @@
 
 방향키는 선택한 읽기 방향을 따릅니다. Space/Page Down은 다음 페이지, Page Up은 이전 페이지, Home/End는 처음/마지막 페이지입니다. 번호 입력 후 Return으로 이동합니다. 글자 입력 중에는 페이지 단축키가 작동하지 않습니다.
 
+0.2.24부터 실패한 페이지에는 **이 페이지 재시도**를 표시합니다. 한 페이지를 다시 처리하거나 중단해도 다른 페이지의 오류 기록은 유지합니다. 재번역에 실패하면 이전 저장본을 보존하고 화면에 표시 중임을 알리며, **이어서 번역**으로 실패 페이지를 다시 처리합니다. 이전 저장본이 있다는 이유로 실패 페이지를 완료로 중복 집계하지 않습니다. 실패 원인에 따라 모델·문구·영역 수정이 필요할 수 있으며 재시도 자체가 번역 품질을 보장하지는 않습니다.
+
 ## 파일 형식
 
 폴더(하위 폴더 포함), ZIP/CBZ, 7z/CB7, RAR/CBR, TAR 및 gzip/bzip2/xz 압축 TAR, PDF, PNG/JPEG/WebP/GIF/TIFF/BMP/HEIC/HEIF/AVIF를 가져옵니다. 0.2.22부터 파일 열기 창에서 이미지를 고르면 기본적으로 그 한 장만 바로 가져옵니다. **이미지의 앞뒤 페이지도 함께 열기**를 선택한 경우에만 이미지가 있는 폴더를 한 번 더 선택합니다. **이 폴더 열기**를 누르면 같은 폴더의 이미지를 자연스러운 숫자 순서로 읽고 고른 페이지에서 시작합니다. 긴 파일명이나 사진 앱의 임시 폴더명이 추가 선택창을 화면 밖까지 늘리지 않도록 안내문에 경로를 붙이지 않습니다. 파일 한 장에 대한 접근만으로 상위 폴더를 암묵적으로 읽지 않습니다. 폴더 선택을 취소하면 현재 책을 유지하며, 다른 폴더를 고르거나 선택한 이미지가 사라졌으면 오류를 표시합니다. **폴더 열기**는 한 번의 선택으로 책 전체를 읽습니다.
@@ -146,6 +148,7 @@ swift run MangaLadaRenderingChecks
 swift run MangaLadaImportChecks
 scripts/check_viewer_images.sh
 scripts/check_file_panel.sh
+scripts/check_translation_state.sh
 swift run MangaLadaBallonsChecks --session-lifetime
 swift run MangaLadaWorkflowChecks --cache-migration
 # 완성본 폴더를 실제 CBZ로 내보내고 모든 페이지 바이트·원본 보존 검사

@@ -37,16 +37,18 @@ final class AppState: ObservableObject {
     @Published var autoTranslate: Bool { didSet { UserDefaults.standard.set(autoTranslate, forKey: "translator.auto") } }
     let reading = ReadingSettings(prefix: "translator")
     let loader = ComicBookLoader(extractionRoot: AppPaths.archives)
-    let processor = MangaPageProcessor(applicationSupportDirectory: AppPaths.support)
+    let processor: MangaPageProcessor
     let bookStore = TranslationBookStore()
     let settingsStore = TranslatorSettingsStore()
     let runtime = LocalModelRuntime()
-    let reviewStore = TranslationReviewStore(directory: AppPaths.support.appendingPathComponent("ReviewDrafts"))
+    let reviewStore: TranslationReviewStore
     var sourceURL: URL?
     var sessionID = UUID()
     var job: Task<Void, Never>?
     var isShowingFilePanel = false
-    init() {
+    init(processor: MangaPageProcessor = MangaPageProcessor(applicationSupportDirectory: AppPaths.support),
+         reviewStore: TranslationReviewStore = TranslationReviewStore(directory: AppPaths.support.appendingPathComponent("ReviewDrafts"))) {
+        self.processor = processor; self.reviewStore = reviewStore
         autoTranslate = UserDefaults.standard.object(forKey: "translator.auto") as? Bool ?? true
         if let path = UserDefaults.standard.string(forKey: "translator.outputRoot") { outputRoot = URL(fileURLWithPath: path) }
         do {
@@ -58,8 +60,8 @@ final class AppState: ObservableObject {
     }
     var currentResult: ProcessedMangaPage? { results[currentIndex] }
     var displayPages: [URL] { pages.enumerated().map { index, page in !isSelectingRegion && mode == .translated ? results[index]?.renderedImageURL ?? page.url : page.url } }
-    var completed: Set<Int> { Set(results.keys) }
-    var progress: Double { pages.isEmpty ? 0 : Double(results.count + failures.count) / Double(pages.count) }
+    var completed: Set<Int> { Set(results.keys).subtracting(failures.keys) }
+    var progress: Double { pages.isEmpty ? 0 : Double(Set(results.keys).union(failures.keys).count) / Double(pages.count) }
     func select(_ index: Int) {
         guard pages.indices.contains(index), index != currentIndex else { return }
         currentIndex = index; selectedRegion = nil; selectedBlockID = nil

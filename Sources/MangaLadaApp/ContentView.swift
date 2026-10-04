@@ -48,11 +48,19 @@ private struct TranslatorBody: View {
         }.overlay {
             if state.isLoading { ProgressView("페이지를 여는 중…").padding(22).background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12)) }
         }.overlay(alignment: .topLeading) {
-            if !state.pages.isEmpty && !state.isSelectingRegion && state.mode == .translated && state.currentResult == nil {
-                Label(state.isBusy ? "현재 페이지 번역 대기 중" : "아직 번역 전 · 전체 번역 시작을 누르세요", systemImage: "clock")
+            if !state.pages.isEmpty && !state.isSelectingRegion && state.mode == .translated
+                && (state.currentResult == nil || state.failures[state.currentIndex] != nil) {
+                pageNotice
                     .font(.system(size: 12, weight: .medium)).padding(10)
                     .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8)).padding(12)
             }
+        }
+    }
+    @ViewBuilder private var pageNotice: some View {
+        if state.failures[state.currentIndex] != nil {
+            Label(state.currentResult == nil ? "번역 실패 · 검수창에서 재시도하세요" : "재번역 실패 · 이전 저장본 표시 중", systemImage: "exclamationmark.triangle")
+        } else if state.currentResult == nil {
+            Label(state.isBusy ? "현재 페이지 번역 대기 중" : "아직 번역 전 · 전체 번역 시작을 누르세요", systemImage: "clock")
         }
     }
 }
