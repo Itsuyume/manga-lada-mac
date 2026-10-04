@@ -44,6 +44,8 @@ ViewerUI의 이미지 디코딩은 `PageImageLoader`, 표시 수명은 `PageImag
 
 영역 드래그 제스처는 `ComicPageImage`가 번호·선택 표시 위에서 함께 처리합니다. `ComicImageSelectionOverlay`는 표시만 하고 입력을 가로채지 않습니다. 번호 클릭과 드래그가 함께 작동하는지는 설치한 앱에서 확인합니다.
 
+수동 영역의 OCR 응답은 Workflow의 `ManualRegionTranslation.validateRecognition`에서 검증합니다. 요청·응답의 개수와 UUID 집합이 같고 중복이 없어야 하며, 일본어 또는 Core의 `TextLanguageDetector.isPunctuationOnly`로 확인한 기호를 허용합니다. 점·물음표만 있는 영역을 언어가 없다는 이유로 거부하지 않습니다. 빈 내용·숫자·영어만 있는 응답은 그대로 실패시키며, 검증 전에 원문 제거·렌더링·캐시 저장을 하지 않습니다.
+
 정규화 사각형의 면적·교차·합집합은 Core의 `TextBoxGeometry`를 재사용합니다. `JapaneseHorizontalOCR`는 두 OCR의 영역을 대조해 가로 원문만 보완하며 좌표·윤곽·번호를 변경하지 않습니다. 플랫폼 OCR 호출은 Workflow→Vision 경계에 두고, 세로 글자·수동 검수·중복 또는 부분 인식은 보완 대상으로 삼지 않습니다.
 
 효과음 보완 경계는 Ballons의 `optical_effects.py`입니다. 새 영역은 알려진 효과음의 실제 macOS OCR 후보와 해당 위치의 만화 OCR 원문이 일치할 때만 추가합니다. 이미 있는 문구는 종류에 관계없이 확정한 원문과 macOS OCR이 일치할 때 글자 제거 범위를 보완하되 저장 좌표·번호·종류를 바꾸지 않습니다. 가로 원문을 Core 규칙으로 교정한 경우 Workflow는 같은 상주 엔진에 교정된 문구를 전달해 제거 범위도 다시 계산합니다. 글자 마스크는 `erase_supplemental_text.glyph_mask`를 재사용합니다. 원문 불일치·수동 검수·다중 영역 충돌은 자동 보완 대상에서 제외합니다. 새 효과음이 추가돼도 기존 영역의 검수 문구는 유지합니다. Python 내부 의존 방향과 순환도 구조 검사에서 강제합니다.

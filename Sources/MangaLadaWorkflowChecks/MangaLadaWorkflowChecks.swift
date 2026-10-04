@@ -10,6 +10,7 @@ struct MangaLadaWorkflowChecks {
     static func main() async throws {
         let arguments = CommandLine.arguments
         if arguments.count == 2, arguments[1] == "--cache-migration" {
+            try ManualRecognitionChecks.run()
             try CacheMigrationChecks.run()
             try PunctuationReviewChecks.run()
             try await LegacyPunctuationCacheChecks.run()
