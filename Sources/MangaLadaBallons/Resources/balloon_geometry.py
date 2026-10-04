@@ -73,13 +73,15 @@ class BalloonGeometry:
             uniform = (np.abs(colors.astype(np.float32) - background).max(axis=1) <= 30).mean()
             if uniform < .75:
                 continue
-            shape = sampled_shape(local, bx, by, self.width, self.height, center_x - bx)
-            if shape is None or not anchored and not self.caption_space(shape, (bx, by, bw, bh), (x, y, w, h), font_size, background):
-                continue
-            candidates.append((area, shape))
+            if not anchored:
+                shape = sampled_shape(local, bx, by, self.width, self.height, center_x - bx)
+                if shape is None or not self.caption_space(shape, (bx, by, bw, bh), (x, y, w, h), font_size, background):
+                    continue
+            candidates.append((area, bx, by, local))
         if not candidates:
             return None
-        return min(candidates, key=lambda item: item[0])[1]
+        _, bx, by, mask = min(candidates, key=lambda item: item[0])
+        return sampled_shape(mask, bx, by, self.width, self.height, center_x - bx)
 
     def caption_space(self, shape: dict, bounds: tuple, text: tuple, font_size: float, background: np.ndarray) -> bool:
         """Only a wide, centered line in an otherwise empty rectangle may relax the center anchor."""
