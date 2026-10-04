@@ -1,0 +1,442 @@
+[
+  {
+    "id": "only-negated-thunder",
+    "texts": [
+      "雷なんて鳴っていない。何の音だろう。",
+      "ゴロゴロ"
+    ],
+    "kinds": [
+      "caption",
+      "soundEffect"
+    ],
+    "reviewedTexts": [
+      "검수 완료: 주변 문구",
+      "기존 효과음"
+    ],
+    "selectedIndices": [
+      1
+    ],
+    "reviewPoints": [
+      "선택하지 않은 주변 문구와 영역 정보를 보존한다.",
+      "천둥이 아니라고 명시되어 있다. 소리의 정체가 없으므로 천둥으로 확정하면 안 된다."
+    ]
+  },
+  {
+    "id": "remembered-thunder",
+    "texts": [
+      "昨日の雷はすごかったね。今日は何の音も聞こえない。",
+      "ゴロゴロ"
+    ],
+    "kinds": [
+      "caption",
+      "soundEffect"
+    ],
+    "reviewedTexts": [
+      "검수 완료: 주변 문구",
+      "기존 효과음"
+    ],
+    "selectedIndices": [
+      1
+    ],
+    "reviewPoints": [
+      "선택하지 않은 주변 문구와 영역 정보를 보존한다.",
+      "천둥은 어제의 회상이다. 현재는 아무 소리도 없다는 문구와 효과음의 충돌을 검수한다."
+    ]
+  },
+  {
+    "id": "cat-comparison",
+    "texts": [
+      "雷みたいだけど、膝の上の猫が出している音だよ。",
+      "ゴロゴロ"
+    ],
+    "kinds": [
+      "caption",
+      "soundEffect"
+    ],
+    "reviewedTexts": [
+      "검수 완료: 주변 문구",
+      "기존 효과음"
+    ],
+    "selectedIndices": [
+      1
+    ],
+    "reviewPoints": [
+      "선택하지 않은 주변 문구와 영역 정보를 보존한다.",
+      "천둥은 비유이며 실제 소리는 무릎 위 고양이다. 고양이의 가르랑/골골 계열로 해석한다."
+    ]
+  },
+  {
+    "id": "thunder-comparison",
+    "texts": [
+      "猫の声みたいに聞こえるが、実際には遠くの雷だ。",
+      "ゴロゴロ"
+    ],
+    "kinds": [
+      "caption",
+      "soundEffect"
+    ],
+    "reviewedTexts": [
+      "검수 완료: 주변 문구",
+      "기존 효과음"
+    ],
+    "selectedIndices": [
+      1
+    ],
+    "reviewPoints": [
+      "선택하지 않은 주변 문구와 영역 정보를 보존한다.",
+      "고양이 소리는 비유이며 실제 소리는 멀리서 나는 천둥이다. 우르릉 계열로 해석한다."
+    ]
+  },
+  {
+    "id": "ambiguous-paper-rain",
+    "texts": [
+      "屋根には雨粒が当たり、読書中の人はページをめくっている。",
+      "パラパラ"
+    ],
+    "kinds": [
+      "caption",
+      "soundEffect"
+    ],
+    "reviewedTexts": [
+      "검수 완료: 주변 문구",
+      "기존 효과음"
+    ],
+    "selectedIndices": [
+      1
+    ],
+    "reviewPoints": [
+      "선택하지 않은 주변 문구와 영역 정보를 보존한다.",
+      "비와 책장 넘김이 동시에 있다. 텍스트만으로 어느 소리인지 확정할 수 없으며 그림 검수가 필요하다."
+    ]
+  },
+  {
+    "id": "negated-paper",
+    "texts": [
+      "本をめくる音じゃない。屋根に小雨が当たっているんだ。",
+      "パラパラ"
+    ],
+    "kinds": [
+      "caption",
+      "soundEffect"
+    ],
+    "reviewedTexts": [
+      "검수 완료: 주변 문구",
+      "기존 효과음"
+    ],
+    "selectedIndices": [
+      1
+    ],
+    "reviewPoints": [
+      "선택하지 않은 주변 문구와 영역 정보를 보존한다.",
+      "책장 넘김은 부정되고 지붕에 떨어지는 빗소리가 명시된다. 종이 소리로 바꾸지 않는다."
+    ]
+  },
+  {
+    "id": "applause-vs-fire",
+    "texts": [
+      "たき火のそばで皆が手をたたいている。",
+      "パチパチ"
+    ],
+    "kinds": [
+      "caption",
+      "soundEffect"
+    ],
+    "reviewedTexts": [
+      "검수 완료: 주변 문구",
+      "기존 효과음"
+    ],
+    "selectedIndices": [
+      1
+    ],
+    "reviewPoints": [
+      "선택하지 않은 주변 문구와 영역 정보를 보존한다.",
+      "타닥거리는 불과 박수가 함께 존재한다. 효과음이 가리키는 위치는 그림으로 확인해야 한다."
+    ]
+  },
+  {
+    "id": "explicit-applause",
+    "texts": [
+      "枝が燃えているけど、この音は客席の拍手だよ。",
+      "パチパチ"
+    ],
+    "kinds": [
+      "caption",
+      "soundEffect"
+    ],
+    "reviewedTexts": [
+      "검수 완료: 주변 문구",
+      "기존 효과음"
+    ],
+    "selectedIndices": [
+      1
+    ],
+    "reviewPoints": [
+      "선택하지 않은 주변 문구와 영역 정보를 보존한다.",
+      "불도 있지만 이 소리는 객석의 박수라고 명시한다. 짝짝 계열로 해석한다."
+    ]
+  },
+  {
+    "id": "electricity",
+    "texts": [
+      "壊れたコードから青い火花が飛んだ。",
+      "パチパチ"
+    ],
+    "kinds": [
+      "caption",
+      "soundEffect"
+    ],
+    "reviewedTexts": [
+      "검수 완료: 주변 문구",
+      "기존 효과음"
+    ],
+    "selectedIndices": [
+      1
+    ],
+    "reviewPoints": [
+      "선택하지 않은 주변 문구와 영역 정보를 보존한다.",
+      "전선에서 튀는 전기 불꽃이다. 박수나 일본어 발음 전사로 바꾸지 않는다."
+    ]
+  },
+  {
+    "id": "unlisted-blinking",
+    "texts": [
+      "目を何度もまばたきしていた。",
+      "パチパチ"
+    ],
+    "kinds": [
+      "caption",
+      "soundEffect"
+    ],
+    "reviewedTexts": [
+      "검수 완료: 주변 문구",
+      "기존 효과음"
+    ],
+    "selectedIndices": [
+      1
+    ],
+    "reviewPoints": [
+      "선택하지 않은 주변 문구와 영역 정보를 보존한다.",
+      "눈을 반복해서 깜빡이는 동작이다. 불이나 박수가 아니며 깜빡깜빡 계열로 해석한다."
+    ]
+  },
+  {
+    "id": "window",
+    "texts": [
+      "強い風で窓枠が揺れている。",
+      "ガタガタ"
+    ],
+    "kinds": [
+      "caption",
+      "soundEffect"
+    ],
+    "reviewedTexts": [
+      "검수 완료: 주변 문구",
+      "기존 효과음"
+    ],
+    "selectedIndices": [
+      1
+    ],
+    "reviewPoints": [
+      "선택하지 않은 주변 문구와 영역 정보를 보존한다.",
+      "바람에 흔들리는 창틀의 소리다. 몸의 떨림이나 엔진 소리와 구분한다."
+    ]
+  },
+  {
+    "id": "fear",
+    "texts": [
+      "恐ろしくて膝が震えている。",
+      "ガタガタ"
+    ],
+    "kinds": [
+      "caption",
+      "soundEffect"
+    ],
+    "reviewedTexts": [
+      "검수 완료: 주변 문구",
+      "기존 효과음"
+    ],
+    "selectedIndices": [
+      1
+    ],
+    "reviewPoints": [
+      "선택하지 않은 주변 문구와 영역 정보를 보존한다.",
+      "공포로 무릎이 떨리는 장면이다. 덜덜 계열이며 기계 소리와 구분한다."
+    ]
+  },
+  {
+    "id": "teeth-specific",
+    "texts": [
+      "寒い朝、上下の歯が何度もぶつかり合った。",
+      "ガタガタ"
+    ],
+    "kinds": [
+      "caption",
+      "soundEffect"
+    ],
+    "reviewedTexts": [
+      "검수 완료: 주변 문구",
+      "기존 효과음"
+    ],
+    "selectedIndices": [
+      1
+    ],
+    "reviewPoints": [
+      "선택하지 않은 주변 문구와 영역 정보를 보존한다.",
+      "추워서 위아래 이가 부딪히는 소리다. 엔진이 부르릉거리는 것으로 바꾸지 않는다."
+    ]
+  },
+  {
+    "id": "negated-teeth",
+    "texts": [
+      "歯の音じゃない。古い荷車が石畳を走っている。",
+      "ガタガタ"
+    ],
+    "kinds": [
+      "caption",
+      "soundEffect"
+    ],
+    "reviewedTexts": [
+      "검수 완료: 주변 문구",
+      "기존 효과음"
+    ],
+    "selectedIndices": [
+      1
+    ],
+    "reviewPoints": [
+      "선택하지 않은 주변 문구와 영역 정보를 보존한다.",
+      "이의 소리가 아니라고 명시한다. 돌길을 달리는 수레가 내는 소리를 표현한다."
+    ]
+  },
+  {
+    "id": "not-drumming",
+    "texts": [
+      "太鼓はまだ鳴っていない。誰かが扉を強くたたいている。",
+      "ドンドン"
+    ],
+    "kinds": [
+      "caption",
+      "soundEffect"
+    ],
+    "reviewedTexts": [
+      "검수 완료: 주변 문구",
+      "기존 효과음"
+    ],
+    "selectedIndices": [
+      1
+    ],
+    "reviewPoints": [
+      "선택하지 않은 주변 문구와 영역 정보를 보존한다.",
+      "북은 아직 울리지 않는다. 누군가 문을 세게 두드리는 쿵쿵 계열로 해석한다."
+    ]
+  },
+  {
+    "id": "unknown-don",
+    "texts": [
+      "向こうから音が聞こえる。",
+      "ドンドン"
+    ],
+    "kinds": [
+      "caption",
+      "soundEffect"
+    ],
+    "reviewedTexts": [
+      "검수 완료: 주변 문구",
+      "기존 효과음"
+    ],
+    "selectedIndices": [
+      1
+    ],
+    "reviewPoints": [
+      "선택하지 않은 주변 문구와 영역 정보를 보존한다.",
+      "소리의 방향만 있고 발생 원인이 없다. 문이나 북 같은 원인을 새로 만들어 넣지 않는다."
+    ]
+  },
+  {
+    "id": "new-leaves",
+    "texts": [
+      "木から乾いた葉が少しずつ落ちてきた。",
+      "パラパラ"
+    ],
+    "kinds": [
+      "caption",
+      "soundEffect"
+    ],
+    "reviewedTexts": [
+      "검수 완료: 주변 문구",
+      "기존 효과음"
+    ],
+    "selectedIndices": [
+      1
+    ],
+    "reviewPoints": [
+      "선택하지 않은 주변 문구와 영역 정보를 보존한다.",
+      "마른 잎이 조금씩 떨어지는 동작이다. 비나 책장 넘김으로 단정하지 않는다."
+    ]
+  },
+  {
+    "id": "scattered-seeds",
+    "texts": [
+      "畑に小さな種をまいている。",
+      "パラパラ"
+    ],
+    "kinds": [
+      "caption",
+      "soundEffect"
+    ],
+    "reviewedTexts": [
+      "검수 완료: 주변 문구",
+      "기존 효과음"
+    ],
+    "selectedIndices": [
+      1
+    ],
+    "reviewPoints": [
+      "선택하지 않은 주변 문구와 영역 정보를 보존한다.",
+      "밭에 작은 씨앗을 뿌리는 동작이다. 빗소리나 책장 넘김으로 단정하지 않는다."
+    ]
+  },
+  {
+    "id": "metal",
+    "texts": [
+      "大きな金属の鐘を一度強くたたいた。",
+      "ガーン"
+    ],
+    "kinds": [
+      "caption",
+      "soundEffect"
+    ],
+    "reviewedTexts": [
+      "검수 완료: 주변 문구",
+      "기존 효과음"
+    ],
+    "selectedIndices": [
+      1
+    ],
+    "reviewPoints": [
+      "선택하지 않은 주변 문구와 영역 정보를 보존한다.",
+      "금속 종을 세게 한 번 친 소리다. 심리적 충격과 구분하고 반복음을 임의로 추가하지 않는다."
+    ]
+  },
+  {
+    "id": "shock-negated",
+    "texts": [
+      "金属の音ではない。落選の知らせに頭が真っ白になった。",
+      "ガーン"
+    ],
+    "kinds": [
+      "caption",
+      "soundEffect"
+    ],
+    "reviewedTexts": [
+      "검수 완료: 주변 문구",
+      "기존 효과음"
+    ],
+    "selectedIndices": [
+      1
+    ],
+    "reviewPoints": [
+      "선택하지 않은 주변 문구와 영역 정보를 보존한다.",
+      "금속 소리가 아니라 낙선 소식에 받은 심리적 충격이다. 실제 금속 충돌로 바꾸지 않는다."
+    ]
+  }
+]

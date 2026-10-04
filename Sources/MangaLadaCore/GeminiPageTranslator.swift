@@ -3,9 +3,11 @@ import Foundation
 public struct GeminiPageTranslator: MangaPageTranslating {
     private let configuration: GeminiConfiguration
     private let session: URLSession
-    public init(configuration: GeminiConfiguration, session: URLSession = .shared) {
+    private let selectedIDs: Set<UUID>?
+    public init(configuration: GeminiConfiguration, session: URLSession = .shared, selectedIDs: Set<UUID>? = nil) {
         self.configuration = configuration
         self.session = session
+        self.selectedIDs = selectedIDs
     }
 
     public func translatePage(_ blocks: [TextBlock], previousContext: String = "") async throws -> [TextBlock] {
@@ -32,7 +34,7 @@ public struct GeminiPageTranslator: MangaPageTranslating {
         let response = try JSONDecoder().decode(Response.self, from: data)
         guard let content = response.candidates.first?.content else { throw TranslationError.missingTranslatedText }
         let text = content.parts.map(\.text).joined()
-        return try MangaPageResponse.decode(ModelJSON.data(from: text), blocks: blocks)
+        return try MangaPageResponse.decode(ModelJSON.data(from: text), blocks: blocks, selectedIDs: selectedIDs)
     }
 
     private struct Part: Codable { let text: String }

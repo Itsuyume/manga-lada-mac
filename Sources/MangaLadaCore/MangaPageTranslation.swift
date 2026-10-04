@@ -25,7 +25,10 @@ public enum MangaReadingOrder {
 }
 
 public enum MangaPageResponse {
-    public static func decode(_ data: Data, blocks: [TextBlock]) throws -> [TextBlock] {
+    public static func decode(_ data: Data, blocks: [TextBlock], selectedIDs: Set<UUID>? = nil) throws -> [TextBlock] {
+        if let selectedIDs, !selectedIDs.isSubset(of: Set(blocks.map(\.id))) {
+            throw TranslationError.invalidPageResponse("선택한 영역이 현재 페이지에 없습니다.")
+        }
         let response: PageResponse
         do { response = try JSONDecoder().decode(PageResponse.self, from: data) }
         catch DecodingError.keyNotFound(let key, let context) {
@@ -46,6 +49,8 @@ public enum MangaPageResponse {
         let entries = Dictionary(uniqueKeysWithValues: response.translations.map { ($0.id, $0) })
         let lexicon = try JapaneseSoundEffectLexicon.bundled()
         return try blocks.enumerated().map { index, block in
+            // Context output is discarded. Its language cannot invalidate an unrelated selection.
+            if let selectedIDs, !selectedIDs.contains(block.id) { return block }
             guard let entry = entries[index] else {
                 throw TranslationError.invalidPageResponse("영역 \(index) 누락")
             }

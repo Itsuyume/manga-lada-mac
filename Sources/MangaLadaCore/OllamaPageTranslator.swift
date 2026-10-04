@@ -4,19 +4,22 @@ import Foundation
 public struct OllamaPageTranslator: MangaPageTranslating {
     private let configuration: OllamaConfiguration
     private let session: URLSession
-    public init(configuration: OllamaConfiguration = OllamaConfiguration(), session: URLSession = .shared) {
+    private let selectedIDs: Set<UUID>?
+    public init(configuration: OllamaConfiguration = OllamaConfiguration(), session: URLSession = .shared, selectedIDs: Set<UUID>? = nil) {
         self.configuration = configuration
         self.session = session
+        self.selectedIDs = selectedIDs
     }
 
     public func translatePage(_ blocks: [TextBlock], previousContext: String = "") async throws -> [TextBlock] {
         guard !blocks.isEmpty else { return [] }
         if configuration.isTranslationSpecialist {
-            return try await TranslateGemmaPageTranslator(configuration: configuration, session: session).translatePage(blocks, previousContext: previousContext)
+            return try await TranslateGemmaPageTranslator(configuration: configuration, session: session, selectedIDs: selectedIDs)
+                .translatePage(blocks, previousContext: previousContext)
         }
         return try await OllamaChatClient(configuration: configuration, session: session).validated(
             system: MangaTranslationPrompt.system, user: MangaTranslationPrompt.user(blocks: blocks, previousContext: previousContext),
-            schema: .page(count: blocks.count), outputTokens: blocks.count * 160) { try MangaPageResponse.decode($0, blocks: blocks) }
+            schema: .page(count: blocks.count), outputTokens: blocks.count * 160) { try MangaPageResponse.decode($0, blocks: blocks, selectedIDs: selectedIDs) }
     }
 }
 

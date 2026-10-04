@@ -3,8 +3,9 @@ import Foundation
 public struct TranslateGemmaPageTranslator: MangaPageTranslating {
     private let configuration: OllamaConfiguration
     private let session: URLSession
-    public init(configuration: OllamaConfiguration = OllamaConfiguration(), session: URLSession = .shared) {
-        self.configuration = configuration; self.session = session
+    private let selectedIDs: Set<UUID>?
+    public init(configuration: OllamaConfiguration = OllamaConfiguration(), session: URLSession = .shared, selectedIDs: Set<UUID>? = nil) {
+        self.configuration = configuration; self.session = session; self.selectedIDs = selectedIDs
     }
     public func translatePage(_ blocks: [TextBlock], previousContext: String = "") async throws -> [TextBlock] {
         guard !blocks.isEmpty else { return [] }
@@ -21,7 +22,7 @@ public struct TranslateGemmaPageTranslator: MangaPageTranslating {
         for attempt in 0..<2 {
             try Task.checkCancellation()
             let response = try await client.text(user: instruction, outputTokens: blocks.count * 100)
-            do { return try MangaNumberedPageResponse.decode(response, blocks: blocks) }
+            do { return try MangaNumberedPageResponse.decode(response, blocks: blocks, selectedIDs: selectedIDs) }
             catch TranslationError.invalidPageResponse(let detail) {
                 guard attempt == 0 else { throw TranslationError.invalidPageResponse(detail) }
                 instruction = """
@@ -37,7 +38,7 @@ public struct TranslateGemmaPageTranslator: MangaPageTranslating {
 }
 
 public enum MangaNumberedPageResponse {
-    public static func decode(_ text: String, blocks: [TextBlock]) throws -> [TextBlock] {
+    public static func decode(_ text: String, blocks: [TextBlock], selectedIDs: Set<UUID>? = nil) throws -> [TextBlock] {
         let expression = try NSRegularExpression(pattern: #"\[R(\d+)\]\s*([\s\S]*?)(?=\[R\d+\]|\z)"#)
         let range = NSRange(text.startIndex..<text.endIndex, in: text)
         let matches = expression.matches(in: text, range: range)
@@ -51,7 +52,7 @@ public enum MangaNumberedPageResponse {
             }
             return Entry(id: id, text: String(text[textRange]), kind: blocks[id].textKind ?? .dialogue)
         }
-        return try MangaPageResponse.decode(JSONEncoder().encode(Response(translations: entries)), blocks: blocks)
+        return try MangaPageResponse.decode(JSONEncoder().encode(Response(translations: entries)), blocks: blocks, selectedIDs: selectedIDs)
     }
     private struct Entry: Encodable { let id: Int; let text: String; let kind: MangaTextKind }
     private struct Response: Encodable { let translations: [Entry] }

@@ -7,6 +7,8 @@ enum NetworkBoundaryChecks {
         let session = URLSession(configuration: configuration)
         defer { session.invalidateAndCancel() }
         try await checkSelections(session: session)
+        try await checkUnselectedLanguageErrors(session: session)
+        try await checkMultipleSelectedRegions(session: session)
         let blocks = [TextBlock(box: TextBox(x: 0.2, y: 0.3, width: 0.2, height: 0.3), originalText: "ありがとう")]
         let page = #"{"translations":[{"id":0,"text":"고마워","kind":"dialogue"}]}"#
         FixtureProtocol.state.install { request in
@@ -149,6 +151,58 @@ enum NetworkBoundaryChecks {
         }
         let google = try await pipeline.translateSelected([blocks[0].id], in: blocks, configuration: LocalTranslatorConfiguration(provider: .googleWeb))
         try check(google == expected && FixtureProtocol.state.count == 1, "Independent text selection changed other regions or sent excess requests.")
+    }
+    private static func checkUnselectedLanguageErrors(session: URLSession) async throws {
+        let pipeline = TranslationPipeline(sourceLanguage: .japanese, targetLanguage: .korean, session: session)
+        let effect = TextBlock(box: TextBox(x: 0.2, y: 0.6, width: 0.3, height: 0.2), originalText: "ドンドン",
+                               translatedText: "기존 효과음", textKind: .soundEffect, effectStyleID: "impact")
+        let caption = TextBlock(box: TextBox(x: 0.1, y: 0.1, width: 0.8, height: 0.2), originalText: "誰かが扉をたたいている。",
+                                translatedText: "검수 완료: 문을 두드린다.", textKind: .caption)
+        let blocks = [effect, caption]
+        let configurations = [LocalTranslatorConfiguration(),
+                              LocalTranslatorConfiguration(ollama: OllamaConfiguration(model: "qwen3.5:9b")),
+                              LocalTranslatorConfiguration(provider: .geminiFlashLite, gemini: GeminiConfiguration(apiKey: "fixture-key"))]
+        var expected = blocks; expected[0].translatedText = "쿵쿵"
+        for invalidText in ["日本語のまま", "문扉", ""] {
+            for configuration in configurations {
+                FixtureProtocol.state.install { request in
+                    try check(String(decoding: Self.body(request), as: UTF8.self).contains(caption.originalText), "Selection lost the original page context.")
+                    let page = #"{"translations":[{"id":0,"text":"\#(invalidText)","kind":"caption"},{"id":1,"text":"쿵쿵","kind":"soundEffect"}]}"#
+                    if configuration.provider == .geminiFlashLite {
+                        return (200, try JSONEncoder().encode(GeminiReply(candidates: [.init(content: .init(parts: [.init(text: page)]))])))
+                    }
+                    let content = configuration.ollama.isTranslationSpecialist ? "[R0] \(invalidText)\n[R1] 쿵쿵" : page
+                    return (200, try JSONEncoder().encode(ChatReply(message: Message(role: "assistant", content: content))))
+                }
+                let selected = try await pipeline.translateSelected([effect.id], in: blocks, configuration: configuration)
+                try check(selected == expected && FixtureProtocol.state.count == 1,
+                          "An unused context translation blocked the selected result, caused a retry, or changed the reviewed caption.")
+                do {
+                    _ = try await pipeline.translateSelected([caption.id], in: blocks, configuration: configuration)
+                    throw BoundaryCheckError.failed("Invalid text was accepted when its region was selected.")
+                } catch TranslationError.invalidPageResponse { }
+                do {
+                    _ = try await pipeline.translate(blocks, configuration: configuration)
+                    throw BoundaryCheckError.failed("Full-page translation skipped a required language check.")
+                } catch TranslationError.invalidPageResponse { }
+                try check(blocks == [effect, caption], "Rejected translation mutated the input page.")
+            }
+        }
+        print("Selected language validation passed: unused Japanese/Chinese/empty output ignored, selected and full-page errors rejected, reviewed text preserved")
+    }
+    private static func checkMultipleSelectedRegions(session: URLSession) async throws {
+        let caption = TextBlock(box: TextBox(x: 0.1, y: 0.1, width: 0.8, height: 0.1), originalText: "雨が降っている。",
+                                translatedText: "직접 검수한 비 설명", textKind: .caption)
+        let first = TextBlock(box: TextBox(x: 0.6, y: 0.5, width: 0.2, height: 0.1), originalText: "ザアア", textKind: .soundEffect)
+        let second = TextBlock(box: TextBox(x: 0.2, y: 0.7, width: 0.2, height: 0.1), originalText: "カチッ", textKind: .soundEffect)
+        let blocks = [second, caption, first]
+        FixtureProtocol.state.install { _ in
+            (200, try JSONEncoder().encode(ChatReply(message: Message(role: "assistant", content: "[R0] 日本語\n[R1] 쏴아아\n[R2] 딸깍"))))
+        }
+        let pipeline = TranslationPipeline(sourceLanguage: .japanese, targetLanguage: .korean, session: session)
+        let result = try await pipeline.translateSelected([first.id, second.id], in: blocks, configuration: LocalTranslatorConfiguration())
+        var expected = blocks; expected[0].translatedText = "딸깍"; expected[2].translatedText = "쏴아아"
+        try check(result == expected && FixtureProtocol.state.count == 1, "Multiple selected IDs lost their reading-order mapping or preserved caption.")
     }
     private static func checkGemma(_ blocks: [TextBlock], session: URLSession) async throws {
         FixtureProtocol.state.install { request in

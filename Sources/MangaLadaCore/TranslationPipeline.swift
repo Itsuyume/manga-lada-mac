@@ -43,7 +43,12 @@ public struct TranslationPipeline: Sendable {
         guard !selectedIDs.isEmpty else { return blocks }
         // Google translates independent strings; sending surrounding blocks there adds no context.
         let input = configuration.provider == .googleWeb ? blocks.filter { selectedIDs.contains($0.id) } : blocks
-        let translated = try await translate(input, configuration: configuration, previousContext: previousContext)
+        let translated: [TextBlock]
+        if configuration.provider == .googleWeb {
+            translated = try await translate(input, configuration: configuration, previousContext: previousContext)
+        } else {
+            translated = try await translatePage(input, configuration: configuration, previousContext: previousContext, selectedIDs: selectedIDs)
+        }
         try Task.checkCancellation()
         var result = blocks
         for index in result.indices where selectedIDs.contains(result[index].id) {
@@ -63,14 +68,7 @@ public struct TranslationPipeline: Sendable {
     ) async throws -> [TextBlock] {
         guard !blocks.isEmpty else { return [] }
         if injectedTranslator == nil, configuration.provider != .googleWeb {
-            let ordered = MangaReadingOrder.sorted(blocks)
-            await progress?(TranslationProgress(provider: configuration.provider, completed: 0, total: ordered.count))
-            let translator: any MangaPageTranslating = configuration.provider == .ollama
-                ? OllamaPageTranslator(configuration: configuration.ollama, session: session)
-                : GeminiPageTranslator(configuration: configuration.gemini, session: session)
-            let translated = try await translator.translatePage(ordered, previousContext: previousContext)
-            await progress?(TranslationProgress(provider: configuration.provider, completed: ordered.count, total: ordered.count))
-            return translated
+            return try await translatePage(blocks, configuration: configuration, previousContext: previousContext, selectedIDs: nil)
         }
         let translator = injectedTranslator ?? TranslatorFactory.makeTranslator(
             configuration: configuration, session: session
@@ -89,6 +87,19 @@ public struct TranslationPipeline: Sendable {
             )
             return translatedBlock
         }
+    }
+
+    private func translatePage(_ blocks: [TextBlock], configuration: LocalTranslatorConfiguration,
+                               previousContext: String, selectedIDs: Set<UUID>?) async throws -> [TextBlock] {
+        let ordered = MangaReadingOrder.sorted(blocks)
+        let count = selectedIDs?.count ?? ordered.count
+        await progress?(TranslationProgress(provider: configuration.provider, completed: 0, total: count))
+        let translator: any MangaPageTranslating = configuration.provider == .ollama
+            ? OllamaPageTranslator(configuration: configuration.ollama, session: session, selectedIDs: selectedIDs)
+            : GeminiPageTranslator(configuration: configuration.gemini, session: session, selectedIDs: selectedIDs)
+        let translated = try await translator.translatePage(ordered, previousContext: previousContext)
+        await progress?(TranslationProgress(provider: configuration.provider, completed: count, total: count))
+        return translated
     }
 
     private func translateTexts(
