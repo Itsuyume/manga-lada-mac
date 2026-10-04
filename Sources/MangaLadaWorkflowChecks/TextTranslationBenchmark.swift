@@ -39,12 +39,14 @@ enum TextTranslationBenchmark {
             let translated: [TextBlock]
             if let indices = test.selectedIndices {
                 let ids = Set(indices.map { blocks[$0].id })
-                translated = try await pipeline.translateSelected(ids, in: blocks, configuration: configuration, previousContext: test.previousContext ?? "")
+                translated = try await pipeline.translateSelected(ids, in: blocks, configuration: configuration,
+                    previousContext: test.previousContext ?? "", refreshMaskedContext: test.refreshMaskedContext ?? false)
                 guard blocks.filter({ !ids.contains($0.id) }).allSatisfy({ translated.contains($0) }) else {
                     throw BenchmarkError.unselectedTextChanged
                 }
             } else {
-                translated = try await pipeline.translate(blocks, configuration: configuration, previousContext: test.previousContext ?? "")
+                translated = try await pipeline.translate(blocks, configuration: configuration,
+                    previousContext: test.previousContext ?? "", refreshMaskedContext: test.refreshMaskedContext ?? false)
             }
             guard translated.count == blocks.count, Set(translated.map(\.id)) == Set(blocks.map(\.id)) else {
                 throw BenchmarkError.regionIdentityChanged
@@ -67,6 +69,7 @@ enum TextTranslationBenchmark {
         let kinds: [MangaTextKind]?
         let reviewedTexts: [String]?
         let selectedIndices: [Int]?
+        let refreshMaskedContext: Bool?
 
         var isValid: Bool {
             guard !id.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, !texts.isEmpty,

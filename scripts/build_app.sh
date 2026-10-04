@@ -19,6 +19,8 @@ bundle_app() {
       ditto "$resource" "$app_dir/Contents/Resources/$(basename "$resource")"
     fi
   done
+  # Runtime bytecode from prior local checks is not an application resource.
+  find "$app_dir/Contents/Resources" -type d -name '__pycache__' -prune -exec rm -rf {} +
   swift "$ROOT_DIR/scripts/make_icon.swift" "$app_dir/Contents/Resources/AppIcon.icns" "$icon_variant"
   cat > "$app_dir/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
@@ -44,8 +46,8 @@ bundle_app() {
     </dict>
   </array>
   <key>CFBundlePackageType</key><string>APPL</string>
-  <key>CFBundleShortVersionString</key><string>0.2.26</string>
-  <key>CFBundleVersion</key><string>30</string>
+  <key>CFBundleShortVersionString</key><string>0.2.27</string>
+  <key>CFBundleVersion</key><string>33</string>
   <key>LSMinimumSystemVersion</key><string>14.0</string>
   <key>NSHighResolutionCapable</key><true/>
   <key>NSSupportsAutomaticGraphicsSwitching</key><true/>

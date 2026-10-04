@@ -2,6 +2,7 @@ import Foundation
 
 /// Local hypotheses are cached by the exact request context, never promoted to a global glossary.
 public actor MaskedContextResolver {
+    struct Interpretation: Sendable { let text: String; let wasCached: Bool }
     private struct Entry: Codable {
         let key: String
         let resolution: MaskedContextResolution
@@ -15,14 +16,17 @@ public actor MaskedContextResolver {
 
     public init(directory: URL) { fileURL = directory.appendingPathComponent("masked-context-v1.json") }
 
-    func interpret(source: String, context: String, configuration: OllamaConfiguration, session: URLSession) async throws -> String {
+    func interpret(source: String, context: String, configuration: OllamaConfiguration, session: URLSession,
+                   refresh: Bool = false) async throws -> Interpretation {
         try Task.checkCancellation()
         let request = RequestContext(version: 1, model: configuration.model, source: source, context: String(context.prefix(2_000)))
         let encoder = JSONEncoder(); encoder.outputFormatting = [.sortedKeys]
         let data = try encoder.encode(request)
         let key = ImageFingerprint().make(for: data)
         try load()
-        if let cached = entries?[key] { return try cached.resolution.applying(to: source) }
+        if !refresh, let cached = entries?[key] {
+            return try Interpretation(text: cached.resolution.applying(to: source), wasCached: true)
+        }
         let resolution = try await OllamaChatClient(configuration: configuration, session: session).validated(
             system: MaskedContextResolution.instruction, user: String(decoding: data, as: UTF8.self),
             schema: MaskedContextResolution.schema, outputTokens: 512) {
@@ -30,7 +34,7 @@ public actor MaskedContextResolver {
             }
         try Task.checkCancellation()
         try save(Entry(key: key, resolution: resolution, created: Date()))
-        return try resolution.applying(to: source)
+        return try Interpretation(text: resolution.applying(to: source), wasCached: false)
     }
 
     private func load() throws {

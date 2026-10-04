@@ -101,7 +101,8 @@ public final class MangaPageProcessor {
             await status("\(configuration.provider.displayName) · 페이지 문맥 번역 중")
             let reviewed = Dictionary(uniqueKeysWithValues: (migrated ?? []).filter { !$0.translatedText.isEmpty }.map { ($0.id, $0) })
             do {
-                let translated = try await textTranslator.translate(baseline.blocks, configuration: configuration, previousContext: previousContext)
+                let translated = try await textTranslator.translate(baseline.blocks, configuration: configuration,
+                    previousContext: previousContext, refreshMaskedContext: force)
                 blocks = translated.map { reviewed[$0.id] ?? $0 }
             } catch {
                 if error is CancellationError || Task.isCancelled { throw CancellationError() }

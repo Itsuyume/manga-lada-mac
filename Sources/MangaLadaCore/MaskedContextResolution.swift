@@ -4,7 +4,12 @@ import Foundation
 public struct MaskedTextInterpretation: Codable, Equatable, Sendable {
     public let japanese: String?
     public let message: String
-    public init(japanese: String?, message: String) { self.japanese = japanese; self.message = message }
+    public let translationModel: String?
+    public let usedCachedInterpretation: Bool?
+    public init(japanese: String?, message: String, translationModel: String? = nil, usedCachedInterpretation: Bool? = nil) {
+        self.japanese = japanese; self.message = message
+        self.translationModel = translationModel; self.usedCachedInterpretation = usedCachedInterpretation
+    }
 }
 
 struct MaskedContextResolution: Codable, Equatable, Sendable {
@@ -18,9 +23,7 @@ struct MaskedContextResolution: Codable, Equatable, Sendable {
 
     static func needsInterpretation(_ source: String) -> Bool {
         let unresolved = MaskedTextTranslation.modelText(source)
-        let embedded = japanese + "[○◯〇]+" + japanese
-        return MaskedTextTranslation.hasUnresolvedCircles(unresolved)
-            && unresolved.range(of: embedded, options: .regularExpression) != nil
+        return MaskedTextTranslation.requiresContextTranslation(unresolved)
     }
 
     static func decode(_ data: Data, source: String) throws -> Self {

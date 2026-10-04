@@ -23,25 +23,38 @@ extension AppState {
     }
     func retranslateBlock(in translation: PageTranslation, at blockIndex: Int) {
         guard translation.blocks.indices.contains(blockIndex) else { return }
-        retranslateBlocks([translation.blocks[blockIndex].id], in: translation)
+        let block = translation.blocks[blockIndex]
+        retranslateBlocks([block.id], in: translation, interpretMasks: MaskedTextTranslation.requiresContextTranslation(block.originalText))
+    }
+    func retranslateMaskedWords() {
+        guard let translation = currentReview else { return }
+        retranslateBlocks(translation.maskedTextReviewIDs, in: translation, interpretMasks: true)
     }
     func translatePendingWords() {
         guard pendingPages[currentIndex] != nil, let translation = currentReview else { return }
         retranslateBlocks(translation.untranslatedBlockIDs, in: translation)
     }
-    private func retranslateBlocks(_ selectedIDs: Set<UUID>, in translation: PageTranslation) {
+    private func retranslateBlocks(_ selectedIDs: Set<UUID>, in translation: PageTranslation, interpretMasks: Bool = false) {
         guard !isBusy, !isLoading, !selectedIDs.isEmpty, let baseline = currentReviewBaseline else { return }
         guard reviewErrors[currentIndex] == nil else { _ = requireAppliedReviews(at: [currentIndex]); return }
         let page = currentIndex, id = sessionID
+        var requestConfiguration = configuration
+        if interpretMasks { requestConfiguration.interpretMaskedText = true }
+        let configuration = requestConfiguration
+        let onlyMasked = configuration.interpretMaskedText && translation.blocks.filter { selectedIDs.contains($0.id) }
+            .allSatisfy { MaskedTextTranslation.requiresContextTranslation($0.originalText) }
         isBusy = true
         job = Task { [self] in
             defer { if sessionID == id { isBusy = false; job = nil } }
             do {
-                if configuration.provider == .ollama { try await runtime.ensureReady(model: configuration.ollama.model) }
-                statusMessage = "페이지 문맥을 참고해 선택한 문구를 다시 번역하는 중…"
+                if onlyMasked || configuration.provider == .ollama {
+                    try await runtime.ensureReady(model: onlyMasked ? OllamaConfiguration.visionModel : configuration.ollama.model)
+                }
+                statusMessage = onlyMasked ? "이전 해석 캐시를 건너뛰고 Qwen으로 선택 문구를 판단하는 중…"
+                    : "페이지 문맥을 참고해 선택한 문구를 다시 번역하는 중…"
                 var updated = translation
                 updated.blocks = try await processor.textTranslator.translateSelected(
-                    selectedIDs, in: translation.blocks, configuration: configuration)
+                    selectedIDs, in: translation.blocks, configuration: configuration, refreshMaskedContext: true)
                 try Task.checkCancellation()
                 guard sessionID == id else { return }
                 try saveReview(updated, comparedTo: baseline, at: page)

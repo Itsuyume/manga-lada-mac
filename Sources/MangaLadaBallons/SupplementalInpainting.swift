@@ -29,7 +29,7 @@ extension BallonsTranslatorEngine {
         process.arguments = [script.path, sourceRootURL.path, cleanImageURL.path, regionsURL.path]
         process.currentDirectoryURL = sourceRootURL
         process.environment = ProcessInfo.processInfo.environment.merging([
-            "QT_QPA_PLATFORM": "offscreen", "PYTHONUNBUFFERED": "1"
+            "QT_QPA_PLATFORM": "offscreen", "PYTHONUNBUFFERED": "1", "PYTHONDONTWRITEBYTECODE": "1"
         ]) { _, value in value }
         process.standardInput = FileHandle.nullDevice
         process.standardOutput = log

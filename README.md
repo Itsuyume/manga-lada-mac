@@ -27,6 +27,8 @@
 
 0.2.26은 번역 뒤 문장 끝에 남던 일본어 마침표 `。`를 보완합니다. 원본에서 확인한 말풍선 안의 작은 원형 글자만 후보로 삼고, 기존 만화 OCR이 같은 문장에 마침표가 추가됐다고 확인할 때만 그 글자 획을 제거합니다. 수동 영역·수정한 원문·서로 겹친 문구·기울어진 문장·여러 줄·그림과 붙은 원형은 자동 보완하지 않습니다. 별도 모델이나 다운로드 없이 기존 OCR을 재사용합니다. 기존 완성 이미지는 자동으로 덮어쓰지 않으며, 같은 원본을 새로 열어 처리하면 이전 검수 문구와 영역을 이관하면서 새 제거 결과를 반영합니다. **현재 페이지 다시 번역**은 문구도 모델에 새로 요청하므로 검수 문구를 유지하려면 새로 열기를 사용하세요.
 
+0.2.27부터 **가림표 문맥 해석**을 켜면 일본어 단어 중간의 `○/◯/〇/O/Ｏ`가 있는 문구만 로컬 **Qwen 3.5 9B**로 번역합니다. 나머지는 설정한 기본 번역 모델을 사용합니다. 주변 원문은 Qwen의 참고 문맥으로 전달하며 번역 대상에는 넣지 않습니다. 일반 영문 O, 숫자 〇, 익명 이름 ○○는 별도로 처리합니다. 기존 번역 캐시는 검수 문구를 지키기 위해 유지하며, 오래된 가림표 번역에 **가림표 N개 Qwen 재번역**과 개별 **Qwen으로 이 문구 다시 번역**을 표시합니다. 이 버튼은 선택한 문구의 이전 문맥 해석 캐시도 건너뛰고 새로 판단합니다. 나머지 검수는 유지되며 **수정 적용**으로 이미지에 저장합니다. 해석 재사용 여부·미확정·실패는 검수창에 표시합니다. 원문 가림표와 좌표는 그대로 보존합니다. Python의 임시 bytecode가 앱 내부에 생겨 서명을 손상시키던 별도 원문 제거 경로도 수정했습니다.
+
 ## 파일 형식
 
 폴더(하위 폴더 포함), ZIP/CBZ, 7z/CB7, RAR/CBR, TAR 및 gzip/bzip2/xz 압축 TAR, PDF, PNG/JPEG/WebP/GIF/TIFF/BMP/HEIC/HEIF/AVIF를 가져옵니다. 0.2.22부터 파일 열기 창에서 이미지를 고르면 기본적으로 그 한 장만 바로 가져옵니다. **이미지의 앞뒤 페이지도 함께 열기**를 선택한 경우에만 이미지가 있는 폴더를 한 번 더 선택합니다. **이 폴더 열기**를 누르면 같은 폴더의 이미지를 자연스러운 숫자 순서로 읽고 고른 페이지에서 시작합니다. 긴 파일명이나 사진 앱의 임시 폴더명이 추가 선택창을 화면 밖까지 늘리지 않도록 안내문에 경로를 붙이지 않습니다. 파일 한 장에 대한 접근만으로 상위 폴더를 암묵적으로 읽지 않습니다. 폴더 선택을 취소하면 현재 책을 유지하며, 다른 폴더를 고르거나 선택한 이미지가 사라졌으면 오류를 표시합니다. **폴더 열기**는 한 번의 선택으로 책 전체를 읽습니다.
@@ -158,6 +160,8 @@ scripts/check_viewer_images.sh
 scripts/check_file_panel.sh
 scripts/check_translation_state.sh
 swift run MangaLadaBallonsChecks --session-lifetime
+# numpy·OpenCV가 설치된 Python과 빌드된 Ballons 리소스 폴더: 실제 복원 후 리소스 불변 검사
+swift run MangaLadaBallonsChecks --resource-integrity /path/to/python /path/to/built/resources
 swift run MangaLadaWorkflowChecks --cache-migration
 # 완성본 폴더를 실제 CBZ로 내보내고 모든 페이지 바이트·원본 보존 검사
 swift run MangaLadaImportChecks --export /path/to/completed-folder /path/to/output.cbz
@@ -188,6 +192,7 @@ swift run MangaLadaWorkflowChecks --text-benchmark fixtures/translation-effect-e
 swift run -c release MangaLadaWorkflowChecks --text-benchmark fixtures/translation-punctuation-ja-ko.json /path/to/new-punctuation-report.json --model=translategemma:12b
 swift run -c release MangaLadaWorkflowChecks --text-benchmark fixtures/translation-masked-names-ja-ko.json /path/to/new-masked-names-report.json --model=translategemma:12b
 swift run -c release MangaLadaWorkflowChecks --text-benchmark fixtures/translation-masked-context-ja-ko.json /path/to/new-context-report.json --masked-context
+swift run -c release MangaLadaWorkflowChecks --text-benchmark fixtures/translation-masked-routing-ja-ko.json /path/to/new-routing-report.json --masked-context
 ```
 
 선택 번역 비교 사례에는 문구별 `kinds`, 기존 검수 내용인 `reviewedTexts`, 0부터 시작하는 `selectedIndices`를 선택적으로 지정합니다. 문구 수·선택 번호를 검증하고 선택하지 않은 전체 영역 정보가 그대로인지 비교합니다. 같은 효과음을 단독 번역한 결과와 페이지 문맥으로 재번역한 결과가 나란히 저장됩니다. 속도에는 OCR·식자 시간이 포함되지 않습니다.

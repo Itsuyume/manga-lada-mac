@@ -8,6 +8,11 @@ struct MangaLadaBallonsChecks {
     @MainActor
     static func main() async {
         do {
+            if CommandLine.arguments.count == 4, CommandLine.arguments[1] == "--resource-integrity" {
+                try await SupplementalResourceChecks.run(python: URL(fileURLWithPath: CommandLine.arguments[2]),
+                    resources: URL(fileURLWithPath: CommandLine.arguments[3]))
+                return
+            }
             if CommandLine.arguments.dropFirst() == ["--session-lifetime"] {
                 try await SessionLifetimeChecks.run()
                 return

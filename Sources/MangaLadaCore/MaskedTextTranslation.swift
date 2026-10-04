@@ -1,11 +1,29 @@
 import Foundation
 
 /// Resolve catalogued names in context; preserve omissions that remain uncertain.
-enum MaskedTextTranslation {
+public enum MaskedTextTranslation {
     private static let circleCharacters = "○◯〇"
     private static let circles = Set(circleCharacters)
     private static let numerals = Set("0123456789０１２３４５６７８９零一二三四五六七八九十百千万億兆")
     private static let numberUnits = Set("年月日時分秒点円個人本回階歳才度頁")
+
+    /// Word-internal masks only: anonymous names, numeric zero and standalone Latin O are not guesses.
+    public static func requiresContextTranslation(_ source: String) -> Bool {
+        let normalized = normalizedSpelling(source)
+        let pattern = #"[\p{Hiragana}\p{Katakana}\p{Han}ー][○◯〇]+[\p{Hiragana}\p{Katakana}\p{Han}ー]"#
+        return hasUnresolvedCircles(normalized) && normalized.range(of: pattern, options: .regularExpression) != nil
+    }
+
+    public static func reviewMessage(for block: TextBlock) -> String? {
+        guard requiresContextTranslation(block.originalText), !block.translatedText.isEmpty else { return nil }
+        do { try validateKnownNames(block.translatedText, source: block.originalText) }
+        catch { return "가린 이름과 번역이 맞지 않습니다. Qwen으로 이 문구를 다시 확인하세요." }
+        if block.maskedTextInterpretation?.translationModel == OllamaConfiguration.visionModel {
+            return block.maskedTextInterpretation?.japanese == nil
+                ? "가린 단어의 뜻이 아직 확인되지 않았습니다. 원문·문맥을 확인하거나 다시 번역하세요." : nil
+        }
+        return "이전 번역 결과입니다. Qwen으로 이 문구만 다시 확인할 수 있습니다."
+    }
 
     static func instruction(for texts: [String]) -> String {
         let prepared = texts.map(resolution)

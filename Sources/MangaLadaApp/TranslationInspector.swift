@@ -22,6 +22,11 @@ struct TranslationInspector: View {
             }
             reviewNotice
             if let draft, !draft.blocks.isEmpty {
+                if !draft.maskedTextReviewIDs.isEmpty {
+                    Button("가림표 \(draft.maskedTextReviewIDs.count)개 Qwen 재번역", systemImage: "arrow.clockwise") {
+                        state.retranslateMaskedWords()
+                    }.disabled(editingDisabled).help("표시한 문구의 이전 해석 캐시를 건너뛰고 다시 판단합니다. 나머지 검수 문구는 유지됩니다.")
+                }
                 if isPending, !draft.untranslatedBlockIDs.isEmpty {
                     Button("빈 문구 \(draft.untranslatedBlockIDs.count)개 번역", systemImage: "character.bubble") {
                         state.translatePendingWords()
@@ -114,13 +119,19 @@ struct TranslationInspector: View {
             }
             TextField("일본어 원문", text: textBinding(block, \.originalText), axis: .vertical)
                 .font(.system(size: 11)).foregroundStyle(.secondary).disabled(editingDisabled)
+            if let message = MaskedTextTranslation.reviewMessage(for: block) {
+                Text(message).font(.system(size: 10)).foregroundStyle(.orange).fixedSize(horizontal: false, vertical: true)
+            }
             if let interpretation = block.maskedTextInterpretation {
                 VStack(alignment: .leading, spacing: 3) {
                     Text(interpretation.message).foregroundStyle(.orange)
                     if let japanese = interpretation.japanese { Text(japanese).foregroundStyle(.secondary) }
+                    if let reused = interpretation.usedCachedInterpretation {
+                        Text(reused ? "이전 문맥 해석 재사용" : "캐시 없이 새 문맥 판단").foregroundStyle(.secondary)
+                    }
                 }.font(.system(size: 10)).fixedSize(horizontal: false, vertical: true).textSelection(.enabled)
             }
-            Button("이 문구 다시 번역") {
+            Button(MaskedTextTranslation.requiresContextTranslation(block.originalText) ? "Qwen으로 이 문구 다시 번역" : "이 문구 다시 번역") {
                 if let draft, let index = draft.blocks.firstIndex(where: { $0.id == block.id }) {
                     state.retranslateBlock(in: draft, at: index)
                 }

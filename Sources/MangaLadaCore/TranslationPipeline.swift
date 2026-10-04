@@ -38,21 +38,15 @@ public struct TranslationPipeline: Sendable {
 
     /// Uses page context but replaces only selected text, retaining draft order and all metadata.
     public func translateSelected(_ selectedIDs: Set<UUID>, in blocks: [TextBlock],
-                                  configuration: LocalTranslatorConfiguration, previousContext: String = "") async throws -> [TextBlock] {
+                                  configuration: LocalTranslatorConfiguration, previousContext: String = "",
+                                  refreshMaskedContext: Bool = false) async throws -> [TextBlock] {
         try Task.checkCancellation()
         let ids = Set(blocks.map(\.id))
         guard ids.count == blocks.count else { throw TranslationSelectionError.duplicateRegions }
         guard selectedIDs.isSubset(of: ids) else { throw TranslationSelectionError.missingRegion }
         guard !selectedIDs.isEmpty else { return blocks }
-        // Google translates independent strings; sending surrounding blocks there adds no context.
-        let prepared = try await maskedPreparation.prepare(blocks, selectedIDs: selectedIDs, configuration: configuration, previousContext: previousContext)
-        let input = configuration.provider == .googleWeb ? prepared.filter { selectedIDs.contains($0.id) } : prepared
-        let translated: [TextBlock]
-        if configuration.provider == .googleWeb {
-            translated = try await translatePrepared(input, configuration: configuration, translator: nil, previousContext: previousContext)
-        } else {
-            translated = try await translatePage(input, configuration: configuration, previousContext: previousContext, selectedIDs: selectedIDs)
-        }
+        let translated = try await translateRequest(blocks, selectedIDs: selectedIDs, configuration: configuration,
+            translator: nil, previousContext: previousContext, refreshMaskedContext: refreshMaskedContext)
         try Task.checkCancellation()
         var result = blocks
         for index in result.indices where selectedIDs.contains(result[index].id) {
@@ -70,32 +64,80 @@ public struct TranslationPipeline: Sendable {
         _ blocks: [TextBlock],
         configuration: LocalTranslatorConfiguration,
         translator injectedTranslator: TextTranslating? = nil,
-        previousContext: String = ""
+        previousContext: String = "",
+        refreshMaskedContext: Bool = false
     ) async throws -> [TextBlock] {
         try Task.checkCancellation()
         guard !blocks.isEmpty else { return [] }
         guard Set(blocks.map(\.id)).count == blocks.count else { throw TranslationSelectionError.duplicateRegions }
-        let prepared = try await maskedPreparation.prepare(blocks, selectedIDs: nil, configuration: configuration, previousContext: previousContext)
-        let translated = try await translatePrepared(prepared, configuration: configuration, translator: injectedTranslator, previousContext: previousContext)
+        let translated = try await translateRequest(blocks, selectedIDs: nil, configuration: configuration,
+            translator: injectedTranslator, previousContext: previousContext, refreshMaskedContext: refreshMaskedContext)
         return try MaskedPagePreparation.restore(translated, originals: blocks)
     }
 
-    private func translatePrepared(_ blocks: [TextBlock], configuration: LocalTranslatorConfiguration,
-                                   translator injectedTranslator: TextTranslating?, previousContext: String) async throws -> [TextBlock] {
-        if injectedTranslator == nil, configuration.provider != .googleWeb {
-            return try await translatePage(blocks, configuration: configuration, previousContext: previousContext, selectedIDs: nil)
+    private func translateRequest(_ blocks: [TextBlock], selectedIDs: Set<UUID>?, configuration: LocalTranslatorConfiguration,
+                                  translator: TextTranslating?, previousContext: String, refreshMaskedContext: Bool) async throws -> [TextBlock] {
+        let requested = selectedIDs ?? Set(blocks.map(\.id))
+        let maskedIDs = Set(blocks.filter {
+            configuration.interpretMaskedText && requested.contains($0.id) && MaskedTextTranslation.requiresContextTranslation($0.originalText)
+        }.map(\.id))
+        let prepared = try await maskedPreparation.prepare(blocks, selectedIDs: selectedIDs, configuration: configuration,
+            previousContext: previousContext, refresh: refreshMaskedContext)
+        guard !maskedIDs.isEmpty, translator == nil else {
+            return try await translatePrepared(prepared, configuration: configuration, translator: translator,
+                                               previousContext: previousContext, selectedIDs: selectedIDs)
         }
+        let masked = prepared.filter { maskedIDs.contains($0.id) }
+        let ordinary = prepared.filter { !maskedIDs.contains($0.id) }
+        let ordinaryIDs = requested.subtracting(maskedIDs)
+        var translated: [TextBlock] = []
+        if !ordinaryIDs.isEmpty {
+            translated = try await translatePrepared(ordinary, configuration: configuration, translator: nil,
+                previousContext: Self.context(masked, previous: previousContext), selectedIDs: ordinaryIDs)
+        }
+        var qwen = configuration
+        qwen.provider = .ollama; qwen.ollama.model = OllamaConfiguration.visionModel
+        // Only masked targets receive numbered output slots; the rest is read-only context.
+        let contextual = try await translatePage(masked, configuration: qwen,
+            previousContext: Self.context(ordinary, previous: previousContext), selectedIDs: maskedIDs)
+        translated += contextual.map { block in
+            var updated = block
+            let interpretation = block.maskedTextInterpretation
+            let expanded = MaskedTextTranslation.modelText(block.originalText)
+            updated.maskedTextInterpretation = MaskedTextInterpretation(
+                japanese: interpretation?.japanese ?? (interpretation == nil && expanded != block.originalText
+                    && !MaskedTextTranslation.hasUnresolvedCircles(expanded) ? expanded : nil),
+                message: interpretation?.message ?? "사전으로 확인한 가림표 · Qwen 번역",
+                translationModel: qwen.ollama.model, usedCachedInterpretation: interpretation?.usedCachedInterpretation)
+            return updated
+        }
+        let updates = Dictionary(uniqueKeysWithValues: translated.map { ($0.id, $0) })
+        return prepared.map { updates[$0.id] ?? $0 }
+    }
+
+    private static func context(_ neighbors: [TextBlock], previous: String) -> String {
+        previous + "\nSame page, context only (do not translate):\n"
+            + MangaReadingOrder.sorted(neighbors).map(\.originalText).joined(separator: "\n")
+    }
+
+    private func translatePrepared(_ blocks: [TextBlock], configuration: LocalTranslatorConfiguration,
+                                   translator injectedTranslator: TextTranslating?, previousContext: String,
+                                   selectedIDs: Set<UUID>?) async throws -> [TextBlock] {
+        if injectedTranslator == nil, configuration.provider != .googleWeb {
+            return try await translatePage(blocks, configuration: configuration, previousContext: previousContext, selectedIDs: selectedIDs)
+        }
+        let input = blocks.filter { selectedIDs?.contains($0.id) != false }
         let translator = injectedTranslator ?? TranslatorFactory.makeTranslator(
             configuration: configuration, session: session
         )
         let translatedTexts = try await translateTexts(
-            blocks.map { MaskedTextTranslation.modelText($0.originalText) },
+            input.map { MaskedTextTranslation.modelText($0.originalText) },
             translator: translator,
             maxConcurrentRequests: configuration.maxConcurrentRequests
         )
         try Task.checkCancellation()
 
-        return try zip(blocks, translatedTexts).map { block, translatedText in
+        return try zip(input, translatedTexts).map { block, translatedText in
             var translatedBlock = block
             let refined = refiner.refine(
                 originalText: block.originalText,

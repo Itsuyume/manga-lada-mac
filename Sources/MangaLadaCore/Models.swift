@@ -84,6 +84,9 @@ public struct PageTranslation: Codable, Equatable, Sendable {
     public var untranslatedBlockIDs: Set<UUID> {
         Set(blocks.filter { $0.translatedText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }.map(\.id))
     }
+    public var maskedTextReviewIDs: Set<UUID> {
+        Set(blocks.filter { MaskedTextTranslation.reviewMessage(for: $0) != nil }.map(\.id))
+    }
 
     public init(
         imageURL: URL,

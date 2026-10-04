@@ -10,6 +10,7 @@ enum NetworkBoundaryChecks {
         try await checkSelections(session: session)
         try await checkUnselectedLanguageErrors(session: session)
         try await checkMaskedText(session: session)
+        try await checkMaskedRouting(session: session)
         try await checkMaskedContext(session: session)
         try await checkMultipleSelectedRegions(session: session)
         let blocks = [TextBlock(box: TextBox(x: 0.2, y: 0.3, width: 0.2, height: 0.3), originalText: "ありがとう")]
@@ -391,4 +392,7 @@ final class FixtureState: @unchecked Sendable {
         return try handler(request)
     }
 }
-enum BoundaryCheckError: Error { case failed(String) }
+enum BoundaryCheckError: LocalizedError {
+    case failed(String)
+    var errorDescription: String? { switch self { case .failed(let message): message } }
+}

@@ -27,10 +27,12 @@ jobs:
           python3 - <<'PY'
           from pathlib import Path
           import subprocess
+          import sys
           binary_directory = Path(subprocess.check_output(["swift", "build", "--show-bin-path"], text=True).strip())
           workers = list(binary_directory.rglob("japanese_engine_worker.py"))
           assert len(workers) == 1, "Expected one packaged OCR worker"
           subprocess.run(["python3", "scripts/check_sentence_punctuation.py", "--resources", str(workers[0].parent)], check=True)
+          subprocess.run([str(binary_directory / "MangaLadaBallonsChecks"), "--resource-integrity", sys.executable, str(workers[0].parent)], check=True)
           PY
       - run: swift run MangaLadaCoreChecks
       - run: swift run -c release MangaLadaCoreChecks

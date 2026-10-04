@@ -64,9 +64,13 @@ Python OCR 프로세스의 대기 종료는 Ballons의 `JapaneseEngineSession`�
 
 단색 배경 복원의 SSOT는 `flat_background.prepare_flat_backgrounds`입니다. 원본의 글자 마스크 범위와 그 둘레에서 충분한 수의 마스크 밖 픽셀이 균일할 때만 글자 마스크 안을 복원하고, 나머지 마스크만 LaMa에 보냅니다. 멀리 떨어진 말풍선 테두리를 배경 근거에 섞지 않고 마스크에 인접한 다른 색은 그대로 검사합니다. 원본·기존 작업 이미지·마스크는 수정하지 않고 새 결과와 남은 마스크를 반환합니다. 배경을 확인할 수 없는 질감·그라데이션은 단색으로 바꾸지 않습니다. 자동 인식과 수동 영역 제거가 같은 함수를 사용합니다.
 
+복자 대상 판단과 이전 결과 안내는 `MaskedTextTranslation.requiresContextTranslation/reviewMessage`가 공유합니다. `TranslationPipeline`은 복자가 있는 대상만 Qwen의 번호 있는 출력에 넣고 나머지는 문맥으로 전달합니다. 일반 문구는 기본 제공자에 남깁니다. 명시적 재번역은 `refreshMaskedContext`를 전달해 해당 해석 키만 다시 판단하며 다른 캐시를 삭제하지 않습니다. 새 해석 실패 때 예전 가설로 조용히 대체하지 않고 오류 안내·원래 가림표 검증을 유지합니다. `MaskedTextInterpretation.translationModel/usedCachedInterpretation`은 선택 필드로 이전 캐시와 호환되며 OCR 원문 변경 시 기존 불변식에 따라 해제됩니다. 기존 페이지 캐시는 수동 검수 여부를 확정할 수 없으므로 자동 덮어쓰지 않고 재확인 대상으로 표시합니다. 선택 재번역은 임시 검수만 저장하고 이미지 갱신은 수정 적용 경계를 따릅니다.
+
 ## 구현·오류 처리
 
 Strict Swift 6를 유지합니다. 강제 캐스팅·임의 Any 계약을 추가하지 않습니다. Foundation/AppKit의 필수 외부 계약은 해당 어댑터에서만 처리합니다. 모델 응답의 누락·중복·빈 번역·잘못된 좌표·HTTP 오류를 명시적으로 거부합니다. 번역/API 실패를 다른 제공자나 원문으로 조용히 대체하지 않습니다. 취소는 실패 페이지로 기록하지 않습니다.
+
+번들 Python을 실행하는 프로세스 경계는 `PYTHONDONTWRITEBYTECODE=1`을 명시합니다. 실행 중 앱 리소스 안에 `__pycache__`를 만들면 서명이 손상됩니다. 앱 조립 시 이전 로컬 검사에서 생긴 bytecode를 제외하며, `MangaLadaBallonsChecks --resource-integrity`는 실제 단색 복원·빈 입력·실패 경로를 실행하고 원본·그림·리소스 파일 목록과 바이트를 대조합니다.
 
 함수 본문 90줄, 파일 450줄, 복잡도 12, 함수 중첩 3단계 상한은 `.swiftlint.yml`이 관리합니다. 긴 UI나 처리 흐름은 책임별 파일로 나눕니다. 외부 리소스 정리와 사용자 취소 이외의 오류를 빈 catch/try?로 숨기지 않습니다.
 

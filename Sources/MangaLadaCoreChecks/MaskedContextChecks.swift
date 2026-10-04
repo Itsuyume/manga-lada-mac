@@ -23,7 +23,11 @@ extension NetworkBoundaryChecks {
         for translator in [pipeline, contextPipeline(directory, session: session)] {
             let before = FixtureProtocol.state.count
             let repeated = try await translator.translateSelected([block.id], in: [block, neighbor], configuration: configuration)
-            try check(repeated == first && FixtureProtocol.state.count == before + 1, "Identical context called Qwen again or changed output.")
+            var expected = first
+            expected[0].maskedTextInterpretation = MaskedTextInterpretation(japanese: first[0].maskedTextInterpretation?.japanese,
+                message: first[0].maskedTextInterpretation?.message ?? "", translationModel: OllamaConfiguration.visionModel,
+                usedCachedInterpretation: true)
+            try check(repeated == expected && FixtureProtocol.state.count == before + 1, "Identical context called Qwen interpretation again or changed output.")
         }
         try check(try Data(contentsOf: cache) == bytes, "A cache hit rewrote interpretation data.")
         var changed = neighbor; changed.originalText = "別の文脈です。"
@@ -79,8 +83,10 @@ extension NetworkBoundaryChecks {
             installContextResponse(terms: #"{"terms":[]}"#, translation: "[R0] " + target)
             let result = try await contextPipeline(root.appendingPathComponent("fast"), session: session)
                 .translate([contextBlock(source, y: 0.1)], configuration: configuration)
-            try check(FixtureProtocol.state.count == 1 && result[0].translatedText == target && result[0].maskedTextInterpretation == nil,
-                      "Known name, anonymous placeholder, numeric zero or Latin letter triggered Qwen.")
+            let expectedModel = MaskedTextTranslation.requiresContextTranslation(source) ? OllamaConfiguration.visionModel : nil
+            try check(FixtureProtocol.state.count == 1 && result[0].translatedText == target
+                      && result[0].maskedTextInterpretation?.translationModel == expectedModel,
+                      "Known name required interpretation, or a non-mask triggered Qwen.")
         }
         try check(!FileManager.default.fileExists(atPath: root.appendingPathComponent("fast").path), "Fast path wrote a context cache.")
     }
@@ -95,11 +101,25 @@ extension NetworkBoundaryChecks {
     }
     static func installContextResponse(terms: String, translation: String) {
         FixtureProtocol.state.install { request in
-            let probe = try JSONDecoder().decode(ContextProbe.self, from: body(request))
+            let payload = try body(request)
+            let probe = try JSONDecoder().decode(ContextProbe.self, from: payload)
+            let schema = try JSONDecoder().decode(MaskedRouteProbe.self, from: payload).format
             try check(request.url?.host == "127.0.0.1" && probe.keep_alive == "5m", "Inference left the Mac or changed retention.")
-            let content = probe.model == OllamaConfiguration.visionModel ? terms : translation
+            let content: String
+            if schema?.properties.terms != nil { content = terms }
+            else if let count = schema?.properties.translations?.maxItems {
+                content = try contextPageReply(translation, count: count)
+            } else { content = translation }
             return (200, try JSONEncoder().encode(ChatReply(message: Message(role: "assistant", content: content))))
         }
+    }
+    private static func contextPageReply(_ translation: String, count: Int) throws -> String {
+        struct Page: Encodable { let translations: [Entry] }
+        struct Entry: Encodable { let id: Int; let text: String; let kind = "dialogue" }
+        let texts = translation.components(separatedBy: "\n").prefix(count).map {
+            $0.replacingOccurrences(of: #"^\[R\d+\] "#, with: "", options: .regularExpression)
+        }
+        return String(decoding: try JSONEncoder().encode(Page(translations: texts.enumerated().map { Entry(id: $0.offset, text: $0.element) })), as: UTF8.self)
     }
     private struct ContextProbe: Decodable { let model: String; let keep_alive: String }
 }
