@@ -16,6 +16,8 @@
 
 새 함수·타입을 만들기 전에 기존 모듈을 검색하고 SSOT를 유지합니다. 숨은 re-export, 전역 초기화 순서 계약, 모듈 간 순환을 만들지 않습니다. 구조 검사는 `scripts/check_architecture.py`와 SwiftPM의 explicit import 검사로 강제합니다.
 
+ViewerUI의 이미지 디코딩은 `PageImageLoader`, 표시 수명은 `PageImageState`가 소유합니다. 페이지·썸네일은 화면에서 사라지면 이미지를 해제하고 페이지 비율만 보존합니다. LazyVStack의 상태 보관을 이미지 캐시로 사용하지 않습니다. 취소되거나 교체된 요청의 결과를 표시하지 않으며, 이미지 해제 후에도 행 높이를 유지합니다. `scripts/check_viewer_images.sh`는 같은 프로덕션 소스를 직접 컴파일하여 이미지 재로드·비율·실패·취소·원본 보존을 검사합니다.
+
 로컬 모델의 메모리 대기 시간은 `OllamaConfiguration.Retention`이 관리하며 번역·장식 글자·추가 효과음 요청에 명시적으로 전달합니다. 기본 5분, 선택 1/5/15분입니다. 설정 비교는 `LocalTranslatorConfiguration.requiresRetranslation`을 재사용하고 대기 시간만 바뀐 경우 완료 이미지·검수 임시본을 지우거나 재렌더링하지 않습니다. 설정은 다음 모델 요청부터 적용하며 서버 전역 설정이나 모델 파일을 변경하지 않습니다.
 
 본문 식자 규칙의 SSOT는 `DialogueTypesettingRules`입니다. 대사·나레이션은 가로쓰기와 가운데 정렬을 유지하며 말풍선별로 임의의 세로쓰기를 선택하지 않습니다. `BalloonShape`는 원본 픽셀 좌표를 정규화한 공용 윤곽 모델입니다. 줄 폭 계산·줄바꿈과 폰트 규칙은 Rendering에만 둡니다. 한 글자짜리 단어 조각과 테두리 밖 식자를 금지하며 표지 제목과 효과음만 별도 명시적 규칙을 사용합니다.

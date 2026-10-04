@@ -1,4 +1,3 @@
-import AppKit
 import SwiftUI
 
 public struct ThumbnailSidebar: View {
@@ -33,17 +32,12 @@ public struct ThumbnailSidebar: View {
 
 private struct Thumbnail: View {
     let url: URL
-    @State private var image: NSImage?
-    @State private var failed = false
+    @StateObject private var resource = PageImageState()
     var body: some View {
         Group {
-            if let image { Image(nsImage: image).resizable().aspectRatio(contentMode: .fit) }
-            else { Image(systemName: failed ? "photo.badge.exclamationmark" : "photo").foregroundStyle(.gray) }
-        }.task(id: url) {
-            do {
-                let pixels = try await Task.detached { try PageImageLoader.load(url, maximumPixels: 240) }.value
-                try Task.checkCancellation(); image = NSImage(cgImage: pixels, size: .zero)
-            } catch is CancellationError { } catch { failed = true }
-        }
+            if let image = resource.image { Image(nsImage: image).resizable().aspectRatio(contentMode: .fit) }
+            else { Image(systemName: resource.failure == nil ? "photo" : "photo.badge.exclamationmark").foregroundStyle(.gray) }
+        }.task(id: url) { await resource.load(url, maximumPixels: 240) }
+            .onDisappear { resource.release() }
     }
 }

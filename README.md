@@ -9,6 +9,8 @@
 
 두 앱은 읽기 화면과 파일 가져오기 모듈을 공유합니다. 번역기에서 **Reader로 읽기**를 누르면 완성본 폴더가 뷰어에서 열리고, Reader의 **이 책 번역하기**는 원문을 번역기로 전달합니다.
 
+0.2.14부터 연속 스크롤에서 화면을 벗어난 페이지·썸네일의 이미지를 해제합니다. 페이지 비율은 보존하여 다시 올라갈 때 같은 높이로 불러오며, 취소되거나 다른 페이지로 바뀐 읽기 요청은 이전 이미지를 뒤늦게 표시하지 않습니다. 뷰어는 별도 이미지 캐시나 모델을 추가하지 않습니다.
+
 ## 사용 방법
 
 1. Manga translator에서 파일 또는 폴더를 엽니다. 상단의 **전체 번역 시작**을 누르거나 **열면 자동 번역**을 켭니다. 자동 번역은 최초 기본값으로 켜져 있으며 변경한 선택을 기억합니다.
@@ -126,6 +128,7 @@ swift run MangaLadaCoreChecks
 swift run MangaLadaVisionChecks
 swift run MangaLadaRenderingChecks
 swift run MangaLadaImportChecks
+scripts/check_viewer_images.sh
 swift run MangaLadaWorkflowChecks --cache-migration
 # 완성본 폴더를 실제 CBZ로 내보내고 모든 페이지 바이트·원본 보존 검사
 swift run MangaLadaImportChecks --export /path/to/completed-folder /path/to/output.cbz

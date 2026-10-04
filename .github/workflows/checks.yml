@@ -44,3 +44,5 @@ jobs:
           PY
       - run: swift run MangaLadaImportChecks
         timeout-minutes: 4
+      - run: scripts/check_viewer_images.sh
+        timeout-minutes: 4
