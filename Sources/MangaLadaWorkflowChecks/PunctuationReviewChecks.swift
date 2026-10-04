@@ -15,7 +15,7 @@ enum PunctuationReviewChecks {
         try image(cleaned: true).tiffRepresentation!.write(to: clean)
         let sourceData = try Data(contentsOf: source), cleanData = try Data(contentsOf: clean)
         let block = TextBlock(box: .init(x: 0.3, y: 0.3, width: 0.4, height: 0.4), originalText: "・",
-                              translatedText: "・", detectedFontSize: 28)
+                              translatedText: "・", detectedFontSize: 28, userDefinedOriginalText: false)
         let page = PageTranslation(imageURL: source, imageFingerprint: "review", sourceLanguage: .japanese,
                                    targetLanguage: .korean, blocks: [block])
         var result = try PageImageRendering.render(translation: page, cleanImageURL: clean,
@@ -23,7 +23,8 @@ enum PunctuationReviewChecks {
         var primary = page; primary.imageFingerprint = "primary"
         result.primaryTranslation = primary
         let originalOutput = try Data(contentsOf: destination)
-        let oldJSON = try JSONEncoder().encode(page)
+        var oldPage = page; oldPage.blocks[0].userDefinedOriginalText = nil
+        let oldJSON = try JSONEncoder().encode(oldPage)
         let legacy = try JSONDecoder().decode(PageTranslation.self, from: oldJSON)
         try require(legacy.blocks[0].userDefinedOriginalText == nil, "Legacy blocks acquired a user-edit marker.")
         var edits = page
@@ -48,7 +49,7 @@ enum PunctuationReviewChecks {
         print("Punctuation review passed: corrected source and translation, legacy decoding, primary cache, reopen and source preservation")
     }
 
-    private static func image(cleaned: Bool) -> NSImage {
+    static func image(cleaned: Bool) -> NSImage {
         let bitmap = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: 200, pixelsHigh: 200, bitsPerSample: 8,
                                       samplesPerPixel: 4, hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB,
                                       bytesPerRow: 0, bitsPerPixel: 0)!

@@ -56,6 +56,10 @@ public final class MangaPageProcessor {
         if !force, var translated = storedCurrent, FileManager.default.fileExists(atPath: cleanURL.path) {
             await status("캐시에서 불러와 글자 배치 중")
             translated.imageURL = imageURL
+            if RecognitionCacheMigration.hasUnverifiedPunctuation(in: translated.blocks) {
+                let recognized = try cache.load(fingerprint: keys.recognition)
+                translated.blocks = RecognitionCacheMigration.verifyPunctuation(in: translated.blocks, recognized: recognized?.blocks)
+            }
             let manual = engine.inpaintedImageURL(runID: keys.translation + "-manual")
             let selected = translated.blocks.contains { $0.userDefinedBounds != nil } && FileManager.default.fileExists(atPath: manual.path) ? manual : cleanURL
             return MangaPageDraft(translation: translated, cleanImageURL: selected, wasCached: true)
@@ -93,7 +97,8 @@ public final class MangaPageProcessor {
         }
         try Task.checkCancellation()
         let translation = PageTranslation(imageURL: imageURL, imageFingerprint: keys.translation,
-                                          sourceLanguage: .japanese, targetLanguage: .korean, blocks: blocks)
+                                          sourceLanguage: .japanese, targetLanguage: .korean,
+                                          blocks: RecognitionCacheMigration.verifyPunctuation(in: blocks, recognized: recognized.blocks))
         try cache.save(translation)
         await status("말풍선·효과음에 글자 맞추는 중")
         let selectedClean = try await manualCleanImage(for: translation, sourceCleanURL: cleanURL)

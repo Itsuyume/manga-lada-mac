@@ -3,6 +3,28 @@ import MangaLadaCore
 /// Geometry refreshes keep region UUIDs and source boxes; fresh OCR creates new UUIDs.
 /// Reviewed source/translation text belongs to those stable regions, not to the raw OCR cache.
 package enum RecognitionCacheMigration {
+    package static func hasUnverifiedPunctuation(in blocks: [TextBlock]) -> Bool {
+        blocks.contains { needsPunctuationVerification($0) }
+    }
+
+    /// A legacy source may have been edited before provenance was recorded.
+    /// Missing, moved or ambiguous OCR cannot authorize restoring source artwork.
+    package static func verifyPunctuation(in blocks: [TextBlock], recognized: [TextBlock]?) -> [TextBlock] {
+        guard let recognized else { return blocks }
+        let byID = Dictionary(grouping: recognized, by: \.id)
+        return blocks.map { block in
+            guard needsPunctuationVerification(block), let matches = byID[block.id], matches.count == 1,
+                  let source = matches.first, source.box == block.box else { return block }
+            var updated = block
+            updated.userDefinedOriginalText = source.originalText != block.originalText
+            return updated
+        }
+    }
+
+    private static func needsPunctuationVerification(_ block: TextBlock) -> Bool {
+        block.userDefinedOriginalText == nil && PunctuationArtworkPolicy.isCandidate(block)
+    }
+
     package static func reuse(_ stored: PageTranslation, for recognized: [TextBlock]) -> [TextBlock]? {
         guard stored.blocks.count <= recognized.count,
               Set(stored.blocks.map(\.id)).count == stored.blocks.count,

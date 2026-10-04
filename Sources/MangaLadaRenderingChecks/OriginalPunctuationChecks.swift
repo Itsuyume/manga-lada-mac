@@ -6,7 +6,8 @@ extension MangaLadaRenderingChecks {
     @MainActor
     static func checkOriginalPunctuation(in root: URL) throws {
         let box = TextBox(x: 0.4, y: 0.55, width: 0.2, height: 0.2)
-        let punctuation = TextBlock(box: box, originalText: " ・ ", translatedText: "・", detectedFontSize: 18, rotationDegrees: -5)
+        let punctuation = TextBlock(box: box, originalText: " ・ ", translatedText: "・", detectedFontSize: 18,
+                                    rotationDegrees: -5, userDefinedOriginalText: false)
         let caption = TextBlock(box: TextBox(x: 0.1, y: 0.1, width: 0.8, height: 0.2), originalText: "静かになった。",
                                 translatedText: "조용해졌다.", detectedFontSize: 32, textKind: .caption)
         let renderer = TranslatedImageRenderer()

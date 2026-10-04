@@ -1,14 +1,14 @@
 import Foundation
 import MangaLadaCore
 
-struct JapanesePageKeys {
-    let translation: String
-    let recognition: String
+package struct JapanesePageKeys {
+    package let translation: String
+    package let recognition: String
     let previousRecognition: [String]
     let previous: [String]
     private static let translationVersion = 32
     private static let recognitionVersion = 31
-    init(imageURL: URL, configuration: LocalTranslatorConfiguration, context: String, title: String) throws {
+    package init(imageURL: URL, configuration: LocalTranslatorConfiguration, context: String, title: String) throws {
         let fingerprints = ImageFingerprint()
         let image = try fingerprints.make(for: imageURL)
         let oldContext = fingerprints.make(for: Data((title + context.suffix(3_000)).utf8)).prefix(12)

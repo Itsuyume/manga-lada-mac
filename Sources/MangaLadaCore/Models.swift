@@ -29,6 +29,7 @@ public struct TextBlock: Codable, Equatable, Identifiable, Sendable {
     public var effectStyleID: String?
     public var userDefinedBounds: TextBox?
     public var userDefinedTextKind: Bool?
+    /// True: applied source edit. False: source matches OCR. Nil: provenance is unverified.
     public var userDefinedOriginalText: Bool?
 
     public init(

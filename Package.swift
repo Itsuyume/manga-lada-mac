@@ -47,7 +47,7 @@ let package = Package(
         .target(name: "MangaLadaImport", dependencies: ["MangaLadaCore"]),
         .target(name: "MangaLadaViewerUI", dependencies: ["MangaLadaCore"]),
         .executableTarget(name: "MangaReaderApp", dependencies: ["MangaLadaCore", "MangaLadaImport", "MangaLadaViewerUI"]),
-        .executableTarget(name: "MangaLadaWorkflowChecks", dependencies: ["MangaLadaCore", "MangaLadaImport", "MangaLadaRendering", "MangaLadaWorkflow"]),
+        .executableTarget(name: "MangaLadaWorkflowChecks", dependencies: ["MangaLadaCore", "MangaLadaImport", "MangaLadaRendering", "MangaLadaBallons", "MangaLadaWorkflow"]),
         .executableTarget(name: "MangaLadaImportChecks", dependencies: ["MangaLadaCore", "MangaLadaImport", "MangaLadaWorkflow", "MangaLadaViewerUI"]),
         .executableTarget(
             name: "MangaLadaCoreChecks",

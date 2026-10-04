@@ -7,12 +7,7 @@ extension TranslatedImageRenderer {
     func originalPunctuationRegions(in blocks: [TextBlock], imageSize: NSSize) -> [(index: Int, rect: NSRect)] {
         let canvas = NSRect(origin: .zero, size: imageSize)
         return blocks.enumerated().compactMap { index, block in
-            let source = block.originalText.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard TextLanguageDetector.isPunctuationOnly(source),
-                  source == block.translatedText.trimmingCharacters(in: .whitespacesAndNewlines),
-                  block.userDefinedBounds == nil, block.userDefinedTextKind != true, block.effectStyleID == nil,
-                  block.userDefinedOriginalText != true,
-                  ImageRegionSelection.validates(block.box) else { return nil }
+            guard PunctuationArtworkPolicy.isCandidate(block), block.userDefinedOriginalText == false else { return nil }
             // Preserve antialiased edge pixels just outside a tightly detected OCR box.
             let rect = pixelRect(for: block.box, imageSize: imageSize).integral.insetBy(dx: -2, dy: -2).intersection(canvas)
             let overlaps = blocks.enumerated().contains { otherIndex, other in
