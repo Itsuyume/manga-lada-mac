@@ -27,8 +27,10 @@ final class ReaderState: ObservableObject {
         guard !isShowingFilePanel else { return }; isShowingFilePanel = true
         Task {
             defer { isShowingFilePanel = false }
-            guard let url = await ComicOpenPanel.choose(folderOnly: folderOnly) else { return }
-            await open(url)
+            do {
+                guard let input = try await ComicOpenPanel.choose(folderOnly: folderOnly) else { return }
+                await open(input)
+            } catch { errorMessage = error.localizedDescription }
         }
     }
     func open(_ url: URL) async {
@@ -43,8 +45,11 @@ final class ReaderState: ObservableObject {
             bookKey = "reader." + ImageFingerprint().make(for: Data(book.sourceURL.standardizedFileURL.path.utf8))
             let saved = UserDefaults.standard.object(forKey: bookKey + ".page") as? Int
             let requested: Int
-            if case .file(let url) = input, ImageFileScanner.isSupportedImage(url) { requested = book.initialIndex }
-            else { requested = saved ?? book.initialIndex }
+            switch input {
+            case .imageInFolder: requested = book.initialIndex
+            case .file(let url) where ImageFileScanner.isSupportedImage(url): requested = book.initialIndex
+            default: requested = saved ?? book.initialIndex
+            }
             index = min(pages.count - 1, max(0, requested))
             bookmarks = Set(UserDefaults.standard.array(forKey: bookKey + ".bookmarks") as? [Int] ?? [])
             isLoading = false

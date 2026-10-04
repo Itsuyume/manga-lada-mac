@@ -27,6 +27,7 @@ public actor ComicBookLoader {
         let store = ImportedImageStore(root: extractionRoot.appendingPathComponent("ImportedImages"))
         switch input {
         case .file(let url): return try await load(url)
+        case .imageInFolder(let image, let folder): return try loadImage(image, in: folder)
         case .externalFile(let url):
             guard ImageFileScanner.isSupportedImage(url) else { return try await load(url) }
             return try isolatedBook(image: store.copy(url))
@@ -36,6 +37,21 @@ public actor ComicBookLoader {
 
     private func isolatedBook(image: URL) -> ComicBook {
         ComicBook(title: "가져온 이미지", pages: [ImagePage(url: image)], initialIndex: 0, sourceURL: image)
+    }
+
+    private func loadImage(_ image: URL, in folder: URL) throws -> ComicBook {
+        guard ImageFileScanner.isSupportedImage(image) else { throw ComicImportError.unsupportedFormat(image.lastPathComponent) }
+        guard image.deletingLastPathComponent().standardizedFileURL == folder.standardizedFileURL else {
+            throw ComicImportError.wrongImageFolder(image.deletingLastPathComponent().lastPathComponent)
+        }
+        let accessed = folder.startAccessingSecurityScopedResource()
+        defer { if accessed { folder.stopAccessingSecurityScopedResource() } }
+        let pages = try ImageFileScanner().images(in: folder, recursive: false)
+        try Task.checkCancellation()
+        guard let index = pages.firstIndex(where: { $0.url.standardizedFileURL == image.standardizedFileURL }) else {
+            throw ComicImportError.selectedImageMissing(image.lastPathComponent)
+        }
+        return ComicBook(title: folder.lastPathComponent, pages: pages, initialIndex: index, sourceURL: folder)
     }
 
     private func loadSynchronously(_ url: URL) throws -> ComicBook {
@@ -92,12 +108,15 @@ public actor ComicBookLoader {
 
 public enum ComicImportError: LocalizedError {
     case unsupportedFormat(String), emptyBook, invalidPDF, invalidImage
+    case wrongImageFolder(String), selectedImageMissing(String)
     public var errorDescription: String? {
         switch self {
         case .unsupportedFormat(let name): "열 수 없는 형식입니다: \(name)"
         case .emptyBook: "읽을 이미지가 없는 파일 또는 폴더입니다."
         case .invalidPDF: "PDF 페이지를 읽을 수 없습니다. 암호 또는 파일 상태를 확인해주세요."
         case .invalidImage: "이미지 데이터를 읽을 수 없습니다. 100MB·6,400만 픽셀 이내의 PNG·JPEG·TIFF·HEIC 등 이미지를 사용해주세요."
+        case .wrongImageFolder(let name): "선택한 이미지가 있는 ‘\(name)’ 폴더를 선택해주세요. 다른 폴더의 이미지는 열지 않았습니다."
+        case .selectedImageMissing(let name): "선택한 이미지 ‘\(name)’를 폴더에서 찾을 수 없습니다. 파일이 이동·삭제되었거나 숨겨져 있는지 확인해주세요."
         }
     }
 }

@@ -10,8 +10,10 @@ extension AppState {
         guard !isShowingFilePanel else { return }; isShowingFilePanel = true
         Task {
             defer { isShowingFilePanel = false }
-            guard let url = await ComicOpenPanel.choose(folderOnly: folderOnly) else { return }
-            await open(url)
+            do {
+                guard let input = try await ComicOpenPanel.choose(folderOnly: folderOnly) else { return }
+                await open(input)
+            } catch { errorMessage = error.localizedDescription }
         }
     }
     func open(_ url: URL) async {

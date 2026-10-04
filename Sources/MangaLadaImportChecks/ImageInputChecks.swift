@@ -7,6 +7,7 @@ import MangaLadaViewerUI
 @MainActor
 enum ImageInputChecks {
     static func run(image: URL, root: URL, loader: ComicBookLoader) async throws {
+        try await checkSelectedFolder(image: image, root: root, loader: loader)
         let bytes = try Data(contentsOf: image)
         let exported = root.appendingPathComponent("uuid=test&library=1.png")
         try bytes.write(to: exported)
@@ -24,6 +25,47 @@ enum ImageInputChecks {
         catch let error as CocoaError { try require(error.code == .fileReadNoSuchFile, "Wrong missing-file error.") }
         try checkPasteboard(bytes: bytes, image: image, loader: loader)
         print("Image input checks passed: isolated external image, temporary-file removal, deduplication, invalid/missing input, actual image/file/text pasteboard")
+    }
+    private static func checkSelectedFolder(image: URL, root: URL, loader: ComicBookLoader) async throws {
+        let folder = image.deletingLastPathComponent()
+        let original = try ImageFileScanner().images(in: folder, recursive: false)
+        let bytes = try original.map { try Data(contentsOf: $0.url) }
+        try await checkInvalidFolderSelections(image: image, root: root, loader: loader)
+        let book = try await loader.load(.imageInFolder(image: image, folder: folder))
+        try require(book.pages == original && book.initialIndex == 1, "Selected image lost sibling pages, order or initial page.")
+        try require(book.title == folder.lastPathComponent && book.sourceURL == folder, "Image-folder book identity changed.")
+        try require(try original.map { try Data(contentsOf: $0.url) } == bytes, "Image-folder import modified the source.")
+        let pngFolder = root.appendingPathComponent("folder.png")
+        try FileManager.default.createDirectory(at: pngFolder, withIntermediateDirectories: true)
+        try bytes[0].write(to: pngFolder.appendingPathComponent("1.png"))
+        let folderBook = try await loader.load(.file(pngFolder))
+        try require(folderBook.pages.count == 1 && folderBook.title == "folder.png", "Image extension disguised a folder as an image.")
+        print("Image-folder checks passed: wrong folder, missing/hidden image, empty folder, image-named folder, order, selected page, source preservation")
+    }
+    private static func checkInvalidFolderSelections(image: URL, root: URL, loader: ComicBookLoader) async throws {
+        let folder = image.deletingLastPathComponent()
+        let other = root.appendingPathComponent("other")
+        try FileManager.default.createDirectory(at: other, withIntermediateDirectories: true)
+        // Even a same-named image in a different folder must not replace the selection.
+        try Data(contentsOf: image).write(to: other.appendingPathComponent(image.lastPathComponent))
+        do {
+            _ = try await loader.load(.imageInFolder(image: image, folder: other))
+            throw ImageInputFailure.failed("Wrong selected folder was accepted.")
+        } catch ComicImportError.wrongImageFolder { }
+        let empty = root.appendingPathComponent("empty-selection")
+        try FileManager.default.createDirectory(at: empty, withIntermediateDirectories: true)
+        for candidate in [folder.appendingPathComponent("missing.png"), empty.appendingPathComponent("missing.png")] {
+            do {
+                _ = try await loader.load(.imageInFolder(image: candidate, folder: candidate.deletingLastPathComponent()))
+                throw ImageInputFailure.failed("Missing selected image silently opened another page.")
+            } catch ComicImportError.selectedImageMissing { }
+        }
+        let hidden = other.appendingPathComponent(".hidden.png")
+        try Data(contentsOf: image).write(to: hidden)
+        do {
+            _ = try await loader.load(.imageInFolder(image: hidden, folder: other))
+            throw ImageInputFailure.failed("Excluded selected image silently opened another page.")
+        } catch ComicImportError.selectedImageMissing { }
     }
     private static func checkPasteboard(bytes: Data, image: URL, loader: ComicBookLoader) throws {
         let board = NSPasteboard(name: .init("manga-check-" + UUID().uuidString))
