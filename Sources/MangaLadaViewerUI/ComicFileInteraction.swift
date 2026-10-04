@@ -3,45 +3,6 @@ import MangaLadaCore
 import SwiftUI
 import UniformTypeIdentifiers
 
-@MainActor
-public enum ComicOpenPanel {
-    public static func choose(folderOnly: Bool = false) async throws -> ComicInput? {
-        let panel = NSOpenPanel()
-        panel.canChooseDirectories = true; panel.canChooseFiles = !folderOnly
-        panel.allowsMultipleSelection = false
-        panel.title = folderOnly ? "만화 폴더 열기" : "만화 파일 또는 폴더 열기"
-        panel.message = "ZIP·CBZ·7z·CB7·RAR·CBR·PDF·이미지·폴더"
-        guard await present(panel) == .OK, let url = panel.url else { return nil }
-        let accessed = url.startAccessingSecurityScopedResource()
-        defer { if accessed { url.stopAccessingSecurityScopedResource() } }
-        guard ImageFileScanner.isSupportedImage(url),
-              try url.resourceValues(forKeys: [.isDirectoryKey]).isDirectory != true else { return .file(url) }
-        return await chooseImageFolder(for: url)
-    }
-    private static func chooseImageFolder(for image: URL) async -> ComicInput? {
-        let folder = image.deletingLastPathComponent()
-        let panel = NSOpenPanel()
-        panel.canChooseDirectories = true; panel.canChooseFiles = false
-        panel.allowsMultipleSelection = false; panel.directoryURL = folder
-        panel.title = "같은 폴더의 페이지 함께 열기"; panel.prompt = "이 폴더 열기"
-        panel.message = "‘\(image.lastPathComponent)’부터 읽습니다. 앞뒤 페이지를 넘길 수 있도록 이 이미지가 있는 ‘\(folder.lastPathComponent)’ 폴더를 선택해주세요."
-        guard await present(panel) == .OK, let selectedFolder = panel.url else { return nil }
-        return .imageInFolder(image: image, folder: selectedFolder)
-    }
-    /// Attach system file dialogs to the app window without blocking its event loop.
-    public static func present(_ panel: NSSavePanel) async -> NSApplication.ModalResponse {
-        await withCheckedContinuation { continuation in
-            // Accessibility actions can arrive while the app has no active key/main window.
-            let host = NSApp.keyWindow ?? NSApp.mainWindow ?? NSApp.windows.first { $0.isVisible && $0.canBecomeMain }
-            if let window = host {
-                panel.beginSheetModal(for: window) { continuation.resume(returning: $0) }
-            } else {
-                panel.begin { continuation.resume(returning: $0) }
-            }
-        }
-    }
-}
-
 public extension View {
     func comicFileDrop(open: @escaping @MainActor (ComicInput) -> Void, failure: @escaping @MainActor (String) -> Void) -> some View {
         modifier(ComicFileDrop(open: open, failure: failure))

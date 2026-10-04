@@ -44,8 +44,8 @@ bundle_app() {
     </dict>
   </array>
   <key>CFBundlePackageType</key><string>APPL</string>
-  <key>CFBundleShortVersionString</key><string>0.2.21</string>
-  <key>CFBundleVersion</key><string>24</string>
+  <key>CFBundleShortVersionString</key><string>0.2.22</string>
+  <key>CFBundleVersion</key><string>25</string>
   <key>LSMinimumSystemVersion</key><string>14.0</string>
   <key>NSHighResolutionCapable</key><true/>
   <key>NSSupportsAutomaticGraphicsSwitching</key><true/>
