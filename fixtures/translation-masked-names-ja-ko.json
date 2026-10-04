@@ -1,0 +1,179 @@
+[
+  {
+    "id": "masked-game",
+    "texts": [
+      "今日はポ○モンのゲームで遊ぼう。"
+    ],
+    "kinds": [
+      "dialogue"
+    ],
+    "reviewPoints": [
+      "게임이라는 문맥과 한 글자만 가린 표기를 대조하여 포켓몬으로 번역한다."
+    ]
+  },
+  {
+    "id": "masked-person",
+    "texts": [
+      "○○さんから手紙が届いた。"
+    ],
+    "kinds": [
+      "dialogue"
+    ],
+    "reviewPoints": [
+      "사람 이름 두 개의 가림표와 존칭을 유지한다."
+    ]
+  },
+  {
+    "id": "masked-title",
+    "texts": [
+      "昨日はドラ◯もんの映画を見た。"
+    ],
+    "kinds": [
+      "dialogue"
+    ],
+    "reviewPoints": [
+      "다른 원형 기호 ◯도 가림표로 취급한다."
+    ]
+  },
+  {
+    "id": "ideographic-circle",
+    "texts": [
+      "カ〇ビィのぬいぐるみを買った。"
+    ],
+    "kinds": [
+      "dialogue"
+    ],
+    "reviewPoints": [
+      "인형이라는 문맥과 표기를 대조하여 커비로 번역한다."
+    ]
+  },
+  {
+    "id": "multiple-masks",
+    "texts": [
+      "山○さんと○○駅で待ち合わせよう。"
+    ],
+    "kinds": [
+      "dialogue"
+    ],
+    "reviewPoints": [
+      "서로 다른 이름의 가림표 묶음 하나와 둘을 유지한다."
+    ]
+  },
+  {
+    "id": "numeric-year",
+    "texts": [
+      "二〇二六年にこの店が開いた。"
+    ],
+    "kinds": [
+      "dialogue"
+    ],
+    "reviewPoints": [
+      "연도 안의 〇는 숫자 0이며 가림표가 아니다."
+    ]
+  },
+  {
+    "id": "latin-o",
+    "texts": [
+      "このOリングを交換してください。"
+    ],
+    "kinds": [
+      "dialogue"
+    ],
+    "reviewPoints": [
+      "라틴 대문자 O를 일본어 가림표로 바꾸지 않는다."
+    ]
+  },
+  {
+    "id": "selected-name",
+    "texts": [
+      "明日はみんなでゲーム大会を開く。",
+      "今日はマ○オのゲームを練習しよう。"
+    ],
+    "kinds": [
+      "dialogue",
+      "dialogue"
+    ],
+    "reviewPoints": [
+      "선택한 게임명만 고치고 주변 검수 내용을 보존한다."
+    ],
+    "reviewedTexts": [
+      "내일 게임 대회를 열기로 했어.",
+      "기존 검수 문구"
+    ],
+    "selectedIndices": [
+      1
+    ]
+  },
+  {
+    "id": "masked-smash-game",
+    "texts": [
+      "今夜は友達とス○ブラで対戦しよう。"
+    ],
+    "kinds": [
+      "dialogue"
+    ],
+    "reviewPoints": [
+      "스매시브라더스를 플레이한다는 뜻으로 번역한다."
+    ]
+  },
+  {
+    "id": "latin-o-mask",
+    "texts": [
+      "週末はスOブラしよう。"
+    ],
+    "kinds": [
+      "dialogue"
+    ],
+    "reviewPoints": [
+      "알려진 게임명 안의 O를 문맥에 따라 복원한다."
+    ]
+  },
+  {
+    "id": "wide-o-mask",
+    "texts": [
+      "明日はスＯブラやろう。"
+    ],
+    "kinds": [
+      "dialogue"
+    ],
+    "reviewPoints": [
+      "알려진 게임명 안의 전각 Ｏ도 동일하게 처리한다."
+    ]
+  },
+  {
+    "id": "unknown-store",
+    "texts": [
+      "ス○ブラという店で昼ご飯を食べた。"
+    ],
+    "kinds": [
+      "dialogue"
+    ],
+    "reviewPoints": [
+      "가게 이름을 게임명으로 단정하지 않고 가림표를 남긴다."
+    ]
+  },
+  {
+    "id": "wrapped-person",
+    "texts": [
+      "○\n○さんから本を借りた。"
+    ],
+    "kinds": [
+      "dialogue"
+    ],
+    "reviewPoints": [
+      "줄바꿈에 걸친 이름의 가림표 두 개를 보존한다."
+    ]
+  },
+  {
+    "id": "mixed-known-unknown",
+    "texts": [
+      "○○さんとポ○モンで遊ぼう。"
+    ],
+    "kinds": [
+      "dialogue"
+    ],
+    "reviewPoints": [
+      "게임명은 포켓몬으로 해석하고 사람 이름은 가림표로 보존한다."
+    ]
+  }
+]

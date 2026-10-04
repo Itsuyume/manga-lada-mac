@@ -54,7 +54,7 @@ public enum MangaPageResponse {
             guard let entry = entries[index] else {
                 throw TranslationError.invalidPageResponse("영역 \(index) 누락")
             }
-            let text = entry.text.trimmingCharacters(in: .whitespacesAndNewlines)
+            let text = try MaskedTextTranslation.validated(entry.text.trimmingCharacters(in: .whitespacesAndNewlines), source: block.originalText)
             let hasKorean = TextLanguageDetector.containsKorean(text)
             let sourceHasJapanese = TextLanguageDetector.containsJapanese(block.originalText)
             let nonverbal = TextLanguageDetector.isNonverbalTranslation(text, source: block.originalText)
@@ -79,17 +79,18 @@ public enum MangaPageResponse {
 
 enum MangaTranslationPrompt {
     static let system = """
-    You are a professional Japanese-to-Korean manga translator. Translate ALL numbered regions together using page context and Japanese right-to-left reading order. Preserve names, relationships, tense, speaker tone, honorifics, jokes and sentence meaning. Use fluent Korean; do not omit or censor content. Never invent missing plot facts. Previous-page text is context only, not new regions to translate.
+    You are a professional Japanese-to-Korean manga translator. Translate ALL numbered regions together using page context and Japanese right-to-left reading order. Preserve names, relationships, tense, speaker tone, honorifics, jokes and sentence meaning. Use fluent Korean and translate all written content while preserving intentional omissions. Never invent missing plot facts. Previous-page text is context only, not new regions to translate.
     Classify each region as dialogue, caption, or soundEffect. Render Japanese onomatopoeia by meaning as concise natural Korean sound effects (ドーン -> 쾅, ゴゴゴ -> 고오오, ドキドキ -> 두근두근, サラサラ -> 사락사락 or 찰랑찰랑 depending on the scene). Never just transliterate a Japanese sound into Hangul (e.g. サラサラ is not 살라살라). Short speech is still dialogue when it is spoken. Use Korean script, punctuation and needed numbers. Do not output Japanese, explanations, romaji or markdown. Keep dialogue compact without summarizing away meaning. Return JSON {"translations":[{"id":0,"text":"한국어","kind":"dialogue"}]} with each input id exactly once.
     """
 
     static func user(blocks: [TextBlock], previousContext: String) throws -> String {
         let regions = blocks.enumerated().map { index, block in
-            Region(id: index, text: block.originalText, x: block.box.x, y: block.box.y,
+            Region(id: index, text: MaskedTextTranslation.modelText(block.originalText), x: block.box.x, y: block.box.y,
                    width: block.box.width, height: block.box.height, vertical: block.sourceIsVertical == true, detectedKind: block.textKind)
         }
         let data = try JSONEncoder().encode(regions)
-        return "Previous page (context only):\n\(previousContext.suffix(3_000))\nRegions in reading order:\n\(String(decoding: data, as: UTF8.self))"
+        let masking = MaskedTextTranslation.instruction(for: blocks.map(\.originalText))
+        return "Previous page (context only):\n\(previousContext.suffix(3_000))\n\(masking)\nRegions in reading order:\n\(String(decoding: data, as: UTF8.self))"
     }
 
     private struct Region: Encodable {

@@ -76,18 +76,19 @@ public struct TranslationPipeline: Sendable {
             configuration: configuration, session: session
         )
         let translatedTexts = try await translateTexts(
-            blocks.map(\.originalText),
+            blocks.map { MaskedTextTranslation.modelText($0.originalText) },
             translator: translator,
             maxConcurrentRequests: configuration.maxConcurrentRequests
         )
         try Task.checkCancellation()
 
-        return zip(blocks, translatedTexts).map { block, translatedText in
+        return try zip(blocks, translatedTexts).map { block, translatedText in
             var translatedBlock = block
-            translatedBlock.translatedText = refiner.refine(
+            let refined = refiner.refine(
                 originalText: block.originalText,
                 translatedText: translatedText
             )
+            translatedBlock.translatedText = try MaskedTextTranslation.validated(refined, source: block.originalText)
             return translatedBlock
         }
     }

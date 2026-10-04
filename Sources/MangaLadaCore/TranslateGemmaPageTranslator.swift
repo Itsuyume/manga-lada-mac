@@ -9,11 +9,13 @@ public struct TranslateGemmaPageTranslator: MangaPageTranslating {
     }
     public func translatePage(_ blocks: [TextBlock], previousContext: String = "") async throws -> [TextBlock] {
         guard !blocks.isEmpty else { return [] }
-        let numbered = blocks.enumerated().map { "[R\($0.offset)] \($0.element.originalText.replacingOccurrences(of: "\n", with: " "))" }.joined(separator: "\n")
+        let numbered = blocks.enumerated().map { "[R\($0.offset)] \(MaskedTextTranslation.modelText($0.element.originalText).replacingOccurrences(of: "\n", with: " "))" }.joined(separator: "\n")
+        let masking = MaskedTextTranslation.instruction(for: blocks.map(\.originalText))
         let prompt = """
         You are a professional Japanese (ja) to Korean (ko) translator. Your goal is to accurately convey the meaning and nuances of the original Japanese text while adhering to Korean grammar, vocabulary, and cultural sensitivities.
-        Produce only the Korean translation, without any additional explanations or commentary. Preserve every [R0], [R1] identifier exactly, with one translated region per identifier. These are manga dialogues: preserve speaker tone and render all names and honorifics in Korean script. Please translate the following Japanese text into Korean:
-
+        Produce only the Korean translation, without any additional explanations or commentary. Preserve every [R0], [R1] identifier exactly, with one translated region per identifier. These are manga dialogues: preserve speaker tone and render all names and honorifics in Korean script.
+        \(masking)
+        Please translate the following Japanese text into Korean:
 
         \(numbered)
         """
@@ -26,8 +28,10 @@ public struct TranslateGemmaPageTranslator: MangaPageTranslating {
             catch TranslationError.invalidPageResponse(let detail) {
                 guard attempt == 0 else { throw TranslationError.invalidPageResponse(detail) }
                 instruction = """
-                You are a professional Japanese (ja) to Korean (ko) translator. Output only Korean text after every numbered [R0], [R1] marker. Never repeat the Japanese original, including inside quotations or parentheses. Render every name and honorific in Korean script. Translate each numbered region exactly once. Please translate the following Japanese text into Korean:
-
+                You are a professional Japanese (ja) to Korean (ko) translator. Output only Korean text after every numbered [R0], [R1] marker. Never repeat the Japanese original, including inside quotations or parentheses. Render every name and honorific in Korean script. Translate each numbered region exactly once.
+                \(masking)
+                The previous response failed validation: \(detail)
+                Please translate the following Japanese text into Korean:
 
                 \(numbered)
                 """

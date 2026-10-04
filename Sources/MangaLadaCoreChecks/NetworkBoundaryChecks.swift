@@ -9,6 +9,7 @@ enum NetworkBoundaryChecks {
         try await checkPunctuationPreservation(session: session)
         try await checkSelections(session: session)
         try await checkUnselectedLanguageErrors(session: session)
+        try await checkMaskedText(session: session)
         try await checkMultipleSelectedRegions(session: session)
         let blocks = [TextBlock(box: TextBox(x: 0.2, y: 0.3, width: 0.2, height: 0.3), originalText: "ありがとう")]
         let page = #"{"translations":[{"id":0,"text":"고마워","kind":"dialogue"}]}"#
