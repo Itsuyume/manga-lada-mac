@@ -21,13 +21,13 @@ struct OllamaChatClient: Sendable {
         let request = ChatRequest(model: configuration.model,
             messages: [Message(role: "system", content: system, images: nil),
                        Message(role: "user", content: user, images: images.isEmpty ? nil : images.map { $0.base64EncodedString() })],
-            stream: false, think: false, format: schema, keep_alive: "15m",
+            stream: false, think: false, format: schema, keep_alive: configuration.retention.rawValue,
             options: Options(temperature: 0.1, num_ctx: 8192, num_predict: min(8192, max(1024, outputTokens))))
         return ModelJSON.data(from: try await response(for: request))
     }
     func text(user: String, outputTokens: Int) async throws -> String {
         try await response(for: ChatRequest(model: configuration.model, messages: [Message(role: "user", content: user, images: nil)],
-            stream: false, think: nil, format: nil, keep_alive: "15m",
+            stream: false, think: nil, format: nil, keep_alive: configuration.retention.rawValue,
             options: Options(temperature: 0, num_ctx: 4096, num_predict: min(8192, max(256, outputTokens)))))
     }
     private func response(for chat: ChatRequest) async throws -> String {

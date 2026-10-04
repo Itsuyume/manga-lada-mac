@@ -3,12 +3,13 @@ import SwiftUI
 
 struct LocalModelSettings: View {
     @Binding private var model: String
+    @Binding private var retention: OllamaConfiguration.Retention
     @State private var selection: Preset
     @State private var customModel: String
     let prepare: () -> Void
 
-    init(model: Binding<String>, prepare: @escaping () -> Void) {
-        _model = model; self.prepare = prepare
+    init(model: Binding<String>, retention: Binding<OllamaConfiguration.Retention>, prepare: @escaping () -> Void) {
+        _model = model; _retention = retention; self.prepare = prepare
         _selection = State(initialValue: Preset.allCases.first { $0.modelName == model.wrappedValue } ?? .custom)
         _customModel = State(initialValue: model.wrappedValue)
     }
@@ -26,6 +27,18 @@ struct LocalModelSettings: View {
                 .font(.system(size: 12)).foregroundStyle(.primary)
                 .disabled(model.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
         }.font(.system(size: 11)).foregroundStyle(.secondary)
+        Picker("번역 모델 대기", selection: $retention) {
+            ForEach(OllamaConfiguration.Retention.allCases, id: \.self) { Text(retentionLabel($0)).tag($0) }
+        }
+        Text("마지막 번역 후 이 시간이 지나면 모델 메모리를 비웁니다. 다음 번역은 모델을 다시 읽느라 조금 늦게 시작할 수 있습니다. 변경은 다음 번역부터 적용되며 모델 파일은 유지됩니다.")
+            .font(.system(size: 11)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+    }
+    private func retentionLabel(_ value: OllamaConfiguration.Retention) -> String {
+        switch value {
+        case .short: "1분 · 메모리 절약"
+        case .balanced: "5분 · 균형"
+        case .extended: "15분 · 연속 작업"
+        }
     }
     private func select(_ preset: Preset) {
         if selection == .custom { customModel = model }

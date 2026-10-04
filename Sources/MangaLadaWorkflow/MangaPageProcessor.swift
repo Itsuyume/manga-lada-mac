@@ -61,7 +61,7 @@ public final class MangaPageProcessor {
             return MangaPageDraft(translation: translated, cleanImageURL: selected, wasCached: true)
         }
         var recognized = try await recognition(imageURL: imageURL, key: keys.recognition, previousKeys: keys.previousRecognition, cleanURL: cleanURL,
-                                               status: status)
+                                               retention: configuration.ollama.retention, status: status)
         recognized.blocks = JapaneseRegionMerger.speechRegions(recognized.blocks)
         let storedPrior = try storedCurrent ?? previousTranslation(keys.previous)
         let manualBlocks = storedPrior?.blocks.filter { $0.userDefinedBounds != nil } ?? []
@@ -139,6 +139,7 @@ public final class MangaPageProcessor {
     }
 
     private func recognition(imageURL: URL, key: String, previousKeys: [String], cleanURL: URL,
+                             retention: OllamaConfiguration.Retention,
                              status: @escaping @Sendable (String) async -> Void) async throws -> PageTranslation {
         if let stored = try cache.load(fingerprint: key), FileManager.default.fileExists(atPath: cleanURL.path) { return stored }
         let prior = try previousTranslation(previousKeys)
@@ -162,7 +163,7 @@ public final class MangaPageProcessor {
             try Task.checkCancellation()
         }
         result.blocks = lexicon.inferKinds(result.blocks)
-        if prior == nil { result.blocks = try await GraphicalTitleRecognition.repair(in: imageURL, blocks: result.blocks) }
+        if prior == nil { result.blocks = try await GraphicalTitleRecognition.repair(in: imageURL, blocks: result.blocks, retention: retention) }
         try cache.save(result)
         return result
     }

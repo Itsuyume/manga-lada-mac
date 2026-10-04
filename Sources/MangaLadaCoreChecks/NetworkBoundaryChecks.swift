@@ -20,6 +20,8 @@ enum NetworkBoundaryChecks {
         let result = try await OllamaPageTranslator(configuration: OllamaConfiguration(model: "qwen3.5:9b"), session: session).translatePage(blocks)
         try check(result[0].translatedText == "고마워" && result[0].box == blocks[0].box, "Local response lost text or geometry.")
         try await checkGemma(blocks, session: session)
+        try await checkModelRetention(blocks, session: session)
+        try await checkVisionRetention(session: session)
         try await checkGemmaValidationRetry(blocks, session: session)
         try await checkValidationRetry(blocks, session: session, validPage: page)
         try await checkMissingFieldRetry(blocks, session: session, validPage: page)
@@ -214,6 +216,7 @@ enum NetworkBoundaryChecks {
             try check(body.model == "translategemma:12b" && body.messages.count == 1 && body.messages[0].role == "user",
                       "Translation specialist did not use its single-user-message contract.")
             try check(body.format == nil && body.think == nil, "Translation specialist received unsupported JSON/reasoning settings.")
+            try check(body.keep_alive == "5m", "The default request keeps an idle model loaded longer than the balanced limit.")
             return (200, try JSONEncoder().encode(ChatReply(message: Message(role: "assistant", content: "[R0] 고마워"))))
         }
         let result = try await OllamaPageTranslator(session: session).translatePage(blocks)
@@ -234,6 +237,24 @@ enum NetworkBoundaryChecks {
         catch TranslationError.invalidPageResponse { }
         try check(FixtureProtocol.state.count == 2, "Invalid reply was retried without a bound.")
     }
+    private static func checkModelRetention(_ blocks: [TextBlock], session: URLSession) async throws {
+        for model in ["translategemma:12b", "qwen3.5:9b"] {
+            for retention in OllamaConfiguration.Retention.allCases {
+                FixtureProtocol.state.install { request in
+                    let payload = try JSONDecoder().decode(RetentionProbe.self, from: Self.body(request))
+                    try check(payload.keep_alive == retention.rawValue && payload.model == model,
+                              "The local HTTP request did not carry the selected model lifetime.")
+                    let content = model.hasPrefix("translategemma") ? "[R0] 고마워"
+                        : #"{"translations":[{"id":0,"text":"고마워","kind":"dialogue"}]}"#
+                    return (200, try JSONEncoder().encode(ChatReply(message: Message(role: "assistant", content: content))))
+                }
+                let configuration = OllamaConfiguration(model: model, retention: retention)
+                let translated = try await OllamaPageTranslator(configuration: configuration, session: session).translatePage(blocks)
+                try check(translated[0].translatedText == "고마워" && translated[0].box == blocks[0].box && FixtureProtocol.state.count == 1,
+                          "Changing lifetime altered translation mapping or generated extra requests.")
+            }
+        }
+    }
     private static func checkGemmaValidationRetry(_ blocks: [TextBlock], session: URLSession) async throws {
         FixtureProtocol.state.install { _ in
             let content = FixtureProtocol.state.count == 1 ? "[R0] ありがとう (고마워)" : "[R0] 고마워"
@@ -247,6 +268,28 @@ enum NetworkBoundaryChecks {
         do { _ = try await TranslateGemmaPageTranslator(session: session).translatePage(blocks); throw BoundaryCheckError.failed("Bilingual reply was accepted.") }
         catch TranslationError.invalidPageResponse { }
         try check(FixtureProtocol.state.count == 2, "Specialist retry was unbounded.")
+    }
+    private static func checkVisionRetention(session: URLSession) async throws {
+        for retention in OllamaConfiguration.Retention.allCases {
+            let configuration = OllamaConfiguration(model: OllamaConfiguration.visionModel, retention: retention)
+            for caption in [true, false] {
+                FixtureProtocol.state.install { request in
+                    let payload = try JSONDecoder().decode(RetentionProbe.self, from: Self.body(request))
+                    try check(payload.keep_alive == retention.rawValue && payload.model == OllamaConfiguration.visionModel,
+                              "Supplemental vision calls ignored the model lifetime setting.")
+                    let content = caption ? #"{"text":"青い空"}"# : #"{"regions":[]}"#
+                    return (200, try JSONEncoder().encode(ChatReply(message: Message(role: "assistant", content: content))))
+                }
+                if caption {
+                    let text = try await OllamaOpticalTextReader(configuration: configuration, session: session).recognize(Data([1]))
+                    try check(text == "青い空", "Vision retention changed transcription.")
+                } else {
+                    let effects = try await OllamaSoundEffectDetector(configuration: configuration, session: session).recognize(imageData: Data([1]))
+                    try check(effects.isEmpty, "Vision retention produced additional regions.")
+                }
+                try check(FixtureProtocol.state.count == 1, "Vision lifetime control generated extra requests.")
+            }
+        }
     }
     private static func checkLocalGuard(_ blocks: [TextBlock], session: URLSession) async throws {
         let endpoint = URL(string: "https://example.invalid/api/chat")!
@@ -304,8 +347,10 @@ enum NetworkBoundaryChecks {
     private struct Message: Codable { let role: String; let content: String }
     private struct GemmaProbe: Decodable {
         let model: String; let messages: [UserMessage]; let format: String?; let think: Bool?
+        let keep_alive: String
         struct UserMessage: Decodable { let role: String; let content: String }
     }
+    private struct RetentionProbe: Decodable { let model: String; let keep_alive: String }
     private struct ChatReply: Encodable {
         let message: Message
         var done: Bool? = true

@@ -4,7 +4,7 @@ import MangaLadaCore
 import UniformTypeIdentifiers
 
 enum GraphicalTitleRecognition {
-    static func repair(in url: URL, blocks: [TextBlock]) async throws -> [TextBlock] {
+    static func repair(in url: URL, blocks: [TextBlock], retention: OllamaConfiguration.Retention) async throws -> [TextBlock] {
         guard let source = CGImageSourceCreateWithURL(url as CFURL, nil), let image = CGImageSourceCreateImageAtIndex(source, 0, nil) else {
             throw CocoaError(.fileReadCorruptFile)
         }
@@ -22,7 +22,8 @@ enum GraphicalTitleRecognition {
             guard let destination = CGImageDestinationCreateWithData(data, UTType.png.identifier as CFString, 1, nil) else { throw CocoaError(.fileWriteUnknown) }
             CGImageDestinationAddImage(destination, crop, nil)
             guard CGImageDestinationFinalize(destination) else { throw CocoaError(.fileWriteUnknown) }
-            resolved[index].originalText = try await OllamaOpticalTextReader().recognize(data as Data)
+            let configuration = OllamaConfiguration(model: OllamaConfiguration.visionModel, retention: retention)
+            resolved[index].originalText = try await OllamaOpticalTextReader(configuration: configuration).recognize(data as Data)
             resolved[index].textKind = .title
         }
         return resolved

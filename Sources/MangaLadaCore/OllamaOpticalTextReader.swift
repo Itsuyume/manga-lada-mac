@@ -1,9 +1,12 @@
 import Foundation
 
 public struct OllamaOpticalTextReader: Sendable {
-    public init() {}
+    private let client: OllamaChatClient
+    public init(configuration: OllamaConfiguration = OllamaConfiguration(model: OllamaConfiguration.visionModel), session: URLSession = .shared) {
+        client = OllamaChatClient(configuration: configuration, session: session)
+    }
     public func recognize(_ image: Data) async throws -> String {
-        try await OllamaChatClient(configuration: OllamaConfiguration(model: OllamaConfiguration.visionModel), session: .shared).validated(
+        try await client.validated(
             system: "You transcribe printed Japanese characters exactly. Do not translate or infer plot.",
             user: "Read all printed Japanese text in this crop, top to bottom and right to left. Preserve names. Ignore illustration. Return only {\"text\":\"exact original Japanese\"}.",
             schema: .object(properties: ["text": .string(choices: nil)], required: ["text"]), images: [image], outputTokens: 256) { data in

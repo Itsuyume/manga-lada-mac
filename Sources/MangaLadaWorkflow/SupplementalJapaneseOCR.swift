@@ -6,10 +6,12 @@ import UniformTypeIdentifiers
 
 enum SupplementalJapaneseOCR {
     static func recognize(in imageURL: URL, existing blocks: [TextBlock],
+                          retention: OllamaConfiguration.Retention,
                           verifyProposals: @Sendable ([TextBlock]) async throws -> [TextBlock]) async throws -> (blocks: [TextBlock], extras: [TextBlock], unverified: Int) {
         var candidates = try await VisionOCRService().recognizeText(in: imageURL, recognitionLanguages: ["ja-JP"])
         let imageData = try await Task.detached { try prepareVisionImage(imageURL) }.value
-        let effects = try await OllamaSoundEffectDetector().recognize(imageData: imageData)
+        let configuration = OllamaConfiguration(model: OllamaConfiguration.visionModel, retention: retention)
+        let effects = try await OllamaSoundEffectDetector(configuration: configuration).recognize(imageData: imageData)
         let cropped = try await verifyProposals(effects)
         candidates += cropped.filter { recognized in effects.contains { effect in
             effect.id == recognized.id && effect.originalText.filter { !$0.isWhitespace } == recognized.originalText.filter { !$0.isWhitespace }

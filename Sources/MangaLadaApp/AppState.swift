@@ -82,15 +82,17 @@ final class AppState: ObservableObject {
     @discardableResult
     func saveSettings(configuration: LocalTranslatorConfiguration, typography: MangaTypography, renderCompleted: Bool = true) -> Bool {
         guard !isBusy else { return false }
-        guard self.configuration == configuration || requireAppliedReviews() else { return false }
+        let translatorChanged = configuration.requiresRetranslation(comparedTo: self.configuration)
+        guard !translatorChanged || requireAppliedReviews() else { return false }
         do {
             try settingsStore.save(configuration: configuration, typography: typography)
-            let translatorChanged = self.configuration != configuration
+            let typographyChanged = self.typography != typography
             self.configuration = configuration; self.typography = typography; showSettings = false
             if translatorChanged {
                 results = [:]; reviewDrafts = [:]; reviewErrors = [:]; failures = [:]; imageRevision += 1
                 statusMessage = "번역 방식이 바뀌었습니다. 전체 번역 시작을 눌러 새 설정으로 번역해주세요."
-            } else if renderCompleted { rerenderCompletedPages() }
+            } else if renderCompleted && typographyChanged { rerenderCompletedPages() }
+            else { statusMessage = "설정을 저장했습니다. 기존 번역과 검수 수정은 유지됩니다." }
             return true
         } catch { errorMessage = error.localizedDescription; return false }
     }

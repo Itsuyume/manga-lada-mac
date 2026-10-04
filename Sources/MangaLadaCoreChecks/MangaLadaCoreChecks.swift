@@ -10,6 +10,7 @@ struct MangaLadaCoreChecks {
         try ReadingBehaviorChecks.run()
         try SelectionGeometryChecks.run()
         try TranslationReviewChecks.run()
+        try ModelRetentionChecks.run()
         try await NetworkBoundaryChecks.run()
         try checkImageScannerKeepsOnlySupportedImagesAndSortsNaturally()
         try checkImageScannerFindsNestedImagesNaturally()

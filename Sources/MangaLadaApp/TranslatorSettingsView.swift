@@ -22,7 +22,7 @@ struct TranslatorSettingsView: View {
                         Text("Gemini Flash-Lite · 저가 API").tag(TranslationProvider.geminiFlashLite)
                     }
                     if configuration.provider == .ollama {
-                        LocalModelSettings(model: $configuration.ollama.model) {
+                        LocalModelSettings(model: $configuration.ollama.model, retention: $configuration.ollama.retention) {
                             if state.saveSettings(configuration: configuration, typography: typography, renderCompleted: false) { state.prepareLocalModel() }
                         }
                     } else {
@@ -58,7 +58,8 @@ struct TranslatorSettingsView: View {
                 }
             }.formStyle(.grouped)
             HStack {
-                Text(configuration == state.configuration ? "원본과 기존 번역 캐시는 유지됩니다." : "저장 후 ‘전체 번역 시작’을 눌러 다시 번역해주세요.")
+                Text(configuration.requiresRetranslation(comparedTo: state.configuration)
+                     ? "저장 후 ‘전체 번역 시작’을 눌러 다시 번역해주세요." : "원본과 기존 번역·검수 수정은 유지됩니다.")
                     .font(.system(size: 11)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                 Spacer()
                 Button("취소") { state.showSettings = false }.keyboardShortcut(.cancelAction)

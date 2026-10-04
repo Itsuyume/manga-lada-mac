@@ -24,7 +24,8 @@ public struct LocalTranslatorConfiguration: Equatable, Sendable {
         return Self(
             provider: file?.provider ?? .ollama,
             maxConcurrentRequests: environment["MANGA_LADA_MAX_CONCURRENT_TRANSLATIONS"].flatMap(Int.init) ?? file?.maxConcurrentRequests ?? 1,
-            ollama: OllamaConfiguration(model: environment["MANGA_LADA_OLLAMA_MODEL"] ?? file?.ollamaModel ?? OllamaConfiguration.defaultModel),
+            ollama: OllamaConfiguration(model: environment["MANGA_LADA_OLLAMA_MODEL"] ?? file?.ollamaModel ?? OllamaConfiguration.defaultModel,
+                                       retention: file?.ollamaKeepAlive ?? .balanced),
             gemini: GeminiConfiguration(model: file?.geminiModel ?? GeminiConfiguration.defaultModel, apiKey: environment["GEMINI_API_KEY"] ?? ""),
             enhanceSoundEffects: file?.enhanceSoundEffects ?? false
         )
@@ -32,7 +33,8 @@ public struct LocalTranslatorConfiguration: Equatable, Sendable {
 
     public func save(to url: URL) throws {
         let file = ConfigurationFile(provider: provider, maxConcurrentRequests: maxConcurrentRequests,
-                                     ollamaModel: ollama.model, geminiModel: gemini.model, enhanceSoundEffects: enhanceSoundEffects)
+                                     ollamaModel: ollama.model, geminiModel: gemini.model, enhanceSoundEffects: enhanceSoundEffects,
+                                     ollamaKeepAlive: ollama.retention)
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
@@ -48,12 +50,20 @@ public struct LocalTranslatorConfiguration: Equatable, Sendable {
         provider == .geminiFlashLite || (provider == .ollama && !ollama.isTranslationSpecialist)
     }
 
+    public func requiresRetranslation(comparedTo previous: Self) -> Bool {
+        var comparable = self
+        // Retention affects execution lifetime only; preserve all other comparison behavior.
+        comparable.ollama.retention = previous.ollama.retention
+        return comparable != previous
+    }
+
     private struct ConfigurationFile: Codable {
         let provider: TranslationProvider?
         let maxConcurrentRequests: Int?
         let ollamaModel: String?
         let geminiModel: String?
         let enhanceSoundEffects: Bool?
+        let ollamaKeepAlive: OllamaConfiguration.Retention?
     }
 }
 
@@ -63,10 +73,15 @@ public struct OllamaConfiguration: Equatable, Sendable {
     public static let visionModel = "qwen3.5:9b"
     public let endpoint: URL
     public var model: String
+    public var retention: Retention
     public var isTranslationSpecialist: Bool { model.lowercased().hasPrefix("translategemma") }
-    public init(endpoint: URL = Self.defaultEndpoint, model: String = Self.defaultModel) {
+    public init(endpoint: URL = Self.defaultEndpoint, model: String = Self.defaultModel, retention: Retention = .balanced) {
         self.endpoint = endpoint
         self.model = model
+        self.retention = retention
+    }
+    public enum Retention: String, Codable, CaseIterable, Sendable {
+        case short = "1m", balanced = "5m", extended = "15m"
     }
 }
 
