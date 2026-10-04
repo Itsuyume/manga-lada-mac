@@ -52,19 +52,11 @@ class JapaneseEngine:
         if blocks is None:
             self.ocr.load_model()
             blocks = self.read_blocks(image, mask, detected)
-        optical_mask, optical_paint = self.add_optical_effects(image, blocks, request)
+        optical_mask, optical_boxes = self.add_optical_effects(image, blocks, request)
         mask = self.cv2.bitwise_or(mask, optical_mask)
-        text_mask = mask.copy()
-        self.expand_outline_mask(image, mask, detected)
-        paint_blocks = self.inpainting_blocks(detected, width, height) + optical_paint
-        from flat_background import prepare_flat_backgrounds
-        prepared, pending = prepare_flat_backgrounds(image, image, mask, [block.xyxy for block in paint_blocks])
-        unresolved = [block for block in paint_blocks if pending[block.xyxy[1]:block.xyxy[3], block.xyxy[0]:block.xyxy[2]].any()]
-        result = self.painter.inpaint(prepared, pending.copy(), unresolved, check_need_inpaint=False) if unresolved else prepared.copy()
-        result[pending == 0] = prepared[pending == 0]
         from balloon_geometry import BalloonGeometry, separate_shared_balloons
         from text_region_kind import classify_text_kind
-        geometry = BalloonGeometry(image, text_mask=text_mask)
+        geometry = BalloonGeometry(image, text_mask=mask.copy())
         sound_effect_sources = set(request["soundEffectSources"])
         for block in blocks:
             block["balloonShape"] = geometry.shape(block["box"], block["detectedFontSize"])
@@ -72,6 +64,15 @@ class JapaneseEngine:
             if kind is not None:
                 block["textKind"] = kind
         separate_shared_balloons(blocks)
+        punctuation_mask, punctuation_boxes = self.add_sentence_punctuation(image, blocks)
+        mask = self.cv2.bitwise_or(mask, punctuation_mask)
+        self.expand_outline_mask(image, mask, detected)
+        paint_blocks = self.inpainting_blocks(detected, width, height) + self.inpainting_regions(optical_boxes + punctuation_boxes)
+        from flat_background import prepare_flat_backgrounds
+        prepared, pending = prepare_flat_backgrounds(image, image, mask, [block.xyxy for block in paint_blocks])
+        unresolved = [block for block in paint_blocks if pending[block.xyxy[1]:block.xyxy[3], block.xyxy[0]:block.xyxy[2]].any()]
+        result = self.painter.inpaint(prepared, pending.copy(), unresolved, check_need_inpaint=False) if unresolved else prepared.copy()
+        result[pending == 0] = prepared[pending == 0]
         destination = Path(request["destination"])
         destination.parent.mkdir(parents=True, exist_ok=True)
         temporary = destination.with_name("recognized.partial.png")
@@ -82,7 +83,6 @@ class JapaneseEngine:
 
     def add_optical_effects(self, image, blocks: list[dict], request: dict) -> tuple:
         from optical_effects import plan_effects, confirmed_effects, effect_mask
-        from ballontranslator.utils.textblock import TextBlock
         proposals, matched = plan_effects(blocks, request["opticalCandidates"],
                                           set(request["soundEffectSources"]), request["soundEffectPatterns"])
         verified = []
@@ -97,12 +97,31 @@ class JapaneseEngine:
                          rotationDegrees=0)
         mask, boxes = effect_mask(image, matched + extras)
         blocks.extend(extras)
-        paint = []
+        return mask, boxes
+
+    def add_sentence_punctuation(self, image, blocks: list[dict]) -> tuple:
+        from sentence_punctuation import sentence_end_candidates, confirms_sentence_end
+        from erase_supplemental_text import glyph_mask
+        candidates = sentence_end_candidates(image, blocks)
+        confirmed = []
+        if candidates:
+            self.ocr.load_model()
+        for candidate in candidates:
+            left, top, right, bottom = candidate.crop
+            recognized = self.ocr.ocr_img(image[top:bottom, left:right])
+            if confirms_sentence_end(candidate, recognized):
+                confirmed.append(candidate.box)
+        return glyph_mask(image, confirmed, bounded=True)
+
+    @staticmethod
+    def inpainting_regions(boxes: list) -> list["TextBlock"]:
+        from ballontranslator.utils.textblock import TextBlock
+        regions = []
         for left, top, right, bottom in boxes:
             block = TextBlock(xyxy=[left, top, right, bottom])
             block.set_lines_by_xywh([left, top, right - left, bottom - top])
-            paint.append(block)
-        return mask, paint
+            regions.append(block)
+        return regions
 
     @staticmethod
     def inpainting_blocks(detected: list["TextBlock"], width: int, height: int) -> list["TextBlock"]:
@@ -112,16 +131,13 @@ class JapaneseEngine:
         xyxy crop alone. Tight OCR polygons can cut off glyph tips at high resolution.
         These rectangles bound the existing ink mask; they do not fill or erase it.
         """
-        from ballontranslator.utils.textblock import TextBlock
-        regions = []
+        boxes = []
         for block in detected:
             x1, y1, x2, y2 = map(int, block.xyxy)
             pad = max(3, int(block._detected_font_size * .22))
             x1, y1, x2, y2 = max(0, x1 - pad), max(0, y1 - pad), min(width, x2 + pad), min(height, y2 + pad)
-            region = TextBlock(xyxy=[x1, y1, x2, y2])
-            region.set_lines_by_xywh([x1, y1, x2 - x1, y2 - y1])
-            regions.append(region)
-        return regions
+            boxes.append([x1, y1, x2, y2])
+        return JapaneseEngine.inpainting_regions(boxes)
 
     def read_proposed_regions(self, image, regions: list[dict]) -> list[dict]:
         if len(regions) > 40:

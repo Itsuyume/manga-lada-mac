@@ -6,8 +6,8 @@ package struct JapanesePageKeys {
     package let recognition: String
     let previousRecognition: [String]
     let previous: [String]
-    private static let translationVersion = 32
-    private static let recognitionVersion = 31
+    private static let translationVersion = 33
+    private static let recognitionVersion = 32
     package init(imageURL: URL, configuration: LocalTranslatorConfiguration, context: String, title: String) throws {
         let fingerprints = ImageFingerprint()
         let image = try fingerprints.make(for: imageURL)

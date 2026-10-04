@@ -15,12 +15,23 @@ jobs:
       - run: python3 scripts/check_balloon_geometry.py
       - run: python3 scripts/check_text_region_kind.py
       - run: python3 scripts/check_optical_effects.py
+      - run: python3 scripts/check_sentence_punctuation.py
       - run: python3 scripts/check_flat_backgrounds.py
       - run: python3 scripts/check_supplemental_mask.py
       - run: brew install swiftlint
       - run: python3 scripts/check_architecture.py
       - run: swiftlint lint --strict
       - run: swift build --explicit-target-dependency-import-check error
+      - name: Packaged punctuation behavior
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import subprocess
+          binary_directory = Path(subprocess.check_output(["swift", "build", "--show-bin-path"], text=True).strip())
+          workers = list(binary_directory.rglob("japanese_engine_worker.py"))
+          assert len(workers) == 1, "Expected one packaged OCR worker"
+          subprocess.run(["python3", "scripts/check_sentence_punctuation.py", "--resources", str(workers[0].parent)], check=True)
+          PY
       - run: swift run MangaLadaCoreChecks
       - run: swift run -c release MangaLadaCoreChecks
       - run: swift run MangaLadaVisionChecks
