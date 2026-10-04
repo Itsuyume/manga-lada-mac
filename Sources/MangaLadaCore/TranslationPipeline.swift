@@ -55,6 +55,7 @@ public struct TranslationPipeline: Sendable {
             }
             try MaskedTextTranslation.validateKnownNames(updated.translatedText, source: result[index].originalText)
             result[index].translatedText = updated.translatedText
+            result[index].textKind = updated.textKind
             result[index].maskedTextInterpretation = updated.maskedTextInterpretation
         }
         return result
@@ -78,10 +79,11 @@ public struct TranslationPipeline: Sendable {
     private func translateRequest(_ blocks: [TextBlock], selectedIDs: Set<UUID>?, configuration: LocalTranslatorConfiguration,
                                   translator: TextTranslating?, previousContext: String, refreshMaskedContext: Bool) async throws -> [TextBlock] {
         let requested = selectedIDs ?? Set(blocks.map(\.id))
+        let classified = try JapaneseSoundEffectLexicon.bundled().inferKinds(blocks, selectedIDs: requested)
         let maskedIDs = Set(blocks.filter {
             configuration.interpretMaskedText && requested.contains($0.id) && MaskedTextTranslation.requiresContextTranslation($0.originalText)
         }.map(\.id))
-        let prepared = try await maskedPreparation.prepare(blocks, selectedIDs: selectedIDs, configuration: configuration,
+        let prepared = try await maskedPreparation.prepare(classified, selectedIDs: selectedIDs, configuration: configuration,
             previousContext: previousContext, refresh: refreshMaskedContext)
         guard !maskedIDs.isEmpty, translator == nil else {
             return try await translatePrepared(prepared, configuration: configuration, translator: translator,
@@ -151,20 +153,31 @@ public struct TranslationPipeline: Sendable {
     private func translatePage(_ blocks: [TextBlock], configuration: LocalTranslatorConfiguration,
                                previousContext: String, selectedIDs: Set<UUID>?) async throws -> [TextBlock] {
         let ordered = MangaReadingOrder.sorted(blocks)
+        let lexicon = try JapaneseSoundEffectLexicon.bundled()
+        let fixedEffects = Dictionary(uniqueKeysWithValues: ordered.compactMap { block -> (UUID, String)? in
+            guard block.textKind == .soundEffect, let text = lexicon.translation(for: block.originalText) else { return nil }
+            return (block.id, text)
+        })
         let count = selectedIDs?.count ?? ordered.count
         await progress?(TranslationProgress(provider: configuration.provider, completed: 0, total: count))
         try Task.checkCancellation()
-        let input = ordered.filter { !TextLanguageDetector.isPunctuationOnly($0.originalText) }
+        let input = ordered.filter { !TextLanguageDetector.isPunctuationOnly($0.originalText) && fixedEffects[$0.id] == nil }
         let selectedWords = selectedIDs.map { $0.intersection(Set(input.map(\.id))) }
         var translated: [TextBlock] = []
         if !input.isEmpty, selectedWords?.isEmpty != true {
             let translator: any MangaPageTranslating = configuration.provider == .ollama
                 ? OllamaPageTranslator(configuration: configuration.ollama, session: session, selectedIDs: selectedWords)
                 : GeminiPageTranslator(configuration: configuration.gemini, session: session, selectedIDs: selectedWords)
-            translated = try await translator.translatePage(input, previousContext: previousContext)
+            let context = fixedEffects.isEmpty ? previousContext
+                : Self.context(ordered.filter { fixedEffects[$0.id] != nil }, previous: previousContext)
+            translated = try await translator.translatePage(input, previousContext: context)
         }
         let result = try ordered.map { block in
             guard selectedIDs?.contains(block.id) != false else { return block }
+            if let text = fixedEffects[block.id] {
+                var effect = block; effect.translatedText = text
+                return effect
+            }
             if TextLanguageDetector.isPunctuationOnly(block.originalText) {
                 var preserved = block
                 preserved.translatedText = block.originalText.trimmingCharacters(in: .whitespacesAndNewlines)

@@ -21,7 +21,7 @@ let package = Package(
     targets: [
         .target(
             name: "MangaLadaCore",
-            resources: [.copy("Resources/sound-effect-lexicon.json")]
+            resources: [.copy("Resources/sound-effect-lexicon.json"), .copy("Resources/Licenses")]
         ),
         .target(
             name: "MangaLadaVision",

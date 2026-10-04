@@ -14,7 +14,7 @@ from text_region_kind import classify_text_kind
 
 catalog_path = Path(__file__).resolve().parents[1] / "Sources/MangaLadaCore/Resources/sound-effect-lexicon.json"
 catalog = json.loads(catalog_path.read_text())
-sound_effect_sources = {source for entry in catalog["entries"] for source in entry["sources"]}
+sound_effect_sources = {source for entry in catalog["entries"] if entry.get("recognition", True) for source in entry["sources"]}
 
 
 def enclosed(color: int, rectangle: bool = True) -> tuple:
@@ -54,11 +54,15 @@ def run():
     image, block = enclosed(20, rectangle=False)
     check_kind(image, block, None)  # Dark dialogue is not automatically narration.
     blank = np.zeros((1, 1, 3), np.uint8)
-    for text in ("", "あっ", "アッ", "うん", "ナナ", "ママ", "ココ", "キキ", "ホテル", "ありがとう", "雨が降ってきた"):
+    for text in ("", "あっ", "アッ", "うん", "ナナ", "ママ", "ココ", "キキ", "ホテル", "ありがとう", "雨が降ってきた",
+                 "にちっと音がした", "こんにちは", "にゃっ", "ニチカ", "きっと"):
         check_kind(blank, {"originalText": text, "balloonShape": None}, None)
     for text in ("ザアア", "ザーッ", "ゴゴゴ", "ドンドン", "カチッ", "ガチャン", "バタン", "ゴロゴロ", "ｻﾞｱｱ", "ザアア…",
-                 "ザアァーッ", "バタンバタン", "ガチャガチャ", "ゴロゴロゴロゴロ", "ピッピッピッ"):
+                 "ザアァーッ", "バタンバタン", "ガチャガチャ", "ゴロゴロゴロゴロ", "ピッピッピッ",
+                 "にちっ", "ニチッ", "ﾆﾁｯ", "にちゃっ", "にちゃにちゃ", "ニチャニチャ", "ニャー", "ねばねば", "プニプニ"):
         effect = {"originalText": text, "balloonShape": None}
+        check_kind(blank, effect, "soundEffect")
+        effect.update(textKind="dialogue")
         check_kind(blank, effect, "soundEffect")
         effect.update(textKind="dialogue", userDefinedTextKind=True)
         check_kind(blank, effect, "dialogue")

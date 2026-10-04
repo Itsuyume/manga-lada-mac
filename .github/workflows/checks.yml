@@ -14,6 +14,7 @@ jobs:
       - run: python3 -m pip install -r scripts/requirements-checks.txt
       - run: python3 scripts/check_balloon_geometry.py
       - run: python3 scripts/check_text_region_kind.py
+      - run: python3 scripts/check_effect_catalog.py
       - run: python3 scripts/check_optical_effects.py
       - run: python3 scripts/check_sentence_punctuation.py
       - run: python3 scripts/check_flat_backgrounds.py

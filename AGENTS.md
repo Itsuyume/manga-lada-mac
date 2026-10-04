@@ -28,7 +28,9 @@ Python OCR 프로세스의 대기 종료는 Ballons의 `JapaneseEngineSession`�
 
 원본 윤곽과 배경색을 기준으로 말풍선 내부·글자 대비를 결정합니다. 원문 제거 이미지에서 테두리를 재추정하지 않습니다. 윤곽 안의 글자 포함률을 검사하고 드래그 영역도 윤곽과 교차시킵니다. 캐시 버전과 이전 인식 키의 SSOT는 `JapanesePageKeys`, 이미지와 검수 목록의 종류·색 표시는 `MangaTextKind+Presentation`입니다. 처리 버전 갱신 후 수동 영역·종류 변경·검수 문구 보존을 확인합니다.
 
-효과음 인식 표기와 한국어 기본형은 Core의 `Resources/sound-effect-lexicon.json`이 단일 출처입니다. Core는 목록을 검증하고, Ballons 요청은 검증된 원문 목록을 Python에 명시적으로 전달합니다. Python에 같은 단어 목록을 복제하지 않습니다. 한국어 기본형이 없는 항목은 문맥에 따라 번역을 유지하며 새 모델 응답의 효과음에만 보정을 적용합니다. 기존 검수 캐시를 사전으로 일괄 덮어쓰지 않습니다.
+효과음 인식 표기·뜻 후보·한국어 기본형은 Core의 `Resources/sound-effect-lexicon.json`이 단일 출처입니다. Core는 목록을 검증하고, Ballons 요청은 `recognition != false`인 원문만 Python에 명시적으로 전달합니다. Python에 같은 단어 목록을 복제하지 않습니다. `scripts/update_effect_lexicon.py`는 공식 JMdict의 효과음·의태어 읽기와 뜻만 추출하며 원본 날짜·해시·항목 번호를 남깁니다. 일반 부사·짧은 발화는 자동 후보에서 제외하고 수동 항목이 내려받은 표기보다 우선합니다. 갱신 전후와 실패 시 파일 부작용은 `scripts/check_effect_catalog.py`로 검사합니다. 사전 데이터의 CC BY-SA 출처·라이선스는 앱과 문서에 함께 배포합니다.
+
+`TranslationPipeline`은 새 번역 및 선택 재번역에서 같은 `inferKinds`를 재사용합니다. 선택하지 않은 문구, 말풍선 안의 대사, 수동 종류·영역, 제목은 자동 변경하지 않습니다. 확정 한국어 기본형의 효과음은 페이지 모델 요청에서 제외하고 UUID로 합치며 문맥으로는 유지합니다. 다의어의 뜻 후보는 `MangaTranslationPrompt.soundEffectGuidance`를 통해 TranslateGemma/Qwen/Gemini에 공통 전달합니다. 원문 철자·좌표는 바꾸지 않고 기존 검수 캐시를 사전으로 일괄 덮어쓰지 않습니다. 개별 재번역의 자동 분류 갱신도 검수 임시본에만 저장하며 수정 적용 전에는 이미지·번역 캐시를 바꾸지 않습니다.
 
 선택 문구 재번역과 드래그 번역은 Core의 `TranslationPipeline.translateSelected`를 공유합니다. 페이지 번역 모델에는 주변 일본어를 함께 전달하고, 응답에서 선택한 ID의 한국어만 갱신합니다. 선택하지 않은 검수 문구, 배열 순서, 영역·종류·글꼴 정보는 보존합니다. 문자열별로 동작하는 Google 제공자는 선택한 문구만 요청합니다. 모델 경계 검사는 URLSession에서 수행하며 내부 번역 구현을 대체하지 않습니다.
 

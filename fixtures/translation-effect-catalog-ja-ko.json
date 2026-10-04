@@ -1,0 +1,9 @@
+[
+  {"id":"sticky-adhesive","texts":["接着剤のついた紙をゆっくりはがした。","にちっ"],"kinds":["caption","dialogue"],"reviewedTexts":["접착제를 붙인 종이를 천천히 떼었다. (검수)","야옹"],"selectedIndices":[1],"reviewPoints":["두 번째 영역을 효과음으로 다시 분류한다.","끈적한 접착면 소리를 짧게 표현한다. 고양이 울음이나 발음 전사를 넣지 않는다.","첫 번째 검수 문구와 좌표·원문은 그대로 유지한다."]},
+  {"id":"isolated-sticky","texts":["ニチッ"],"kinds":["dialogue"],"reviewPoints":["효과음으로 인식한다. 질척·쩍·끈적 계열이며 야옹으로 바꾸지 않는다.","그림이 없으므로 특정 물체나 행동을 지어내지 않는다."]},
+  {"id":"cat-counterexample","texts":["猫が窓辺で鳴いた。","ニャー"],"kinds":["caption","soundEffect"],"reviewedTexts":["고양이가 창가에서 울었다. (검수)","기존 울음소리"],"selectedIndices":[1],"reviewPoints":["실제 고양이 울음이다. 야옹 계열을 유지하며 끈적한 소리로 바꾸지 않는다."]},
+  {"id":"ordinary-speech","texts":["きっと明日は晴れる。","にちっと音がした。"],"kinds":["dialogue","dialogue"],"reviewPoints":["완전한 문장과 일반 부사를 단독 효과음으로 분류하지 않는다."]},
+  {"id":"instant-fixed-effects","texts":["カチッ","バタン","ドキドキ"],"kinds":["dialogue","dialogue","dialogue"],"reviewPoints":["세 영역 모두 효과음으로 분류해 딸깍·쾅·두근두근을 모델 호출 없이 적용한다."]},
+  {"id":"downloaded-sticky","texts":["納豆を箸で混ぜている。","ねばねば"],"kinds":["caption","dialogue"],"reviewedTexts":["낫토를 젓가락으로 젓고 있다. (검수)","기존 효과음"],"selectedIndices":[1],"reviewPoints":["다운로드 사전으로 두 번째 영역을 효과음으로 인식한다. 끈적끈적 계열이며 대사를 새로 만들지 않는다."]},
+  {"id":"mixed-direct-and-context","texts":["カチッ","にちゃにちゃ"],"kinds":["dialogue","dialogue"],"previousContext":"粘り気のある生地をこねていた。","reviewPoints":["확정 효과음은 딸깍으로 즉시 적용하고, 나머지만 모델로 번역한다.","모델에 전달되는 번호를 다시 매겨도 원래 영역 ID와 종류가 유지된다."]}
+]

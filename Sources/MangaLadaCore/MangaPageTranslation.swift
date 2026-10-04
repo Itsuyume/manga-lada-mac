@@ -90,7 +90,19 @@ enum MangaTranslationPrompt {
         }
         let data = try JSONEncoder().encode(regions)
         let masking = MaskedTextTranslation.instruction(for: blocks.map(\.originalText))
-        return "Previous page (context only):\n\(previousContext.suffix(3_000))\n\(masking)\nRegions in reading order:\n\(String(decoding: data, as: UTF8.self))"
+        let effects = try soundEffectGuidance(blocks: blocks)
+        return "Previous page (context only):\n\(previousContext.suffix(3_000))\n\(masking)\n\(effects)\nRegions in reading order:\n\(String(decoding: data, as: UTF8.self))"
+    }
+
+    static func soundEffectGuidance(blocks: [TextBlock]) throws -> String {
+        guard blocks.contains(where: { $0.textKind == .soundEffect }) else { return "" }
+        let lexicon = try JapaneseSoundEffectLexicon.bundled()
+        let hints = blocks.enumerated().compactMap { index, block -> String? in
+            guard block.textKind == .soundEffect else { return nil }
+            return "R\(index): sound effect. " + (lexicon.meaning(for: block.originalText) ?? "Infer its sound or motion from context.")
+        }
+        return "Sound-effect guide (context only, never copy into output):\n" + hints.joined(separator: "\n")
+            + "\nRender effects as concise natural Korean onomatopoeia. Do not turn them into spoken sentences or transliterate Japanese sounds."
     }
 
     private struct Region: Encodable {

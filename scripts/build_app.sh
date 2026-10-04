@@ -19,6 +19,9 @@ bundle_app() {
       ditto "$resource" "$app_dir/Contents/Resources/$(basename "$resource")"
     fi
   done
+  if [[ "$executable" == "MangaLada" ]]; then
+    cp "$ROOT_DIR/scripts/TranslatorCredits.rtf" "$app_dir/Contents/Resources/Credits.rtf"
+  fi
   # Runtime bytecode from prior local checks is not an application resource.
   find "$app_dir/Contents/Resources" -type d -name '__pycache__' -prune -exec rm -rf {} +
   swift "$ROOT_DIR/scripts/make_icon.swift" "$app_dir/Contents/Resources/AppIcon.icns" "$icon_variant"
@@ -46,8 +49,8 @@ bundle_app() {
     </dict>
   </array>
   <key>CFBundlePackageType</key><string>APPL</string>
-  <key>CFBundleShortVersionString</key><string>0.2.27</string>
-  <key>CFBundleVersion</key><string>33</string>
+  <key>CFBundleShortVersionString</key><string>0.2.28</string>
+  <key>CFBundleVersion</key><string>34</string>
   <key>LSMinimumSystemVersion</key><string>14.0</string>
   <key>NSHighResolutionCapable</key><true/>
   <key>NSSupportsAutomaticGraphicsSwitching</key><true/>

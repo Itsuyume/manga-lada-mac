@@ -72,10 +72,10 @@ enum SoundEffectTranslationChecks {
     private static func checkKindRefinement() throws {
         let lexicon = try JapaneseSoundEffectLexicon.bundled()
         try check(lexicon.inferKinds([]).isEmpty, "Empty OCR produced an effect.")
-        for source in ["カチッ", "ｶﾁｯ。", "バタンバタン", "ザアァーッ", "ゴロゴロ"] {
+        for source in ["カチッ", "ｶﾁｯ。", "バタンバタン", "ザアァーッ", "ゴロゴロ", "にちっ", "ニチッ", "ﾆﾁｯ", "にちゃっ", "にちゃにちゃ", "ニチャニチャ"] {
             try check(lexicon.recognizes(source), "A catalog form or complete effect pattern was missed: \(source)")
         }
-        for source in ["", "ナナ", "あっ", "カチッと音がした", "大きなバタン", "バタンと"] {
+        for source in ["", "ナナ", "あっ", "ああ", "ふふふ", "あっさり", "カチッと音がした", "大きなバタン", "バタンと", "にちっと音がした", "こんにちは", "にゃっ", "ニチカ", "きっと"] {
             try check(!lexicon.recognizes(source), "Dialogue, a name, or a partial match became an effect: \(source)")
         }
         let bounds = TextBox(x: 0.2, y: 0.6, width: 0.5, height: 0.08)
@@ -98,6 +98,11 @@ enum SoundEffectTranslationChecks {
         protected = corrected[0]; protected.textKind = .title
         try check(lexicon.inferKinds([protected]) == [protected], "Automatic inference changed an explicit title.")
         try check(block.originalText == "バタンパタン" && block.textKind == .dialogue, "Refinement mutated input data.")
+        let sticky = TextBlock(box: bounds, originalText: "にちっ", translatedText: "야옹", sourceIsVertical: true, textKind: .dialogue)
+        var expectedSticky = sticky; expectedSticky.textKind = .soundEffect
+        try check(lexicon.inferKinds([sticky]) == [expectedSticky], "Vertical sticky effect retained an automatic dialogue kind.")
+        var cat = sticky; cat.originalText = "にゃっ"
+        try check(lexicon.inferKinds([cat]) == [cat], "A real cat sound was respelled or classified as a sticky effect.")
     }
 
     private static func checkLexicon() throws {
@@ -118,6 +123,12 @@ enum SoundEffectTranslationChecks {
         try check(lexicon.translation(for: "カチッと音がした") == nil && lexicon.translation(for: "") == nil,
                   "A partial word or empty source matched an effect entry.")
         try check(lexicon.sourceForms.count == Set(lexicon.sourceForms).count, "OCR hints contain duplicate source forms.")
+        try check(lexicon.sourceForms.count > 1_000 && lexicon.meaning(for: "にちゃにちゃ") != nil,
+                  "Downloaded effect meanings or automatic forms were not bundled.")
+        try check(lexicon.meaning(for: "きっと") != nil && !lexicon.recognizes("きっと"),
+                  "An ambiguous ordinary adverb became an automatic effect.")
+        try check(lexicon.meaning(for: "ニャー")?.contains("meow") == true && lexicon.translation(for: "ニャー") == nil,
+                  "Cat sound meaning was confused with the sticky effect family.")
     }
 
     private static func decode(source: String, text: String, kind: MangaTextKind = .soundEffect) throws -> TextBlock {

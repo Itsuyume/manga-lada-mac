@@ -6,6 +6,8 @@ public struct JapaneseSoundEffectLexicon: Sendable {
     public let sourceForms: [String]
     public let recognitionPatterns: [String]
     private let translations: [String: String]
+    private let meanings: [String: String]
+    private let recognizedSources: Set<String>
 
     public init(data: Data) throws {
         let catalog = try JSONDecoder().decode(Catalog.self, from: data)
@@ -15,12 +17,16 @@ public struct JapaneseSoundEffectLexicon: Sendable {
             guard !pattern.isEmpty else { throw LexiconError.invalidCatalog }
             _ = try NSRegularExpression(pattern: pattern)
         }
-        var sources = Set<String>(), preferred: [String: String] = [:]
+        var sources = Set<String>(), automatic = Set<String>(), preferred: [String: String] = [:], hints: [String: String] = [:]
         for entry in catalog.entries {
             guard !entry.sources.isEmpty else { throw LexiconError.invalidCatalog }
             if let korean = entry.korean {
                 guard TextLanguageDetector.containsKorean(korean), !TextLanguageDetector.containsJapanese(korean),
                       korean == korean.trimmingCharacters(in: .whitespacesAndNewlines) else { throw LexiconError.invalidCatalog }
+            }
+            if let meaning = entry.meaning {
+                guard !meaning.isEmpty, meaning.count <= 600,
+                      meaning == meaning.trimmingCharacters(in: .whitespacesAndNewlines) else { throw LexiconError.invalidCatalog }
             }
             for source in entry.sources {
                 let normalized = Self.normalized(source)
@@ -28,10 +34,14 @@ public struct JapaneseSoundEffectLexicon: Sendable {
                     throw LexiconError.invalidCatalog
                 }
                 preferred[normalized] = entry.korean
+                hints[normalized] = entry.meaning
+                if entry.recognition != false { automatic.insert(normalized) }
             }
         }
-        sourceForms = sources.sorted()
+        sourceForms = automatic.sorted()
+        recognizedSources = automatic
         translations = preferred
+        meanings = hints
     }
 
     public static func bundled() throws -> Self {
@@ -41,9 +51,11 @@ public struct JapaneseSoundEffectLexicon: Sendable {
         return try Self(data: Data(contentsOf: url))
     }
     public func translation(for source: String) -> String? { translations[Self.normalized(source)] }
-    public func inferKinds(_ blocks: [TextBlock]) -> [TextBlock] {
+    public func meaning(for source: String) -> String? { meanings[Self.normalized(source)] }
+    public func inferKinds(_ blocks: [TextBlock], selectedIDs: Set<UUID>? = nil) -> [TextBlock] {
         blocks.map { block in
-            guard block.balloonShape == nil, block.userDefinedTextKind != true, block.userDefinedBounds == nil,
+            guard selectedIDs?.contains(block.id) != false, block.balloonShape == nil,
+                  block.userDefinedTextKind != true, block.userDefinedBounds == nil,
                   block.textKind != .title, recognizes(block.originalText) else { return block }
             var effect = block; effect.textKind = .soundEffect
             return effect
@@ -51,7 +63,7 @@ public struct JapaneseSoundEffectLexicon: Sendable {
     }
     public func recognizes(_ source: String) -> Bool {
         let text = Self.normalized(source)
-        return sourceForms.contains(text) || recognitionPatterns.contains { pattern in
+        return recognizedSources.contains(text) || recognitionPatterns.contains { pattern in
             guard let range = text.range(of: pattern, options: .regularExpression) else { return false }
             return range == text.startIndex..<text.endIndex
         }
@@ -60,7 +72,9 @@ public struct JapaneseSoundEffectLexicon: Sendable {
         text.precomposedStringWithCompatibilityMapping.trimmingCharacters(in: CharacterSet(charactersIn: " \t\r\n.!?。…・"))
     }
     private struct Catalog: Decodable { let version: Int; let entries: [Entry]; let recognitionPatterns: [String]? }
-    private struct Entry: Decodable { let sources: [String]; let korean: String? }
+    private struct Entry: Decodable {
+        let sources: [String]; let korean: String?; let meaning: String?; let recognition: Bool?
+    }
     private enum LexiconError: LocalizedError {
         case invalidCatalog
         var errorDescription: String? { "효과음 사전의 버전·원문·한국어 표기가 올바르지 않거나 중복되었습니다." }

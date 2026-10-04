@@ -12,7 +12,7 @@ sys.path.insert(0, str(root / "Sources/MangaLadaBallons/Resources"))
 from optical_effects import plan_effects, confirmed_effects, effect_mask
 
 catalog = json.loads((root / "Sources/MangaLadaCore/Resources/sound-effect-lexicon.json").read_text())
-sources = {source for entry in catalog["entries"] for source in entry["sources"]}
+sources = {source for entry in catalog["entries"] if entry.get("recognition", True) for source in entry["sources"]}
 patterns = catalog["recognitionPatterns"]
 
 
@@ -46,7 +46,7 @@ def run():
             pass
         else:
             raise AssertionError("Invalid or off-page optical rectangle was accepted")
-    for text in ["", "ナナ", "HELLO", "あっ", "カチッと音がした"]:
+    for text in ["", "ナナ", "HELLO", "あっ", "カチッと音がした", "きっと", "にちっと音がした"]:
         assert plan([], [region("unknown", text)]) == ([], []), "Name/dialogue/partial word became an automatic effect"
     missing, matching = plan([], [region("new")])
     assert len(missing) == 1 and missing[0]["id"] == "new" and not matching, "Independently located effect was lost"

@@ -7,6 +7,7 @@ enum NetworkBoundaryChecks {
         let session = URLSession(configuration: configuration)
         defer { session.invalidateAndCancel() }
         try await checkPunctuationPreservation(session: session)
+        try await checkEffectRouting(session: session)
         try await checkSelections(session: session)
         try await checkUnselectedLanguageErrors(session: session)
         try await checkMaskedText(session: session)
@@ -206,13 +207,11 @@ enum NetworkBoundaryChecks {
         let first = TextBlock(box: TextBox(x: 0.6, y: 0.5, width: 0.2, height: 0.1), originalText: "ザアア", textKind: .soundEffect)
         let second = TextBlock(box: TextBox(x: 0.2, y: 0.7, width: 0.2, height: 0.1), originalText: "カチッ", textKind: .soundEffect)
         let blocks = [second, caption, first]
-        FixtureProtocol.state.install { _ in
-            (200, try JSONEncoder().encode(ChatReply(message: Message(role: "assistant", content: "[R0] 日本語\n[R1] 쏴아아\n[R2] 딸깍"))))
-        }
+        FixtureProtocol.state.install { _ in throw BoundaryCheckError.failed("Fixed selected effects made an unnecessary model request.") }
         let pipeline = TranslationPipeline(sourceLanguage: .japanese, targetLanguage: .korean, session: session)
         let result = try await pipeline.translateSelected([first.id, second.id], in: blocks, configuration: LocalTranslatorConfiguration())
         var expected = blocks; expected[0].translatedText = "딸깍"; expected[2].translatedText = "쏴아아"
-        try check(result == expected && FixtureProtocol.state.count == 1, "Multiple selected IDs lost their reading-order mapping or preserved caption.")
+        try check(result == expected && FixtureProtocol.state.count == 0, "Multiple selected IDs lost their mapping, preserved caption or instant glossary path.")
     }
     private static func checkGemma(_ blocks: [TextBlock], session: URLSession) async throws {
         FixtureProtocol.state.install { request in

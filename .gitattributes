@@ -1,0 +1,2 @@
+# Preserve the publisher's license documents byte for byte.
+Sources/MangaLadaCore/Resources/Licenses/*.html -whitespace
