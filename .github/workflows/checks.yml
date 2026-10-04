@@ -25,6 +25,7 @@ jobs:
       - run: swift run -c release MangaLadaCoreChecks
       - run: swift run MangaLadaVisionChecks
       - run: swift run MangaLadaWorkflowChecks --cache-migration
+      - run: swift run MangaLadaBallonsChecks --session-lifetime
       - name: Rendering behavior checks
         timeout-minutes: 4
         run: |

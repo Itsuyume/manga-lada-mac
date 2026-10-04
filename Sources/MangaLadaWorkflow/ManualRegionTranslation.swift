@@ -15,7 +15,8 @@ package struct ManualRegionTranslation {
         await status("지정 영역 · 일본어 인식 중")
         let replaced = draft.translation.blocks.filter { ImageRegionSelection.containsCenter(box, of: $0.box) }
         let proposals = try proposedRegions(box: box, kind: kind, existing: replaced)
-        var recognized = try await session.verifyProposedRegions(source: draft.translation.imageURL, regions: proposals)
+        var recognized = try await session.verifyProposedRegions(source: draft.translation.imageURL, regions: proposals,
+                                                                  idleTimeout: configuration.ollama.retention.duration)
         try Self.validateRecognition(recognized, for: proposals)
         for index in recognized.indices {
             recognized[index].userDefinedOriginalText = false

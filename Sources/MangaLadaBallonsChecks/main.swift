@@ -8,6 +8,10 @@ struct MangaLadaBallonsChecks {
     @MainActor
     static func main() async {
         do {
+            if CommandLine.arguments.dropFirst() == ["--session-lifetime"] {
+                try await SessionLifetimeChecks.run()
+                return
+            }
             let run = try await runCheck()
             print("MangaLadaBallonsChecks passed: \(run.blockCount) blocks, \(run.renderedURL.path)")
         } catch {

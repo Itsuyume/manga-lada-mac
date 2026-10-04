@@ -6,29 +6,35 @@ public actor JapaneseEngineSession {
     private let engine: BallonsTranslatorEngine
     private var connection: JapaneseEngineConnection?
     private var processing = false
+    private var idleShutdown: Task<Void, Never>?
+    private var idleGeneration: UUID?
     public init(engine: BallonsTranslatorEngine) { self.engine = engine }
+    deinit { idleShutdown?.cancel() }
 
     public func recognizeAndClean(source: URL, runID: String, priorBlocks: [TextBlock]? = nil,
-                                  opticalCandidates: [TextBlock] = []) async throws -> PageTranslation {
+                                  opticalCandidates: [TextBlock] = [],
+                                  idleTimeout: Duration = OllamaConfiguration.Retention.balanced.duration) async throws -> PageTranslation {
         let lexicon = try JapaneseSoundEffectLexicon.bundled()
         let blocks = try await exchange(Request(source: source.path, destination: engine.inpaintedImageURL(runID: runID).path,
                                                blocks: priorBlocks, regions: nil, soundEffectSources: lexicon.sourceForms,
-                                               soundEffectPatterns: lexicon.recognitionPatterns, opticalCandidates: opticalCandidates))
+                                               soundEffectPatterns: lexicon.recognitionPatterns, opticalCandidates: opticalCandidates), idleTimeout: idleTimeout)
         return PageTranslation(imageURL: source, imageFingerprint: runID, sourceLanguage: .japanese, targetLanguage: .korean, blocks: blocks)
     }
-    public func verifyProposedRegions(source: URL, regions: [TextBlock]) async throws -> [TextBlock] {
+    public func verifyProposedRegions(source: URL, regions: [TextBlock],
+                                      idleTimeout: Duration = OllamaConfiguration.Retention.balanced.duration) async throws -> [TextBlock] {
         guard !regions.isEmpty else { return [] }
         return try await exchange(Request(source: source.path, destination: nil, blocks: nil, regions: regions,
-                                          soundEffectSources: nil, soundEffectPatterns: nil, opticalCandidates: nil))
+                                          soundEffectSources: nil, soundEffectPatterns: nil, opticalCandidates: nil), idleTimeout: idleTimeout)
     }
-    private func exchange(_ value: Request) async throws -> [TextBlock] {
+    private func exchange(_ value: Request, idleTimeout: Duration) async throws -> [TextBlock] {
         guard !processing else { throw JapaneseEngineSessionError.busy }
         try Task.checkCancellation()
+        let request = try JSONEncoder().encode(value)
+        cancelIdleShutdown()
         processing = true; defer { processing = false }
         let worker: JapaneseEngineConnection
         if let connection { worker = connection }
         else { worker = try JapaneseEngineConnection(engine: engine); connection = worker }
-        let request = try JSONEncoder().encode(value)
         do {
             let data = try await withTaskCancellationHandler {
                 try await Task.detached { try worker.exchange(request) }.value
@@ -37,6 +43,7 @@ public actor JapaneseEngineSession {
             let response = try JSONDecoder().decode(Response.self, from: data)
             if let error = response.error { throw JapaneseEngineSessionError.processing(error) }
             guard let blocks = response.blocks else { throw JapaneseEngineSessionError.invalidResponse }
+            scheduleIdleShutdown(after: idleTimeout)
             return blocks
         } catch {
             worker.terminate(); connection = nil
@@ -44,7 +51,25 @@ public actor JapaneseEngineSession {
             throw error
         }
     }
-    public func stop() { connection?.terminate(); connection = nil }
+    public func stop() {
+        cancelIdleShutdown()
+        connection?.terminate(); connection = nil
+    }
+    private func cancelIdleShutdown() {
+        idleShutdown?.cancel(); idleShutdown = nil; idleGeneration = nil
+    }
+    private func scheduleIdleShutdown(after delay: Duration) {
+        let generation = UUID(); idleGeneration = generation
+        idleShutdown = Task { [weak self] in
+            do { try await Task.sleep(for: delay) }
+            catch { return } // Task.sleep only throws when its wait is cancelled.
+            await self?.expireConnection(generation: generation)
+        }
+    }
+    private func expireConnection(generation: UUID) {
+        guard idleGeneration == generation, !processing else { return }
+        stop()
+    }
     private struct Request: Encodable {
         let source: String; let destination: String?; let blocks: [TextBlock]?; let regions: [TextBlock]?
         let soundEffectSources: [String]?

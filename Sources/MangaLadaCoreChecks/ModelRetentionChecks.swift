@@ -24,6 +24,8 @@ enum ModelRetentionChecks {
             try check(try Data(contentsOf: file) == data, "Reading invalid settings overwrote the user's file.")
         }
         let original = LocalTranslatorConfiguration()
+        try check(OllamaConfiguration.Retention.allCases.map(\.duration) == [.seconds(60), .seconds(300), .seconds(900)],
+                  "OCR session duration does not match the persisted model retention choices.")
         for retention in OllamaConfiguration.Retention.allCases {
             var edited = original; edited.ollama.retention = retention
             try edited.save(to: file)

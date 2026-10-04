@@ -27,10 +27,10 @@ struct LocalModelSettings: View {
                 .font(.system(size: 12)).foregroundStyle(.primary)
                 .disabled(model.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
         }.font(.system(size: 11)).foregroundStyle(.secondary)
-        Picker("번역 모델 대기", selection: $retention) {
+        Picker("로컬 모델 대기", selection: $retention) {
             ForEach(OllamaConfiguration.Retention.allCases, id: \.self) { Text(retentionLabel($0)).tag($0) }
         }
-        Text("마지막 번역 후 이 시간이 지나면 모델 메모리를 비웁니다. 다음 번역은 모델을 다시 읽느라 조금 늦게 시작할 수 있습니다. 변경은 다음 번역부터 적용되며 모델 파일은 유지됩니다.")
+        Text("번역·글자 인식 모델은 마지막 사용 후 이 시간이 지나면 메모리를 비웁니다. 진행 중인 인식은 중단하지 않습니다. 다음 작업은 모델을 다시 읽느라 조금 늦게 시작할 수 있습니다. 변경은 다음 작업부터 적용되며 모델 파일은 유지됩니다.")
             .font(.system(size: 11)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
     }
     private func retentionLabel(_ value: OllamaConfiguration.Retention) -> String {

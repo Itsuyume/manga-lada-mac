@@ -37,7 +37,8 @@ struct SupplementalPageTranslation {
         await status("대사 저장 완료 · 로컬 시각 모델로 효과음 보완 중")
         let augmented = try await SupplementalJapaneseOCR.recognize(in: base.translation.imageURL, existing: base.translation.blocks,
                                                                     retention: configuration.ollama.retention) { proposals in
-            try await recognitionSession.verifyProposedRegions(source: base.translation.imageURL, regions: proposals)
+            try await recognitionSession.verifyProposedRegions(source: base.translation.imageURL, regions: proposals,
+                                                                idleTimeout: configuration.ollama.retention.duration)
         }
         try Task.checkCancellation()
         let pipeline = TranslationPipeline(sourceLanguage: .japanese, targetLanguage: .korean)

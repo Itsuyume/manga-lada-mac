@@ -31,7 +31,7 @@ macOS 내장 libarchive를 사용하므로 7z 프로그램을 따로 설치할 �
 
 ## 기본 로컬 모델
 
-0.2.13부터 설정의 **번역 모델 대기**에서 마지막 요청 후 메모리 유지 시간을 고릅니다. **1분 · 메모리 절약**, **5분 · 균형**(기본), **15분 · 연속 작업**을 지원합니다. 기존 설정 파일에 값이 없으면 5분으로 읽습니다. 번역과 로컬 시각 모델 요청에 적용하며 모델 파일은 삭제하지 않습니다. 다음 요청부터 적용되고, 내려간 모델을 다시 읽을 때는 시작이 늦어질 수 있습니다. 대기 시간만 바꾸면 완료 페이지·번역 캐시·미적용 검수 문구를 보존하며 이미지를 다시 만들지 않습니다.
+설정의 **로컬 모델 대기**에서 마지막 요청 후 메모리 유지 시간을 고릅니다. **1분 · 메모리 절약**, **5분 · 균형**(기본), **15분 · 연속 작업**을 지원합니다. 기존 설정 파일에 값이 없으면 5분으로 읽습니다. 번역과 로컬 시각 모델 요청에 적용하며, 0.2.21부터 일본어 OCR·복원 엔진도 마지막 인식 완료 후 같은 시간만큼 사용하지 않으면 종료합니다. 진행 중인 인식은 중단하지 않고 연속 요청은 모델을 재사용합니다. 다음 요청부터 적용되며, 종료한 모델을 다시 읽을 때는 시작이 늦어질 수 있습니다. 모델 파일은 삭제하지 않습니다. 대기 시간만 바꾸면 완료 페이지·번역 캐시·미적용 검수 문구를 보존하며 이미지를 다시 만들지 않습니다.
 
 기본 번역 모델은 [TranslateGemma 12B](https://ollama.com/library/translategemma)입니다. 약 8.1GB이며 페이지의 일본어 문구를 함께 한국어로 번역합니다. 앞 페이지 문맥 전달은 Qwen/Gemini 모드에서 사용합니다. 장식된 저해상도 표지 제목 OCR과 선택한 효과음 추가 인식은 [Qwen3.5 9B](https://ollama.com/library/qwen3.5)를 사용하며 약 6.6GB입니다. OCR·원문 제거 모델은 책을 처리하는 동안 메모리에 유지하므로 페이지마다 다시 로드하지 않습니다.
 
@@ -141,6 +141,7 @@ swift run MangaLadaVisionChecks
 swift run MangaLadaRenderingChecks
 swift run MangaLadaImportChecks
 scripts/check_viewer_images.sh
+swift run MangaLadaBallonsChecks --session-lifetime
 swift run MangaLadaWorkflowChecks --cache-migration
 # 완성본 폴더를 실제 CBZ로 내보내고 모든 페이지 바이트·원본 보존 검사
 swift run MangaLadaImportChecks --export /path/to/completed-folder /path/to/output.cbz

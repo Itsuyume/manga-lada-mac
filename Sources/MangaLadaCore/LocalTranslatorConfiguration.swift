@@ -82,6 +82,13 @@ public struct OllamaConfiguration: Equatable, Sendable {
     }
     public enum Retention: String, Codable, CaseIterable, Sendable {
         case short = "1m", balanced = "5m", extended = "15m"
+        public var duration: Duration {
+            switch self {
+            case .short: .seconds(60)
+            case .balanced: .seconds(300)
+            case .extended: .seconds(900)
+            }
+        }
     }
 }
 

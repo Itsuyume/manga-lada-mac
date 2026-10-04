@@ -166,7 +166,8 @@ public final class MangaPageProcessor {
         let observations = try await VisionOCRService().recognizeText(in: imageURL, recognitionLanguages: ["ja-JP"], effectLexicon: lexicon)
         try Task.checkCancellation()
         await status(prior == nil ? "일본어 글자 검출 · 만화 OCR · 원문 제거 중" : "기존 일본어 인식 재사용 · 원문 복원 갱신 중")
-        var result = try await recognitionSession.recognizeAndClean(source: imageURL, runID: key, priorBlocks: prior?.blocks, opticalCandidates: observations)
+        var result = try await recognitionSession.recognizeAndClean(source: imageURL, runID: key, priorBlocks: prior?.blocks,
+            opticalCandidates: observations, idleTimeout: retention.duration)
         try Task.checkCancellation()
         if result.blocks.contains(where: { JapaneseHorizontalOCR.canRefine($0) }) {
             await status("가로 일본어 인식 대조 중")
@@ -176,7 +177,7 @@ public final class MangaPageProcessor {
                 // ink extent too, using the resident engine and the same source.
                 await status("보완한 원문의 끝 글자까지 제거 중")
                 result = try await recognitionSession.recognizeAndClean(source: imageURL, runID: key,
-                    priorBlocks: refined, opticalCandidates: observations)
+                    priorBlocks: refined, opticalCandidates: observations, idleTimeout: retention.duration)
             }
             try Task.checkCancellation()
         }
