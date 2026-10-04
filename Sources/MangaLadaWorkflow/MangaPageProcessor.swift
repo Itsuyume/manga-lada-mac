@@ -133,8 +133,14 @@ public final class MangaPageProcessor {
         let saved = Dictionary(uniqueKeysWithValues: result.translation.blocks.map { ($0.id, $0) })
         var translation = translation
         translation.blocks = translation.blocks.map { block in
-            guard let original = saved[block.id], original.originalText != block.originalText else { return block }
-            var updated = block; updated.userDefinedOriginalText = true
+            guard let original = saved[block.id] else { return block }
+            var updated = block
+            if original.originalText != block.originalText { updated.userDefinedOriginalText = true }
+            if original.originalText != block.originalText || original.translatedText != block.translatedText
+                || original.textKind != block.textKind || original.effectStyleID != block.effectStyleID
+                || original.box != block.box || original.userDefinedBounds != block.userDefinedBounds {
+                updated.verifiedPunctuationBounds = nil
+            }
             return updated
         }
         var edited = try PageImageRendering.render(translation: translation, cleanImageURL: result.cleanImageURL,

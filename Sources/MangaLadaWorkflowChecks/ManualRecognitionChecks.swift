@@ -26,6 +26,8 @@ enum ManualRecognitionChecks {
         try rejects([symbols, dialogue], for: [first])
         try rejects([symbols, symbols], for: [first, second])
         try rejects([dialogue], for: [first])
+        var moved = symbols; moved.box.x += 0.01
+        try rejects([moved], for: [first])
         print("Manual recognition passed: symbols/Japanese/mixed order accepted; empty/non-Japanese/missing/extra/duplicate/wrong IDs rejected; inputs unchanged")
     }
 

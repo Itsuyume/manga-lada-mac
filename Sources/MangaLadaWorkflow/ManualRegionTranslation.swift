@@ -18,6 +18,8 @@ package struct ManualRegionTranslation {
         var recognized = try await session.verifyProposedRegions(source: draft.translation.imageURL, regions: proposals)
         try Self.validateRecognition(recognized, for: proposals)
         for index in recognized.indices {
+            recognized[index].userDefinedOriginalText = false
+            recognized[index].verifiedPunctuationBounds = TextLanguageDetector.isPunctuationOnly(recognized[index].originalText) ? recognized[index].box : nil
             recognized[index].textKind = kind; recognized[index].detectedFontSize = nil; recognized[index].userDefinedTextKind = true
             if let original = replaced.first(where: { $0.id == recognized[index].id }) {
                 recognized[index].box = original.box; recognized[index].balloonShape = original.balloonShape
@@ -50,6 +52,7 @@ package struct ManualRegionTranslation {
         guard !proposals.isEmpty, recognized.count == proposals.count else { throw ManualRegionError.noJapanese }
         let identifiers = Set(recognized.map(\.id))
         guard identifiers.count == recognized.count, identifiers == Set(proposals.map(\.id)) else { throw ManualRegionError.invalidRecognition }
+        guard recognized.allSatisfy({ block in proposals.contains { $0.id == block.id && $0.box == block.box } }) else { throw ManualRegionError.invalidRecognition }
         guard recognized.allSatisfy({ TextLanguageDetector.containsJapanese($0.originalText)
             || TextLanguageDetector.isPunctuationOnly($0.originalText) }) else { throw ManualRegionError.noJapanese }
     }

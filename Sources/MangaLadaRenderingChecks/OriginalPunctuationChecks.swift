@@ -12,8 +12,8 @@ extension MangaLadaRenderingChecks {
                                 translatedText: "조용해졌다.", detectedFontSize: 32, textKind: .caption)
         let renderer = TranslatedImageRenderer()
         for pointScale in [1.0, 0.5] {
-            let original = makePunctuationImage(cleaned: false, pointScale: pointScale)
-            let clean = makePunctuationImage(cleaned: true, pointScale: pointScale)
+            let original = makePunctuationImage(pointScale: pointScale)
+            let clean = makePunctuationImage(cleanedDots: [184], pointScale: pointScale)
             let originalBytes = original.tiffRepresentation, cleanBytes = clean.tiffRepresentation
             let reference = try punctuationPixels(renderer.render(image: original, blocks: []))
             var blank = punctuation; blank.originalText = ""; blank.translatedText = ""
@@ -33,11 +33,49 @@ extension MangaLadaRenderingChecks {
             try require(original.tiffRepresentation == originalBytes && clean.tiffRepresentation == cleanBytes, "Rendering mutated an input image.")
             if pointScale == 1 { try output.tiffRepresentation!.write(to: root.appendingPathComponent("original-punctuation.tiff")) }
         }
-        let original = makePunctuationImage(cleaned: false), clean = makePunctuationImage(cleaned: true)
+        let original = makePunctuationImage(), clean = makePunctuationImage(cleanedDots: [184])
+        try checkManualPunctuationArtwork()
         try checkTightPunctuationBounds(renderer: renderer, original: original, clean: clean, punctuation: punctuation)
         try checkPunctuationEdits(renderer: renderer, original: original, clean: clean, punctuation: punctuation, caption: caption)
         try checkPunctuationFiles(root: root, original: original, clean: clean, punctuation: punctuation, caption: caption)
         print("Original punctuation passed: exact source pixels, pixel/point scales, edits/styles/placement, overlap, missing/mismatched original and unchanged inputs")
+    }
+
+    @MainActor
+    private static func checkManualPunctuationArtwork() throws {
+        let crop = TextBox(x: 0.2, y: 0.55, width: 0.6, height: 0.2)
+        let punctuation = TextBlock(box: .init(x: 0.4, y: 0.55, width: 0.2, height: 0.2), originalText: "．．．",
+            translatedText: "．．．", textKind: .dialogue, userDefinedBounds: crop, userDefinedTextKind: true,
+            userDefinedOriginalText: false, verifiedPunctuationBounds: crop)
+        let renderer = TranslatedImageRenderer()
+        for scale in [1.0, 0.5] {
+            let original = makePunctuationImage(pointScale: scale)
+            let clean = makePunctuationImage(cleanedDots: [100, 184, 268], pointScale: scale)
+            let before = clean.tiffRepresentation
+            let output = try renderer.render(image: clean, blocks: [punctuation], originalImage: original)
+            try require(try punctuationPixels(output) == punctuationPixels(renderer.render(image: original, blocks: [])),
+                        "Verified manual punctuation changed source size, spacing or unrelated pixels.")
+            try require(clean.tiffRepresentation == before, "Manual punctuation changed the input image.")
+        }
+        let original = makePunctuationImage(), clean = makePunctuationImage(cleanedDots: [100, 184, 268])
+        var legacy = punctuation; legacy.verifiedPunctuationBounds = nil
+        var unverified = punctuation; unverified.userDefinedOriginalText = nil
+        var edited = punctuation; edited.userDefinedOriginalText = true
+        var translated = punctuation; translated.translatedText = "!?"
+        var styled = punctuation; styled.textKind = .soundEffect; styled.effectStyleID = "impact"
+        var narrowed = punctuation; narrowed.userDefinedBounds = punctuation.box
+        var invalid = punctuation; invalid.verifiedPunctuationBounds?.x = -0.1
+        for block in [legacy, unverified, edited, translated, styled, narrowed, invalid] {
+            let expected = try renderer.render(image: clean, blocks: [block])
+            let actual = try renderer.render(image: clean, blocks: [block], originalImage: original)
+            try require(try punctuationPixels(actual) == punctuationPixels(expected), "Manual artwork overrode an edit or invalid/unverified bounds.")
+        }
+        let neighbor = TextBlock(box: .init(x: 0.25, y: 0.6, width: 0.1, height: 0.1), originalText: "音", translatedText: "소리")
+        let overlapping = [punctuation, neighbor]
+        let actual = try renderer.render(image: clean, blocks: overlapping, originalImage: original)
+        try require(try punctuationPixels(actual) == punctuationPixels(renderer.render(image: clean, blocks: overlapping)),
+                    "Manual punctuation restored original pixels over another region outside its old OCR box.")
+        print("Manual punctuation pixels passed: original size/spacing, pixel scales, legacy/unknown/edited/style/bounds/overlap protection")
     }
 
     @MainActor
@@ -113,13 +151,13 @@ extension MangaLadaRenderingChecks {
     }
 
     @MainActor
-    private static func makePunctuationImage(cleaned: Bool, pointScale: Double = 1) -> NSImage {
+    private static func makePunctuationImage(cleanedDots: Set<Int> = [], pointScale: Double = 1) -> NSImage {
         let bitmap = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: 400, pixelsHigh: 400, bitsPerSample: 8,
                                       samplesPerPixel: 4, hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0)!
         NSGraphicsContext.saveGraphicsState(); NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: bitmap)
         NSColor(white: 0.85, alpha: 1).setFill(); NSRect(x: 0, y: 0, width: 400, height: 400).fill()
         NSColor.black.setFill()
-        for x in [100, 184, 268] where !cleaned || x != 184 {
+        for x in [100, 184, 268] where !cleanedDots.contains(x) {
             NSBezierPath(ovalIn: NSRect(x: x, y: 124, width: 32, height: 32)).fill()
         }
         NSColor(calibratedRed: 0.4, green: 0.7, blue: 0.9, alpha: 1).setFill()

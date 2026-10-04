@@ -34,9 +34,9 @@ ViewerUI의 이미지 디코딩은 `PageImageLoader`, 표시 수명은 `PageImag
 
 순수 기호 판단과 기호 응답 예외는 Core의 `TextLanguageDetector`가 단일 출처입니다. `TranslationPipeline`은 모델 요청 전에 순수 기호를 분리하여 앞뒤 공백만 제거하고 원형을 유지합니다. 단어의 번역 실패를 원문으로 대체하지 않습니다. 기호만 선택하면 주변 단어에도 요청하지 않으며, 혼합 선택은 단어의 연속된 모델 번호와 원래 UUID를 구분하여 합칩니다. 선택하지 않은 검수·기하 정보는 보존합니다. 촉음 っ/ッ는 번역 대상이며, 빈 입력·빈 따옴표·숫자·단어는 기호 생략 대상이 아닙니다. 종류별 응답 검사와 모든 제공자의 전체/선택 경로가 같은 규칙을 사용합니다.
 
-기호의 원본 복구 후보 조건은 Core의 `PunctuationArtworkPolicy`, 픽셀 복구는 Rendering의 `OriginalPunctuation`이 소유합니다. Workflow와 Rendering에서 후보 조건을 중복 구현하지 않습니다. Workflow는 원본 URL을 렌더러에 명시적으로 전달합니다. 원문과 번역이 같고 수동 영역·종류·문구별 스타일이 없으며 다른 문구의 공간과 겹치지 않는 OCR 사각형에만 적용합니다. 안티앨리어싱 가장자리를 위한 2픽셀 여유도 겹침 검사에 포함하며 이미지 끝에서 자릅니다. 원본의 점 좌표와 실제 픽셀 좌표를 구분하고 크기가 다른 원본을 임의 확대하지 않습니다. 필요한 원본의 읽기 실패는 저장 경계로 전달하며 복구 대상이 없으면 원본을 추가로 읽지 않습니다. 이미지·OCR·번역 캐시를 이 기능에서 수정하지 않습니다.
+기호의 원본 복구 후보와 원본 영역은 Core의 `PunctuationArtworkPolicy`, 픽셀 복구는 Rendering의 `OriginalPunctuation`이 소유합니다. Workflow와 Rendering에서 후보 조건을 중복 구현하지 않습니다. Workflow는 원본 URL을 렌더러에 명시적으로 전달합니다. 원문과 번역이 같고 문구별 스타일이 없으며 다른 문구의 공간과 겹치지 않는 OCR 사각형에만 적용합니다. 자동 OCR은 수동 영역·종류가 없어야 합니다. 수동 OCR은 `TextBlock.verifiedPunctuationBounds`에 기록한 확인된 원본 영역과 `userDefinedOriginalText == false`가 필요합니다. 원본 영역은 선택 안에 포함돼야 하며 2픽셀 여유도 선택·페이지 경계에서 자릅니다. 직접 원문·번역·종류·스타일·배치를 바꾸면 Workflow의 수정 적용이 수동 원본 영역을 해제합니다. 필드 없는 구버전 수동 저장본을 추측으로 복구하지 않습니다. 원본의 점 좌표와 실제 픽셀 좌표를 구분하고 크기가 다른 원본을 임의 확대하지 않습니다. 필요한 원본의 읽기 실패는 저장 경계로 전달하며 복구 대상이 없으면 원본을 추가로 읽지 않습니다. 렌더러는 이미지·OCR·번역 캐시를 수정하지 않습니다.
 
-`TextBlock.userDefinedOriginalText`는 true=원문 수정, false=OCR 원문과 일치 확인, nil=미확인으로 구분합니다. Workflow의 `RecognitionCacheMigration`이 UUID·좌표·원문 대조를 소유하고 캐시 재사용과 첫 저장에 같은 검증을 적용합니다. Rendering은 false인 기호만 복구합니다. 원문과 번역을 같은 새 기호로 고쳐도 원본 그림 복구를 건너뜁니다. OCR 기록 없음·이동·중복 영역은 일치 증거로 취급하지 않으며, 필요한 캐시의 해석 오류는 전파합니다. 후보가 없으면 추가 캐시 읽기를 하지 않습니다. 이 구버전 기호 대조는 기존 캐시를 수정하지 않습니다. 원문 수정 표시를 기본·효과음 캐시와 윤곽 갱신에서 보존하며, 이전 데이터는 선택 필드 없이 읽을 수 있어야 합니다. 화면의 임시 편집은 기존 `TranslationReviewStore`를 유지하고 수정 적용 전에 캐시를 바꾸지 않습니다.
+`TextBlock.userDefinedOriginalText`는 true=원문 수정, false=OCR 원문과 일치 확인, nil=미확인으로 구분합니다. Workflow의 `RecognitionCacheMigration`이 UUID·좌표·원문 대조를 소유하고 캐시 재사용과 첫 저장에 같은 검증을 적용합니다. 이미 기록한 확인 여부와 수동 원본 영역은 이전의 부분 OCR 문구로 덮어쓰지 않습니다. 확인 표시가 없는 구버전만 원문 차이로 수정을 추정합니다. Rendering은 false인 기호만 복구합니다. 원문과 번역을 같은 새 기호로 고쳐도 원본 그림 복구를 건너뜁니다. OCR 기록 없음·이동·중복 영역은 일치 증거로 취급하지 않으며, 필요한 캐시의 해석 오류는 전파합니다. 후보가 없으면 추가 캐시 읽기를 하지 않습니다. 이 구버전 기호 대조는 기존 캐시를 수정하지 않습니다. 원문 수정 표시를 기본·효과음 캐시와 윤곽 갱신에서 보존하며, 이전 데이터는 선택 필드 없이 읽을 수 있어야 합니다. 화면의 임시 편집은 기존 `TranslationReviewStore`를 유지하고 수정 적용 전에 캐시를 바꾸지 않습니다.
 
 검수 임시 수정은 Core의 `TranslationReviewStore`가 기준 문구와 함께 원자적으로 저장하며, AppState가 복원·편집·적용·취소를 소유합니다. 검수창 View의 수명에 수정본을 맡기지 않습니다. 실제 바꾼 원문·번역·종류·스타일만 UUID로 복원하고 최신 좌표·영역 순서·수정하지 않은 문구는 유지합니다. 타이핑은 번역 캐시·완성 이미지를 수정하지 않습니다. 실패 시 임시 파일을 보존하고 오류를 표시하며 적용 성공 후에만 해제합니다.
 
@@ -44,7 +44,7 @@ ViewerUI의 이미지 디코딩은 `PageImageLoader`, 표시 수명은 `PageImag
 
 영역 드래그 제스처는 `ComicPageImage`가 번호·선택 표시 위에서 함께 처리합니다. `ComicImageSelectionOverlay`는 표시만 하고 입력을 가로채지 않습니다. 번호 클릭과 드래그가 함께 작동하는지는 설치한 앱에서 확인합니다.
 
-수동 영역의 OCR 응답은 Workflow의 `ManualRegionTranslation.validateRecognition`에서 검증합니다. 요청·응답의 개수와 UUID 집합이 같고 중복이 없어야 하며, 일본어 또는 Core의 `TextLanguageDetector.isPunctuationOnly`로 확인한 기호를 허용합니다. 점·물음표만 있는 영역을 언어가 없다는 이유로 거부하지 않습니다. 빈 내용·숫자·영어만 있는 응답은 그대로 실패시키며, 검증 전에 원문 제거·렌더링·캐시 저장을 하지 않습니다.
+수동 영역의 OCR 응답은 Workflow의 `ManualRegionTranslation.validateRecognition`에서 검증합니다. 요청·응답의 개수·UUID·원본 좌표가 같고 중복이 없어야 하며, 일본어 또는 Core의 `TextLanguageDetector.isPunctuationOnly`로 확인한 기호를 허용합니다. 검증한 기호의 OCR 영역을 기존 자동 인식 좌표로 돌려놓기 전에 기록합니다. 점·물음표만 있는 영역을 언어가 없다는 이유로 거부하지 않습니다. 빈 내용·숫자·영어만 있는 응답은 그대로 실패시키며, 검증 전에 수동 영역 결과를 원문 제거·렌더링·캐시에 반영하지 않습니다.
 
 정규화 사각형의 면적·교차·합집합은 Core의 `TextBoxGeometry`를 재사용합니다. `JapaneseHorizontalOCR`는 두 OCR의 영역을 대조해 가로 원문만 보완하며 좌표·윤곽·번호를 변경하지 않습니다. 플랫폼 OCR 호출은 Workflow→Vision 경계에 두고, 세로 글자·수동 검수·중복 또는 부분 인식은 보완 대상으로 삼지 않습니다.
 

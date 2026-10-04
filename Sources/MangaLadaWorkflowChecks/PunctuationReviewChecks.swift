@@ -46,7 +46,47 @@ enum PunctuationReviewChecks {
         try require(Data(contentsOf: reopenedURL) == editedOutput, "Reopening a saved review replaced the corrected glyph.")
         try require(Data(contentsOf: source) == sourceData && Data(contentsOf: clean) == cleanData && page.blocks == [block],
                     "Applying punctuation edits changed original images or baseline data.")
+        try checkManualArtworkEdits(root: root, source: source, clean: clean)
         print("Punctuation review passed: corrected source and translation, legacy decoding, primary cache, reopen and source preservation")
+    }
+
+    private static func checkManualArtworkEdits(root: URL, source: URL, clean: URL) throws {
+        let bounds = TextBox(x: 0.3, y: 0.3, width: 0.4, height: 0.4)
+        let block = TextBlock(box: bounds, originalText: "・", translatedText: "・", textKind: .dialogue,
+            userDefinedBounds: bounds, userDefinedTextKind: true, userDefinedOriginalText: false, verifiedPunctuationBounds: bounds)
+        let page = PageTranslation(imageURL: source, imageFingerprint: "manual-review", sourceLanguage: .japanese,
+                                   targetLanguage: .korean, blocks: [block])
+        let output = root.appendingPathComponent("manual-review.png")
+        var baseline = try PageImageRendering.render(translation: page, cleanImageURL: clean, destinationURL: output,
+                                                     typography: MangaTypography(), wasCached: false)
+        var primary = page; primary.imageFingerprint = "manual-primary"; baseline.primaryTranslation = primary
+        let originalOutput = try Data(contentsOf: output)
+        let processor = MangaPageProcessor(applicationSupportDirectory: root)
+        let cache = TranslationCache(cacheDirectory: root.appendingPathComponent("Cache"))
+        let edits: [(inout TextBlock) -> Void] = [
+            { $0.originalText = "!"; $0.translatedText = "!" },
+            { $0.translatedText = "?" },
+            { $0.textKind = .caption },
+            { $0.textKind = .soundEffect; $0.effectStyleID = "impact" },
+            { $0.userDefinedBounds = .init(x: 0.1, y: 0.1, width: 0.6, height: 0.4) },
+            { $0.box.x += 0.01 }
+        ]
+        for change in edits {
+            var draft = page; change(&draft.blocks[0])
+            let applied = try processor.applyEdits(to: baseline, translation: draft, typography: MangaTypography())
+            try require(applied.translation.blocks[0].verifiedPunctuationBounds == nil, "An explicit edit retained stale manual artwork bounds.")
+            let expected = root.appendingPathComponent("manual-expected.png")
+            _ = try TranslatedImageRenderer().writePNG(sourceImageURL: clean, translation: draft,
+                destinationURL: expected, backgroundStyle: .none)
+            try require(Data(contentsOf: output) == Data(contentsOf: expected), "Manual artwork hid an explicit text/kind/style/placement edit.")
+            let stored = try cache.load(fingerprint: page.imageFingerprint)!
+            try require(stored.blocks == applied.translation.blocks && cache.load(fingerprint: "manual-primary")?.blocks == stored.blocks,
+                        "Saved review lost manual artwork invalidation.")
+        }
+        let unchanged = try processor.applyEdits(to: baseline, translation: page, typography: MangaTypography())
+        try require(unchanged.translation.blocks == page.blocks && Data(contentsOf: output) == originalOutput,
+                    "Applying an unchanged review discarded verified manual punctuation.")
+        print("Manual punctuation review passed: edits clear artwork evidence, unchanged apply and primary cache preserve it")
     }
 
     static func image(cleaned: Bool) -> NSImage {

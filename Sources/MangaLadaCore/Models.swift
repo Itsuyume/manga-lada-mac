@@ -31,6 +31,8 @@ public struct TextBlock: Codable, Equatable, Identifiable, Sendable {
     public var userDefinedTextKind: Bool?
     /// True: applied source edit. False: source matches OCR. Nil: provenance is unverified.
     public var userDefinedOriginalText: Bool?
+    /// Exact source region read by manual OCR for unchanged punctuation; absent in legacy caches.
+    public var verifiedPunctuationBounds: TextBox?
 
     public init(
         id: UUID = UUID(),
@@ -46,7 +48,8 @@ public struct TextBlock: Codable, Equatable, Identifiable, Sendable {
         effectStyleID: String? = nil,
         userDefinedBounds: TextBox? = nil,
         userDefinedTextKind: Bool? = nil,
-        userDefinedOriginalText: Bool? = nil
+        userDefinedOriginalText: Bool? = nil,
+        verifiedPunctuationBounds: TextBox? = nil
     ) {
         self.id = id
         self.box = box
@@ -62,6 +65,7 @@ public struct TextBlock: Codable, Equatable, Identifiable, Sendable {
         self.userDefinedBounds = userDefinedBounds
         self.userDefinedTextKind = userDefinedTextKind
         self.userDefinedOriginalText = userDefinedOriginalText
+        self.verifiedPunctuationBounds = verifiedPunctuationBounds
     }
 }
 

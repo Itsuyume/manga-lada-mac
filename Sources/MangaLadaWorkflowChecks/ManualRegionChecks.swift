@@ -27,6 +27,11 @@ enum ManualRegionChecks {
         }
         let untouched = before.translation.blocks.filter { !ImageRegionSelection.containsCenter(box, of: $0.box) }
         guard untouched.allSatisfy({ result.translation.blocks.contains($0) }) else { throw ManualCheckFailure.failed("Unselected text changed.") }
+        for block in selected where TextLanguageDetector.isPunctuationOnly(block.originalText) {
+            guard block.verifiedPunctuationBounds != nil, block.userDefinedOriginalText == false else {
+                throw ManualCheckFailure.failed("Manual punctuation lost its verified source bounds.")
+            }
+        }
         let reloaded = try await processor.process(imageURL: source, destinationURL: output, configuration: configuration,
             typography: MangaTypography(), previousContext: "context changed", bookTitle: title)
         guard reloaded.wasCached, reloaded.translation.blocks == result.translation.blocks else { throw ManualCheckFailure.failed("Manual bounds/text were lost after reload.") }
@@ -43,6 +48,7 @@ enum ManualRegionChecks {
         guard selected.allSatisfy({ prior in forced.translation.blocks.contains { updated in
             updated.id == prior.id && updated.userDefinedBounds == prior.userDefinedBounds && updated.textKind == prior.textKind
                 && updated.userDefinedTextKind == true && updated.originalText == prior.originalText
+                && updated.verifiedPunctuationBounds == prior.verifiedPunctuationBounds
         } }) else { throw ManualCheckFailure.failed("Explicit retranslating lost manual bounds, identities, source text or chosen kind.") }
         guard bytes == (try Data(contentsOf: source)) else { throw ManualCheckFailure.failed("Retranslating modified the source image.") }
         for block in selected { print("Manual: \(block.originalText) -> \(block.translatedText)") }

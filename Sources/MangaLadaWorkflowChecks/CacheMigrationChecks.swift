@@ -60,6 +60,17 @@ enum CacheMigrationChecks {
                     && augmented[1] == extra, "Adding an effect lost manual style or pre-translated the new region.")
         var moved = rawOCR; moved.box.x += 0.1
         try require(RecognitionCacheMigration.reuse(page, for: [moved, extra]) == nil, "Moved source reused reviewed text while adding an effect.")
+        var manualPunctuation = saved
+        manualPunctuation.originalText = "．．．"; manualPunctuation.translatedText = "．．．"
+        manualPunctuation.effectStyleID = nil; manualPunctuation.userDefinedOriginalText = false
+        manualPunctuation.verifiedPunctuationBounds = box
+        var manualPage = page; manualPage.blocks = [manualPunctuation]
+        var earlierOCR = rawOCR; earlierOCR.originalText = "・"
+        let restoredManual = RecognitionCacheMigration.reuse(manualPage, for: [earlierOCR])!
+        try require(restoredManual[0].verifiedPunctuationBounds == box && restoredManual[0].userDefinedOriginalText == false,
+                    "An older partial OCR changed verified manual punctuation into a user edit.")
+        try require(try JSONDecoder().decode(PageTranslation.self, from: JSONEncoder().encode(manualPage)) == manualPage,
+                    "Manual source bounds were lost during cache encoding.")
         print("Cache migration checks passed: edited Japanese/Korean, new contours, manual bounds/kind/style, missing/duplicate/new/moved regions, source preserved")
     }
     private static func require(_ value: Bool, _ message: String) throws {
