@@ -5,6 +5,8 @@ import MangaLadaWorkflow
 extension AppState {
     func startTranslation(onlyCurrent: Bool = false, force: Bool = false) {
         guard !isBusy, !isLoading, !pages.isEmpty else { return }
+        let indices = onlyCurrent ? [currentIndex] : Array(pages.indices)
+        guard !force || requireAppliedReviews(at: indices) else { return }
         if outputRoot == nil {
             chooseOutputFolder { [weak self] in self?.startTranslation(onlyCurrent: onlyCurrent, force: force) }
             return
@@ -12,7 +14,6 @@ extension AppState {
         guard let outputRoot, let sourceURL else { statusMessage = "완성본 저장 폴더를 먼저 지정해주세요."; return }
         do { outputBook = try bookStore.prepare(sourceURL: sourceURL, title: title, pages: pages, outputRoot: outputRoot) }
         catch { errorMessage = error.localizedDescription; return }
-        let indices = onlyCurrent ? [currentIndex] : Array(pages.indices)
         let id = sessionID; isBusy = true; failures = [:]
         job = Task { await translate(indices: indices, force: force, session: id) }
     }
@@ -42,7 +43,7 @@ extension AppState {
                 await self?.updateStatus(message, page: index, session: session)
             }
             guard sessionID == session else { return }
-            results[index] = result; failures.removeValue(forKey: index); imageRevision += 1
+            recordResult(result, at: index); failures.removeValue(forKey: index); imageRevision += 1
             if var updated = outputBook {
                 updated.manifest.completedPages = results.keys.sorted(); updated.manifest.failures = failures
                 try bookStore.save(updated); outputBook = updated
@@ -59,7 +60,7 @@ extension AppState {
     }
     func updateCurrentTranslation(_ translation: PageTranslation) throws {
         guard !isBusy, let result = currentResult else { return }
-        results[currentIndex] = try processor.applyEdits(to: result, translation: translation, typography: typography)
-        imageRevision += 1; statusMessage = "문구와 글꼴 수정을 이미지에 저장했습니다."
+        try finishReview(processor.applyEdits(to: result, translation: translation, typography: typography), at: currentIndex)
+        statusMessage = "문구와 글꼴 수정을 이미지에 저장했습니다."
     }
 }

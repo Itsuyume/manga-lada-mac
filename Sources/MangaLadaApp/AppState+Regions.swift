@@ -23,6 +23,7 @@ extension AppState {
     }
     func retranslateBlock(in translation: PageTranslation, at blockIndex: Int) {
         guard !isBusy, !isLoading, let result = currentResult, translation.blocks.indices.contains(blockIndex) else { return }
+        guard reviewErrors[currentIndex] == nil else { _ = requireAppliedReviews(at: [currentIndex]); return }
         let page = currentIndex, id = sessionID
         isBusy = true
         job = Task { [self] in
@@ -35,14 +36,15 @@ extension AppState {
                     .translateSelected([translation.blocks[blockIndex].id], in: translation.blocks, configuration: configuration)
                 try Task.checkCancellation()
                 guard sessionID == id else { return }
-                results[page] = try processor.applyEdits(to: result, translation: updated, typography: typography)
-                imageRevision += 1; statusMessage = "이 문구를 다시 번역해 저장했습니다."
+                try finishReview(processor.applyEdits(to: result, translation: updated, typography: typography), at: page)
+                statusMessage = "이 문구를 다시 번역해 저장했습니다."
             } catch is CancellationError { statusMessage = "문구 번역을 중단했습니다." }
             catch { errorMessage = error.localizedDescription }
         }
     }
     func translateSelectedRegion() {
-        guard !isBusy, !isLoading, let box = selectedRegion, pages.indices.contains(currentIndex) else { return }
+        guard !isBusy, !isLoading, let box = selectedRegion, pages.indices.contains(currentIndex),
+              requireAppliedReviews(at: [currentIndex]) else { return }
         if outputRoot == nil { chooseOutputFolder { [weak self] in self?.translateSelectedRegion() }; return }
         guard let outputRoot, let sourceURL else { return }
         do { outputBook = try bookStore.prepare(sourceURL: sourceURL, title: title, pages: pages, outputRoot: outputRoot) }
@@ -60,7 +62,7 @@ extension AppState {
                     await MainActor.run { if self?.sessionID == id { self?.statusMessage = message } }
                 }
                 guard sessionID == id else { return }
-                results[index] = result; failures.removeValue(forKey: index); imageRevision += 1
+                recordResult(result, at: index); failures.removeValue(forKey: index); imageRevision += 1
                 isSelectingRegion = false; selectedRegion = nil; mode = .translated
                 focusBlock(result.translation.blocks.first { ImageRegionSelection.containsCenter(box, of: $0.box) }?.id)
                 if var updated = outputBook {

@@ -5,7 +5,8 @@ import SwiftUI
 
 struct TranslationInspector: View {
     @ObservedObject var state: AppState
-    @State private var draft: PageTranslation?
+    private var draft: PageTranslation? { state.currentReview }
+    private var editingDisabled: Bool { state.isBusy || state.isLoading || state.reviewErrors[state.currentIndex] != nil }
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack { Text("번역 검수").font(.system(size: 13, weight: .semibold)); Spacer(); Text("\(state.currentIndex + 1)쪽").foregroundStyle(.secondary) }
@@ -17,12 +18,17 @@ struct TranslationInspector: View {
                 Label(warning, systemImage: "exclamationmark.triangle").font(.system(size: 11)).foregroundStyle(.orange)
                     .fixedSize(horizontal: false, vertical: true).textSelection(.enabled)
             }
+            reviewNotice
             if let draft, !draft.blocks.isEmpty {
                 editors(draft)
-                Button("수정 적용", systemImage: "checkmark") { apply() }.disabled(state.isBusy)
+                HStack {
+                    Button("수정 적용", systemImage: "checkmark") { apply() }.disabled(editingDisabled)
+                    if state.hasCurrentReview { discardButton }
+                }
                 Button("현재 페이지 다시 번역", systemImage: "arrow.clockwise") { state.startTranslation(onlyCurrent: true, force: true) }.disabled(state.isBusy)
             } else if state.currentResult != nil {
                 Text("인식된 글자가 없는 페이지입니다.").foregroundStyle(.secondary)
+                if state.hasCurrentReview { discardButton }
             } else {
                 Text(state.processingIndex == state.currentIndex ? "일본어를 인식하고 번역하는 중입니다." : "이 페이지가 번역되면 문구를 수정할 수 있습니다.")
                     .foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
@@ -37,15 +43,30 @@ struct TranslationInspector: View {
                 Label(state.outputRoot?.lastPathComponent ?? "완성본 폴더 지정", systemImage: "folder").lineLimit(1)
             }.disabled(state.isBusy).help(state.outputRoot?.path ?? "완성본을 저장할 폴더를 선택해주세요.")
         }.font(.system(size: 12)).padding(16).background(Color(nsColor: .controlBackgroundColor))
-            .onChange(of: state.currentResult?.translation, initial: true) { _, translation in draft = translation }
-            .onChange(of: state.currentIndex) { _, _ in draft = state.currentResult?.translation }
+    }
+    @ViewBuilder private var reviewNotice: some View {
+        if let error = state.reviewErrors[state.currentIndex] {
+            Text(error).font(.system(size: 11)).foregroundStyle(.red)
+                .fixedSize(horizontal: false, vertical: true).textSelection(.enabled)
+        } else if state.hasCurrentReview {
+            VStack(alignment: .leading, spacing: 4) {
+                Label { Text("적용하지 않은 수정").fontWeight(.semibold) } icon: {
+                    Image(systemName: "pencil.circle").foregroundStyle(.orange)
+                }
+                Text("임시 보관됨 · ‘수정 적용’을 누르면 이미지에 저장됩니다.")
+                    .font(.system(size: 10)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            }.font(.system(size: 11))
+        }
+    }
+    private var discardButton: some View {
+        Button("수정 취소") { state.discardCurrentReview() }.disabled(state.isBusy || state.isLoading)
     }
     private func editors(_ translation: PageTranslation) -> some View {
         ScrollViewReader { proxy in
             ScrollView {
                 VStack(alignment: .leading, spacing: 14) {
                     ForEach(translation.blocks.indices, id: \.self) { index in
-                        editor(at: index).id(translation.blocks[index].id)
+                        editor(translation.blocks[index], number: index + 1).id(translation.blocks[index].id)
                     }
                 }
             }
@@ -53,39 +74,43 @@ struct TranslationInspector: View {
                 if let id = state.selectedBlockID { withAnimation(.easeOut(duration: 0.18)) { proxy.scrollTo(id, anchor: .top) } }
             }
             .onChange(of: state.selectedRegionNumbers) { _, numbers in
-                if let number = numbers.first { proxy.scrollTo(translation.blocks[number - 1].id, anchor: .top) }
+                if let number = numbers.first, translation.blocks.indices.contains(number - 1) {
+                    proxy.scrollTo(translation.blocks[number - 1].id, anchor: .top)
+                }
             }
         }
     }
-    private func editor(at index: Int) -> some View {
-        let block = draft?.blocks[index]
-        let active = block.map { state.isBlockSelected($0.id) } ?? false
+    private func editor(_ block: TextBlock, number: Int) -> some View {
+        let active = state.isBlockSelected(block.id)
         return VStack(alignment: .leading, spacing: 6) {
             HStack {
-                Button { state.focusBlock(block?.id) } label: {
-                    Text("\(index + 1)").font(.system(size: 11, weight: .bold)).monospacedDigit()
+                Button { state.focusBlock(block.id) } label: {
+                    Text("\(number)").font(.system(size: 11, weight: .bold)).monospacedDigit()
                         .foregroundStyle(active ? Color.white : Color.secondary).frame(minWidth: 23, minHeight: 22)
                         .background(active ? Color.accentColor : Color.clear, in: RoundedRectangle(cornerRadius: 4))
-                }.buttonStyle(.plain).help("이미지에서 \(index + 1)번 문구 표시")
-                Picker("문구 종류", selection: kindBinding(index)) {
+                }.buttonStyle(.plain).help("이미지에서 \(number)번 문구 표시")
+                Picker("문구 종류", selection: kindBinding(block)) {
                     ForEach(MangaTextKind.allCases, id: \.self) { Text($0.regionLabel).tag($0) }
-                }.labelsHidden().controlSize(.small).disabled(state.isBusy)
+                }.labelsHidden().controlSize(.small).disabled(editingDisabled)
             }
-            TextField("일본어 원문", text: originalBinding(index), axis: .vertical)
-                .font(.system(size: 11)).foregroundStyle(.secondary).disabled(state.isBusy)
-            Button("이 문구 다시 번역") { if let draft { state.retranslateBlock(in: draft, at: index) } }
-                .font(.system(size: 10)).disabled(state.isBusy)
-            if draft?.blocks[index].textKind == .soundEffect {
-                Picker("효과음 스타일", selection: effectStyleBinding(index)) {
+            TextField("일본어 원문", text: textBinding(block, \.originalText), axis: .vertical)
+                .font(.system(size: 11)).foregroundStyle(.secondary).disabled(editingDisabled)
+            Button("이 문구 다시 번역") {
+                if let draft, let index = draft.blocks.firstIndex(where: { $0.id == block.id }) {
+                    state.retranslateBlock(in: draft, at: index)
+                }
+            }.font(.system(size: 10)).disabled(editingDisabled)
+            if block.textKind == .soundEffect {
+                Picker("효과음 스타일", selection: effectStyleBinding(block)) {
                     Text("전체 설정 따르기").tag("")
                     Text("원문에 맞춰 추천").tag("automatic")
                     ForEach(state.effectStyles) { Text($0.name).tag($0.id) }
-                }.controlSize(.small).disabled(state.isBusy)
+                }.controlSize(.small).disabled(editingDisabled)
             }
-            TextEditor(text: textBinding(index)).font(.system(size: 13)).frame(minHeight: 54, maxHeight: 100)
+            TextEditor(text: textBinding(block, \.translatedText)).font(.system(size: 13)).frame(minHeight: 54, maxHeight: 100)
                 .padding(4).background(.background, in: RoundedRectangle(cornerRadius: 5))
                 .overlay { RoundedRectangle(cornerRadius: 5).stroke(.quaternary) }
-                .disabled(state.isBusy)
+                .disabled(editingDisabled)
         }.padding(7).background(active ? Color.accentColor.opacity(0.08) : Color.clear, in: RoundedRectangle(cornerRadius: 7))
             .overlay { RoundedRectangle(cornerRadius: 7).stroke(active ? Color.accentColor : Color.clear, lineWidth: 1) }
     }
@@ -96,19 +121,20 @@ struct TranslationInspector: View {
             } }.frame(maxHeight: 160)
         }.font(.system(size: 11))
     }
-    private func textBinding(_ index: Int) -> Binding<String> {
-        Binding(get: { draft?.blocks[index].translatedText ?? "" }, set: { draft?.blocks[index].translatedText = $0 })
-    }
-    private func originalBinding(_ index: Int) -> Binding<String> {
-        Binding(get: { draft?.blocks[index].originalText ?? "" }, set: { draft?.blocks[index].originalText = $0 })
-    }
-    private func kindBinding(_ index: Int) -> Binding<MangaTextKind> {
-        Binding(get: { draft?.blocks[index].textKind ?? .dialogue }, set: {
-            draft?.blocks[index].textKind = $0; draft?.blocks[index].userDefinedTextKind = true
+    private func textBinding(_ block: TextBlock, _ keyPath: WritableKeyPath<TextBlock, String>) -> Binding<String> {
+        Binding(get: { block[keyPath: keyPath] }, set: { value in
+            state.editReviewBlock(block.id) { $0[keyPath: keyPath] = value }
         })
     }
-    private func effectStyleBinding(_ index: Int) -> Binding<String> {
-        Binding(get: { draft?.blocks[index].effectStyleID ?? "" }, set: { draft?.blocks[index].effectStyleID = $0.isEmpty ? nil : $0 })
+    private func kindBinding(_ block: TextBlock) -> Binding<MangaTextKind> {
+        Binding(get: { block.textKind ?? .dialogue }, set: { value in
+            state.editReviewBlock(block.id) { $0.textKind = value; $0.userDefinedTextKind = true }
+        })
+    }
+    private func effectStyleBinding(_ block: TextBlock) -> Binding<String> {
+        Binding(get: { block.effectStyleID ?? "" }, set: { value in
+            state.editReviewBlock(block.id) { $0.effectStyleID = value.isEmpty ? nil : value }
+        })
     }
     private func apply() {
         guard let draft else { return }

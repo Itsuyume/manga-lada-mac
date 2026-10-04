@@ -19,6 +19,8 @@ final class AppState: ObservableObject {
     @Published var showInspector = true
     @Published var mode: AppMode = .translated
     @Published var results: [Int: ProcessedMangaPage] = [:]
+    @Published var reviewDrafts: [Int: PageTranslation] = [:]
+    @Published var reviewErrors: [Int: String] = [:]
     @Published var failures: [Int: String] = [:]
     @Published var processingIndex: Int?
     @Published var imageRevision = 0
@@ -39,6 +41,7 @@ final class AppState: ObservableObject {
     let bookStore = TranslationBookStore()
     let settingsStore = TranslatorSettingsStore()
     let runtime = LocalModelRuntime()
+    let reviewStore = TranslationReviewStore(directory: AppPaths.support.appendingPathComponent("ReviewDrafts"))
     var sourceURL: URL?
     var sessionID = UUID()
     var job: Task<Void, Never>?
@@ -79,12 +82,13 @@ final class AppState: ObservableObject {
     @discardableResult
     func saveSettings(configuration: LocalTranslatorConfiguration, typography: MangaTypography, renderCompleted: Bool = true) -> Bool {
         guard !isBusy else { return false }
+        guard self.configuration == configuration || requireAppliedReviews() else { return false }
         do {
             try settingsStore.save(configuration: configuration, typography: typography)
             let translatorChanged = self.configuration != configuration
             self.configuration = configuration; self.typography = typography; showSettings = false
             if translatorChanged {
-                results = [:]; failures = [:]; imageRevision += 1
+                results = [:]; reviewDrafts = [:]; reviewErrors = [:]; failures = [:]; imageRevision += 1
                 statusMessage = "번역 방식이 바뀌었습니다. 전체 번역 시작을 눌러 새 설정으로 번역해주세요."
             } else if renderCompleted { rerenderCompletedPages() }
             return true
@@ -110,7 +114,7 @@ final class AppState: ObservableObject {
                     try Task.checkCancellation()
                     guard let result = results[index] else { continue }
                     processingIndex = index; statusMessage = "\(index + 1)페이지 · 새 글꼴로 저장 중"
-                    results[index] = try processor.applyEdits(to: result, translation: result.translation, typography: typography)
+                    recordResult(try processor.applyEdits(to: result, translation: result.translation, typography: typography), at: index)
                     imageRevision += 1; await Task.yield()
                 }
                 statusMessage = "완성한 페이지 전체에 글꼴 설정을 적용했습니다."

@@ -28,13 +28,14 @@ extension AppState {
             guard sessionID == id else { return }
             pages = book.pages; currentIndex = book.initialIndex; title = book.title; sourceURL = book.sourceURL
             isSelectingRegion = false; selectedRegion = nil; selectedBlockID = nil
-            results = [:]; failures = [:]; outputBook = nil; imageRevision += 1; isLoading = false
+            results = [:]; reviewDrafts = [:]; reviewErrors = [:]; failures = [:]; outputBook = nil; imageRevision += 1; isLoading = false
             statusMessage = "\(pages.count)페이지를 열었습니다."
             if autoTranslate { startTranslation() }
         } catch { if sessionID == id { isLoading = false; statusMessage = "열기 실패"; errorMessage = error.localizedDescription } }
     }
     func chooseOutputFolder(then completion: @escaping @MainActor () -> Void = {}) {
         guard !isBusy, !isShowingFilePanel else { return }; isShowingFilePanel = true
+        guard requireAppliedReviews() else { isShowingFilePanel = false; return }
         let panel = NSOpenPanel(); panel.canChooseDirectories = true; panel.canChooseFiles = false
         panel.canCreateDirectories = true; panel.prompt = "완성본 저장 위치 지정"; panel.title = "번역된 만화를 저장할 폴더"
         panel.message = "이 폴더 아래에 책별 ‘한국어’ 폴더를 만들고 번역된 페이지를 자동 저장합니다."
@@ -46,7 +47,7 @@ extension AppState {
         }
     }
     private func applyOutputFolder(_ url: URL) {
-        if outputRoot != url { results = [:]; failures = [:]; imageRevision += 1 }
+        if outputRoot != url { results = [:]; reviewDrafts = [:]; reviewErrors = [:]; failures = [:]; imageRevision += 1 }
         outputRoot = url; outputBook = nil; UserDefaults.standard.set(url.path, forKey: "translator.outputRoot")
         statusMessage = "완성본 저장 위치: \(url.lastPathComponent)"
     }
@@ -56,12 +57,15 @@ extension AppState {
     }
     func openInReader() {
         guard let directory = outputBook?.directory, !results.isEmpty else { return }
+        guard requireAppliedReviews() else { return }
         Task {
             do { try await CompanionApplication.reader.open(directory) }
             catch { errorMessage = error.localizedDescription }
         }
     }
     func exportCurrentPNG() {
+        guard !isBusy, !isLoading else { return }
+        guard requireAppliedReviews(at: [currentIndex]) else { return }
         guard let result = currentResult, !isShowingFilePanel else { return }; isShowingFilePanel = true
         let panel = NSSavePanel(); panel.allowedContentTypes = [.png]; panel.directoryURL = outputBook?.directory
         panel.nameFieldStringValue = result.renderedImageURL.lastPathComponent
@@ -73,6 +77,8 @@ extension AppState {
         }
     }
     func exportCBZ() {
+        guard !isBusy, !isLoading else { return }
+        guard requireAppliedReviews() else { return }
         guard let book = outputBook, !isBusy, !isShowingFilePanel, results.count == pages.count, failures.isEmpty else { return }; isShowingFilePanel = true
         let panel = NSSavePanel(); panel.nameFieldStringValue = title + "_한국어.cbz"; panel.directoryURL = outputRoot
         Task {
