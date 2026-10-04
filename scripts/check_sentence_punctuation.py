@@ -80,8 +80,13 @@ def run():
     for vertical in [True, False]:
         check_pixels(vertical, False)
         check_pixels(vertical, True)
+        for dark in [False, True]:
+            check_multiline(vertical, dark, False)
+            check_multiline(vertical, dark, True)
+        check_multiline(vertical, False, True, scale=10)
     check_rejections()
-    print("Sentence punctuation passed: empty/invalid input, OCR disagreement, light/dark vertical/horizontal glyphs, manual/ambiguous/outside regions, source and artwork preservation")
+    check_multiline_rejections()
+    print("Sentence punctuation passed: empty/invalid input, OCR disagreement, light/dark vertical/horizontal and multiline endings, manual/ambiguous/outside regions, source and artwork preservation")
 
 
 def check_pixels(vertical, dark):
@@ -108,8 +113,6 @@ def check_rejections():
     assert sentence_end_candidates(filled, [block]) == [], "Solid artwork dot became a Japanese period"
     ambiguous = image.copy(); cv2.circle(ambiguous, (cx+12, cy), 4, (0, 0, 0), 2)
     assert sentence_end_candidates(ambiguous, [block]) == [], "Ambiguous adjacent ring chosen"
-    multiline = deepcopy(block); multiline["box"]["width"] = 80/240
-    assert sentence_end_candidates(image, [multiline]) == [], "Unsupported multiline crop was guessed"
     large = cv2.resize(image, None, fx=10, fy=10, interpolation=cv2.INTER_NEAREST)
     large_block = dict(block, detectedFontSize=320)
     candidates = sentence_end_candidates(large, [large_block])
@@ -118,6 +121,62 @@ def check_rejections():
     assert mask[cy*10-40:cy*10+41, cx*10-40:cx*10+41].any()
     large[cy*10:cy*10+3, cx*10+65:cx*10+68] = 0
     assert sentence_end_candidates(large, [large_block]) == [], "High-resolution mask could recruit nearby artwork"
+
+
+def multiline_fixture(vertical, dark, short_final):
+    image, block, _ = fixture()
+    image[50:165, 70:175] = 240
+    image[60:80, 80:102] = 0
+    if not short_final:
+        image[92:115, 80:102] = 0
+    image[60:80, 140:162] = 0
+    image[92:115, 140:162] = 0
+    center = (87, 102 if short_final else 137)
+    cv2.circle(image, center, 4, (0, 0, 0), 2)
+    block.update(box=dict(x=75/240, y=55/240, width=92/240, height=67/240), originalText="ゆっくりはがして")
+    if not vertical:
+        image = cv2.rotate(image, cv2.ROTATE_90_COUNTERCLOCKWISE)
+        box = block["box"]
+        block.update(box=dict(x=box["y"], y=1-box["x"]-box["width"], width=box["height"], height=box["width"]),
+                     sourceIsVertical=False)
+        center = (center[1], 239-center[0])
+        block["balloonShape"] = {"rows": [{"y": y/240, "left": 32/240, "right": 198/240} for y in range(56, 188)]}
+    return (255-image if dark else image), block, center
+
+
+def check_multiline(vertical, dark, short_final, scale=1):
+    image, block, (cx, cy) = multiline_fixture(vertical, dark, short_final)
+    if scale != 1:
+        image = cv2.resize(image, None, fx=scale, fy=scale, interpolation=cv2.INTER_NEAREST)
+        block["detectedFontSize"] *= scale
+        cx, cy = cx * scale, cy * scale
+    original, source = deepcopy(block), image.copy()
+    candidates = sentence_end_candidates(image, [block])
+    assert len(candidates) == 1, (vertical, dark, short_final, "Multiline period was not selected")
+    assert confirms_sentence_end(candidates[0], "ゆっくりはがして。")
+    assert not confirms_sentence_end(candidates[0], "ゆっくりはがして"), "A pixel ring alone confirmed punctuation"
+    mask, boxes = glyph_mask(image, [candidate.box for candidate in candidates], bounded=True)
+    assert mask[cy-4*scale:cy+5*scale, cx-4*scale:cx+5*scale].any(), "The sentence-final period was missed"
+    allowed = np.zeros_like(mask)
+    allowed[cy-12*scale:cy+13*scale, cx-12*scale:cx+13*scale] = 255
+    assert not mask[allowed == 0].any(), "A letter, neighboring column, or balloon border was selected"
+    assert len(boxes) == 1 and block == original and np.array_equal(image, source)
+
+
+def check_multiline_rejections():
+    image, block, (cx, cy) = multiline_fixture(True, False, True)
+    first_column_only = image.copy()
+    first_column_only[cy-6:cy+7, cx-6:cx+7] = 240
+    cv2.circle(first_column_only, (147, 137), 4, (0, 0, 0), 2)
+    assert sentence_end_candidates(first_column_only, [block]) == [], "A non-final column was used"
+    nonterminal = image.copy(); nonterminal[117:121, 80:102] = 0
+    assert sentence_end_candidates(nonterminal, [block]) == [], "A ring before more text was selected"
+    merged = image.copy(); merged[61:80, 80:163] = 0
+    assert sentence_end_candidates(merged, [block]) == [], "Unseparated text columns were guessed"
+    only_ring = image.copy(); only_ring[50:86, 70:110] = 240
+    assert sentence_end_candidates(only_ring, [block]) == [], "A ring without a preceding last-column character was selected"
+    other = dict(block, id="other", box=dict(x=(cx-7)/240, y=(cy-7)/240, width=14/240, height=14/240))
+    assert sentence_end_candidates(image, [block, other]) == [], "An overlapping region's glyph was selected"
 
 
 if __name__ == "__main__":

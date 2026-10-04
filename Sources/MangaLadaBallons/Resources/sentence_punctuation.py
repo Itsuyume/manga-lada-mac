@@ -16,7 +16,7 @@ class SentenceEndCandidate:
 
 
 def sentence_end_candidates(image: np.ndarray, blocks: list[dict]) -> list[SentenceEndCandidate]:
-    """Only single-line, unmodified dialogue with a measured balloon is eligible."""
+    """Propose the final reading line of unmodified text in a measured balloon."""
     height, width = image.shape[:2]
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     proposed = []
@@ -25,12 +25,21 @@ def sentence_end_candidates(image: np.ndarray, blocks: list[dict]) -> list[Sente
         font = block["detectedFontSize"]
         if not math.isfinite(font) or font <= 0:
             raise ValueError("Invalid punctuation font scale")
-        if not eligible(block, width, height):
+        if not eligible(block):
             continue
         if any(other["id"] != block["id"] and geometry.intersection_area(block["box"], other["box"]) > 0 for other in blocks):
             continue
         text, band = end_band(block, width, height)
+        vertical = block["sourceIsVertical"]
+        transverse = text[2] - text[0] if vertical else text[3] - text[1]
+        multiline = transverse > font * 1.5
+        if multiline:
+            band = last_line_band(gray, text, font, vertical)
+            if band is None:
+                continue
         rings = ring_boxes(gray, band, font)
+        if multiline:
+            rings = [ring for ring in rings if terminates_line(gray, ring, band, font, vertical)]
         rings = [ring for ring in rings if inside_shape(ring, block["balloonShape"], width, height)]
         if len(rings) != 1:
             continue
@@ -51,7 +60,7 @@ def confirms_sentence_end(candidate: SentenceEndCandidate, recognized: str | Non
     return recognized.strip() == source + "。"
 
 
-def eligible(block: dict, width: int, height: int) -> bool:
+def eligible(block: dict) -> bool:
     angle = block.get("rotationDegrees") or 0
     if not math.isfinite(angle):
         raise ValueError("Invalid punctuation rotation")
@@ -61,9 +70,8 @@ def eligible(block: dict, width: int, height: int) -> bool:
         return False
     if block.get("sourceIsVertical") not in (True, False) or abs(angle) > 5:
         return False
-    transverse = block["box"]["width"] * width if block["sourceIsVertical"] else block["box"]["height"] * height
     source = block["originalText"].strip()
-    return transverse <= block["detectedFontSize"] * 1.5 and bool(source) and not source.endswith("。")
+    return bool(source) and not source.endswith("。")
 
 
 def end_band(block: dict, width: int, height: int) -> tuple[tuple, tuple]:
@@ -78,13 +86,50 @@ def end_band(block: dict, width: int, height: int) -> tuple[tuple, tuple]:
     return (left, top, right, bottom), band
 
 
+def ink_mask(crop: np.ndarray) -> np.ndarray:
+    if crop.size == 0:
+        return np.zeros_like(crop)
+    polarity = cv2.THRESH_BINARY if np.median(crop) < 127 else cv2.THRESH_BINARY_INV
+    return cv2.threshold(crop, 0, 255, polarity | cv2.THRESH_OTSU)[1]
+
+
+def last_line_band(gray: np.ndarray, text: tuple, font: float, vertical: bool) -> tuple | None:
+    """Separate columns/rows by measured whitespace; Japanese columns read right to left."""
+    left, top, right, bottom = text
+    binary = ink_mask(gray[top:bottom, left:right])
+    occupied = np.flatnonzero(np.any(binary > 0, axis=0 if vertical else 1))
+    if not occupied.size:
+        return None
+    segments = np.split(occupied, np.flatnonzero(np.diff(occupied) > max(2, font * .35)) + 1)
+    terminal = segments[0] if vertical else segments[-1]
+    start, end = int(terminal[0]), int(terminal[-1]) + 1
+    if end - start > font * 1.5:
+        return None
+    height, width = gray.shape
+    side, extent = math.ceil(font * .2), math.ceil(font)
+    if vertical:
+        return max(0, left+start-side), top, min(width, left+end+side), min(height, bottom+extent)
+    return left, max(0, top+start-side), min(width, right+extent), min(height, top+end+side)
+
+
+def terminates_line(gray: np.ndarray, ring: tuple, band: tuple, font: float, vertical: bool) -> bool:
+    left, top, right, bottom = band
+    binary = ink_mask(gray[top:bottom, left:right])
+    projection = np.any(binary > 0, axis=1 if vertical else 0)
+    start = ring[1] - top if vertical else ring[0] - left
+    end = ring[3] - top if vertical else ring[2] - left
+    preceding = np.flatnonzero(projection[:start])
+    if preceding.size < max(3, font * .35) or np.any(projection[end:]):
+        return False
+    return start - int(preceding[-1]) <= font * 1.25
+
+
 def ring_boxes(gray: np.ndarray, band: tuple, font: float) -> list[tuple[int, int, int, int]]:
     left, top, right, bottom = band
     crop = gray[top:bottom, left:right]
     if min(crop.shape, default=0) < 9:
         return []
-    polarity = cv2.THRESH_BINARY if np.median(crop) < 127 else cv2.THRESH_BINARY_INV
-    _, binary = cv2.threshold(crop, 0, 255, polarity | cv2.THRESH_OTSU)
+    binary = ink_mask(crop)
     contours, hierarchy = cv2.findContours(binary, cv2.RETR_CCOMP, cv2.CHAIN_APPROX_SIMPLE)
     if hierarchy is None:
         return []
