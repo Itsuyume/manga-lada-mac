@@ -6,6 +6,7 @@ public enum JapaneseHorizontalOCR {
         let angle = block.rotationDegrees ?? 0
         return block.sourceIsVertical == false && block.translatedText.isEmpty
             && block.userDefinedBounds == nil && block.userDefinedTextKind != true
+            && block.userDefinedOriginalText != true
             && block.textKind != .soundEffect && block.textKind != .title
             && ImageRegionSelection.validates(block.box) && block.box.width >= block.box.height * 1.5
             && angle.isFinite && abs(angle) <= 5
@@ -32,7 +33,10 @@ public enum JapaneseHorizontalOCR {
         }
     }
     private static func matches(_ observation: TextBox, _ source: TextBox) -> Bool {
-        ImageRegionSelection.validates(source) && ImageRegionSelection.containsCenter(source, of: observation)
-            && observation.intersectionArea(with: source) / observation.area >= 0.55
+        guard ImageRegionSelection.validates(source), ImageRegionSelection.containsCenter(source, of: observation) else { return false }
+        let overlap = observation.intersectionArea(with: source)
+        // Detectors may disagree on line height. Full source coverage is also
+        // evidence of a match; the combined extent and uniqueness checks still apply.
+        return overlap / observation.area >= 0.55 || overlap / source.area >= 0.9
     }
 }
