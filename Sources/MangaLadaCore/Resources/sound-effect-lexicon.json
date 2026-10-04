@@ -14,6 +14,16 @@
     "automaticForms": 1714,
     "changes": "Mimetic kana readings and glosses extracted; kana variants generated; curated spellings take precedence."
   },
+  "reviewGroups": [
+    {"sources":["にちっ","ニチッ","にちゃっ","ニチャッ"],"options":[{"context":"끈적한 접촉","korean":"질척"},{"context":"떼어내는 소리","korean":"쩍"},{"context":"점성 있는 촉감","korean":"끈적"}]},
+    {"sources":["にちゃにちゃ","ニチャニチャ"],"options":[{"context":"점성 있는 촉감","korean":"끈적끈적"},{"context":"끈적한 접촉","korean":"질척질척"},{"context":"반복해서 떼어냄","korean":"쩍쩍"}]},
+    {"sources":["ゴロゴロ","ごろごろ","ゴロンゴロン","ごろんごろん"],"options":[{"context":"천둥","korean":"우르릉"},{"context":"고양이","korean":"가르랑"},{"context":"배에서 나는 소리","korean":"꾸르륵"},{"context":"무거운 물체가 구름","korean":"데굴데굴"},{"context":"빈둥거림","korean":"뒹굴뒹굴"}],"jmdictIDs":[1005020]},
+    {"sources":["ガタガタ","がたがた"],"options":[{"context":"물건·창틀이 흔들림","korean":"덜컹덜컹"},{"context":"작은 물체가 부딪힘","korean":"달그락달그락"},{"context":"몸이 떨림","korean":"덜덜"},{"context":"이가 부딪힘","korean":"딱딱"}],"jmdictIDs":[1003100]},
+    {"sources":["パラパラ","ぱらぱら"],"options":[{"context":"빗방울·작은 물체","korean":"후두둑"},{"context":"책장 넘김","korean":"팔락팔락"},{"context":"조금씩 떨어짐","korean":"툭툭"}],"jmdictIDs":[1102580]},
+    {"sources":["パチパチ","ぱちぱち"],"options":[{"context":"박수","korean":"짝짝"},{"context":"눈 깜빡임","korean":"깜빡깜빡"},{"context":"불 타는 소리","korean":"타닥타닥"},{"context":"전기 불꽃","korean":"파직파직"}],"jmdictIDs":[1101650]},
+    {"sources":["ガーン","があん","がーん"],"options":[{"context":"강한 충돌","korean":"꽝"},{"context":"갑작스러운 충격","korean":"충격"},{"context":"멍해지는 느낌","korean":"띵"}],"jmdictIDs":[2207790]},
+    {"sources":["ドンドン","どんどん","ドンドンドン","ゴンゴン","ごんごん"],"options":[{"context":"문·발구르기","korean":"쿵쿵"},{"context":"북","korean":"둥둥"},{"context":"강한 충돌","korean":"쾅쾅"}],"jmdictIDs":[1009320,2517030]}
+  ],
   "entries": [
     {"sources":["にちっ","ニチッ","にちゃっ","ニチャッ"],"korean":"질척","meaning":"A brief sticky or slimy contact sound; not a cat's meow. The Korean default is editable for the scene."},
     {"sources":["にちゃにちゃ","ニチャニチャ"],"meaning":"Sticky or slimy contact, such as glue or dough. Choose a concise Korean effect from context, e.g. 질척질척, 쩍쩍, 끈적끈적."},

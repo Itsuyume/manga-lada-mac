@@ -8,6 +8,7 @@ public struct JapaneseSoundEffectLexicon: Sendable {
     private let translations: [String: String]
     private let meanings: [String: String]
     private let recognizedSources: Set<String>
+    private let reviewChoices: [String: [ReviewOption]]
 
     public init(data: Data) throws {
         let catalog = try JSONDecoder().decode(Catalog.self, from: data)
@@ -42,6 +43,23 @@ public struct JapaneseSoundEffectLexicon: Sendable {
         recognizedSources = automatic
         translations = preferred
         meanings = hints
+        reviewChoices = try Self.decodeReviewChoices(catalog.reviewGroups ?? [], sources: sources)
+    }
+
+    private static func decodeReviewChoices(_ groups: [ReviewGroup], sources: Set<String>) throws -> [String: [ReviewOption]] {
+        var choices: [String: [ReviewOption]] = [:]
+        for group in groups {
+            guard !group.sources.isEmpty, (2...8).contains(group.options.count),
+                  group.options.allSatisfy(\.isValid), Set(group.options).count == group.options.count else {
+                throw LexiconError.invalidCatalog
+            }
+            for source in group.sources {
+                let key = Self.normalized(source)
+                guard sources.contains(key), choices[key] == nil else { throw LexiconError.invalidCatalog }
+                choices[key] = group.options
+            }
+        }
+        return choices
     }
 
     public static func bundled() throws -> Self {
@@ -52,6 +70,8 @@ public struct JapaneseSoundEffectLexicon: Sendable {
     }
     public func translation(for source: String) -> String? { translations[Self.normalized(source)] }
     public func meaning(for source: String) -> String? { meanings[Self.normalized(source)] }
+    /// Optional manual choices never alter automatic inference or model prompts.
+    public func reviewOptions(for source: String) -> [ReviewOption] { reviewChoices[Self.normalized(source)] ?? [] }
     public func inferKinds(_ blocks: [TextBlock], selectedIDs: Set<UUID>? = nil) -> [TextBlock] {
         blocks.map { block in
             guard selectedIDs?.contains(block.id) != false, block.balloonShape == nil,
@@ -71,13 +91,27 @@ public struct JapaneseSoundEffectLexicon: Sendable {
     private static func normalized(_ text: String) -> String {
         text.precomposedStringWithCompatibilityMapping.trimmingCharacters(in: CharacterSet(charactersIn: " \t\r\n.!?。…・"))
     }
-    private struct Catalog: Decodable { let version: Int; let entries: [Entry]; let recognitionPatterns: [String]? }
+    public struct ReviewOption: Decodable, Hashable, Sendable {
+        public let context: String
+        public let korean: String
+        fileprivate var isValid: Bool {
+            [context, korean].allSatisfy {
+                !$0.isEmpty && $0.count <= 40 && !$0.contains(where: \.isNewline)
+                    && $0 == $0.trimmingCharacters(in: .whitespacesAndNewlines)
+                    && TextLanguageDetector.containsKorean($0) && !TextLanguageDetector.containsJapanese($0)
+            }
+        }
+    }
+    private struct Catalog: Decodable {
+        let version: Int; let entries: [Entry]; let recognitionPatterns: [String]?; let reviewGroups: [ReviewGroup]?
+    }
+    private struct ReviewGroup: Decodable { let sources: [String]; let options: [ReviewOption] }
     private struct Entry: Decodable {
         let sources: [String]; let korean: String?; let meaning: String?; let recognition: Bool?
     }
     private enum LexiconError: LocalizedError {
         case invalidCatalog
-        var errorDescription: String? { "효과음 사전의 버전·원문·한국어 표기가 올바르지 않거나 중복되었습니다." }
+        var errorDescription: String? { "효과음 사전의 버전·원문·한국어 표기·검수 후보가 올바르지 않거나 중복되었습니다." }
     }
 }
 

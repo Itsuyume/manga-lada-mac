@@ -3,6 +3,7 @@ import MangaLadaCore
 
 enum SoundEffectTranslationChecks {
     static func run() throws {
+        try checkReviewOptions()
         try checkPunctuationEffects()
         for invalid in ["", "  ", "カチッ", "그弁当"] {
             do {
@@ -44,6 +45,41 @@ enum SoundEffectTranslationChecks {
         try checkLexicon()
         try checkKindRefinement()
         print("Sound-effect translation checks passed: concise Korean forms, context-dependent variants retained, commentary formatting, non-effects untouched, malformed output rejected")
+    }
+
+    private static func checkReviewOptions() throws {
+        let lexicon = try JapaneseSoundEffectLexicon.bundled()
+        for source in ["", "カチッと音がした", "にちっと音がした", "未知の言葉"] {
+            try check(lexicon.reviewOptions(for: source).isEmpty, "An unknown or embedded phrase received isolated effect choices.")
+        }
+        let options = lexicon.reviewOptions(for: "ゴロゴロ")
+        try check(options.contains { $0.context == "천둥" && $0.korean == "우르릉" }, "Thunder review choice is missing.")
+        try check(options.contains { $0.context == "고양이" && $0.korean == "가르랑" }, "Cat review choice is missing.")
+        try check(lexicon.reviewOptions(for: "ｺﾞﾛｺﾞﾛ。") == options && lexicon.reviewOptions(for: "ごろごろ") == options,
+                  "Script or width variants lost the same review choices.")
+        try check(lexicon.translation(for: "ゴロゴロ") == nil, "Review choices became an automatic fixed translation.")
+        let minimal = #"{"version":1,"entries":[{"sources":["ゴロゴロ"]}]}"#
+        try check(try JapaneseSoundEffectLexicon(data: Data(minimal.utf8)).reviewOptions(for: "ゴロゴロ").isEmpty,
+                  "An older catalog without review choices was rejected.")
+        let goodOptions = #"[{"context":"천둥","korean":"우르릉"},{"context":"고양이","korean":"가르랑"}]"#
+        let invalidGroups = [
+            #"[{"sources":[],"options":OPTIONS}]"#,
+            #"[{"sources":["ニチッ"],"options":OPTIONS}]"#,
+            #"[{"sources":["ゴロゴロ","ｺﾞﾛｺﾞﾛ"],"options":OPTIONS}]"#,
+            #"[{"sources":["ゴロゴロ"],"options":[]}]"#,
+            #"[{"sources":["ゴロゴロ"],"options":[{"context":"천둥","korean":"우르릉"}]}]"#,
+            #"[{"sources":["ゴロゴロ"],"options":[{"context":"천둥","korean":"우르릉"},{"context":"천둥","korean":"우르릉"}]}]"#,
+            #"[{"sources":["ゴロゴロ"],"options":[{"context":"","korean":"우르릉"},{"context":"고양이","korean":"가르랑"}]}]"#,
+            #"[{"sources":["ゴロゴロ"],"options":[{"context":"천둥","korean":"ゴロ"},{"context":"고양이","korean":"가르랑"}]}]"#,
+            #"[{"sources":["ゴロゴロ"],"options":OPTIONS},{"sources":["ゴロゴロ"],"options":OPTIONS}]"#
+        ]
+        for group in invalidGroups {
+            let data = Data((#"{"version":1,"entries":[{"sources":["ゴロゴロ"]}],"reviewGroups":GROUPS}"#
+                .replacingOccurrences(of: "GROUPS", with: group).replacingOccurrences(of: "OPTIONS", with: goodOptions)).utf8)
+            var rejected = false
+            do { _ = try JapaneseSoundEffectLexicon(data: data) } catch { rejected = true }
+            try check(rejected, "Invalid, duplicate, or unregistered effect choices were accepted.")
+        }
     }
 
     private static func checkPunctuationEffects() throws {

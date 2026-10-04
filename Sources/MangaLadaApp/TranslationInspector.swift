@@ -148,6 +148,12 @@ struct TranslationInspector: View {
                 .padding(4).background(.background, in: RoundedRectangle(cornerRadius: 5))
                 .overlay { RoundedRectangle(cornerRadius: 5).stroke(.quaternary) }
                 .disabled(editingDisabled)
+            if block.textKind == .soundEffect, let lexicon = state.effectLexicon {
+                SoundEffectReviewMenu(options: lexicon.reviewOptions(for: block.originalText),
+                                     currentText: block.translatedText, number: number) { korean in
+                    state.editReviewBlock(block.id) { $0.translatedText = korean }
+                }.disabled(editingDisabled)
+            }
         }.padding(7).background(active ? Color.accentColor.opacity(0.08) : Color.clear, in: RoundedRectangle(cornerRadius: 7))
             .overlay { RoundedRectangle(cornerRadius: 7).stroke(active ? Color.accentColor : Color.clear, lineWidth: 1) }
     }

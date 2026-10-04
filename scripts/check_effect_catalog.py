@@ -18,7 +18,9 @@ def run():
         root = Path(directory)
         source, catalog = root / "dictionary.gz", root / "catalog.json"
         curated = {"sources": ["カチッ"], "korean": "딸깍"}
-        catalog.write_text(json.dumps({"version": 1, "entries": [curated]}))
+        review_groups = [{"sources": ["カチッ"], "options": [
+            {"context": "스위치", "korean": "딸깍"}, {"context": "단단한 접촉", "korean": "딱"}]}]
+        catalog.write_text(json.dumps({"version": 1, "entries": [curated], "reviewGroups": review_groups}))
         baseline = catalog.read_bytes()
         for invalid in ["", "<JMdict>", "<JMdict></JMdict>"]:
             source.write_bytes(gzip.compress(invalid.encode()))
@@ -53,6 +55,7 @@ def run():
             update(source, catalog)
         assert catalog.read_bytes() == first and source.read_bytes() == original, "Refresh was not deterministic or changed its source"
         data = json.loads(first)
+        assert data["reviewGroups"] == review_groups, "Dictionary refresh changed manually curated review options"
         by_form = {s: e for e in data["entries"] for s in e["sources"]}
         assert by_form["カチッ"] == curated, "Imported entry replaced a curated Korean form"
         assert by_form["ネバネバ"]["recognition"] and by_form["ねばねば"]["meaning"] == "sticky; gooey"

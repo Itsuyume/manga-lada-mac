@@ -28,6 +28,7 @@ final class AppState: ObservableObject {
     @Published var configuration = LocalTranslatorConfiguration()
     @Published var typography = MangaTypography()
     @Published var effectStyles: [SoundEffectStyle] = []
+    private(set) var effectLexicon: JapaneseSoundEffectLexicon?
     @Published var isSelectingRegion = false
     @Published var selectedRegion: TextBox?
     @Published var selectedBlockID: UUID?
@@ -56,8 +57,9 @@ final class AppState: ObservableObject {
             try SoundEffectFonts.registerBundledFonts()
             effectStyles = try SoundEffectLibrary.standard().styles
             (configuration, typography) = try settingsStore.load()
+            effectLexicon = try JapaneseSoundEffectLexicon.bundled()
         }
-        catch { errorMessage = error.localizedDescription; statusMessage = "설정을 읽지 못했습니다. 설정을 확인해주세요." }
+        catch { errorMessage = error.localizedDescription; statusMessage = "앱 준비 중 문제가 발생했습니다. 오류 안내를 확인해주세요." }
     }
     var currentResult: ProcessedMangaPage? { results[currentIndex] }
     var displayPages: [URL] { pages.enumerated().map { index, page in !isSelectingRegion && mode == .translated ? results[index]?.renderedImageURL ?? page.url : page.url } }
