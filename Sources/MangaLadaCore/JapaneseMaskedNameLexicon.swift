@@ -29,10 +29,10 @@ enum JapaneseMaskedNameLexicon {
         guard source.contains(where: { maskCharacters.contains($0) }) else {
             return Resolution(text: source, terms: [:])
         }
-        let matches = entries.flatMap { matches(in: source, entry: $0, maskCharacters: maskCharacters) }
+        let candidates: [Match] = entries.flatMap { Self.matches(in: source, entry: $0, maskCharacters: maskCharacters) }
         // Future catalog additions must not choose between overlapping or ambiguous names.
-        let unique = matches.filter { match in
-            matches.filter { $0.range.overlaps(match.range) }.count == 1
+        let unique = candidates.filter { match in
+            candidates.filter { $0.range.overlaps(match.range) }.count == 1
         }.sorted { $0.range.lowerBound < $1.range.lowerBound }
         var text = "", cursor = source.startIndex
         for match in unique {
