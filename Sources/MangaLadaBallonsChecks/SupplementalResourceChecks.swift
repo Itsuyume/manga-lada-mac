@@ -48,7 +48,7 @@ enum SupplementalResourceChecks {
         for y in 0..<120 {
             for x in 0..<120 {
                 let ink = (40..<60).contains(x) && (40..<80).contains(y) || (5..<10).contains(x) && (5..<10).contains(y)
-                let offset = y * bitmap.bytesPerRow + x * bitmap.samplesPerPixel
+                let offset = y * bitmap.bytesPerRow + x * (bitmap.bitsPerPixel / 8)
                 for channel in 0..<3 { pixels[offset + channel] = ink ? 0 : 255 }
             }
         }
@@ -59,11 +59,12 @@ enum SupplementalResourceChecks {
     private static func checkImage(_ url: URL) throws {
         guard let bitmap = NSBitmapImageRep(data: try Data(contentsOf: url)), let pixels = bitmap.bitmapData else { throw CocoaError(.coderReadCorrupt) }
         try require(bitmap.pixelsWide == 120 && bitmap.pixelsHigh == 120, "Pixel dimensions changed.")
-        try require(bitmap.bitsPerSample == 8 && bitmap.samplesPerPixel >= 3 && !bitmap.isPlanar
+        try require(bitmap.bitsPerSample == 8 && (24...32).contains(bitmap.bitsPerPixel) && bitmap.bitsPerPixel.isMultiple(of: 8)
+                    && bitmap.samplesPerPixel >= 3 && !bitmap.isPlanar
                     && !bitmap.bitmapFormat.contains(.alphaFirst), "Expected an interleaved 8-bit RGB PNG.")
         for y in 0..<120 {
             for x in 0..<120 {
-                let offset = y * bitmap.bytesPerRow + x * bitmap.samplesPerPixel
+                let offset = y * bitmap.bytesPerRow + x * (bitmap.bitsPerPixel / 8)
                 let expected: UInt8 = (5..<10).contains(x) && (5..<10).contains(y) ? 0 : 255
                 try require((0..<3).allSatisfy { pixels[offset + $0] == expected }, "Glyph remained or unrelated artwork changed.")
             }
