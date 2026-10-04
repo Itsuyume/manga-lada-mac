@@ -27,7 +27,23 @@ enum TranslationReviewChecks {
         try identityFailures(store: store, page: page, draft: draft)
         try emptyAndIndependentPages(store: store, page: page)
         try fileFailures(root: root, directory: directory, page: page, draft: draft)
+        try interpretationReview(root: root, page: page)
         print("TranslationReviewChecks passed")
+    }
+
+    private static func interpretationReview(root: URL, page: PageTranslation) throws {
+        let directory = root.appendingPathComponent("interpretation-draft")
+        let store = TranslationReviewStore(directory: directory)
+        var interpreted = page
+        interpreted.blocks[0].maskedTextInterpretation = MaskedTextInterpretation(japanese: "推定した日本語", message: "뜻을 확인해주세요")
+        try store.save(interpreted, comparedTo: page)
+        try check(TranslationReviewStore(directory: directory).load(for: page) == interpreted,
+                  "Interpretation-only change did not survive a review restart.")
+        var edited = interpreted
+        edited.blocks[0].originalText = "修正した日本語"
+        try store.save(edited, comparedTo: interpreted)
+        try check(store.load(for: interpreted) == edited && edited.blocks[0].maskedTextInterpretation == nil,
+                  "Review restore kept an interpretation for an edited source.")
     }
 
     private static func removedUneditedRegion(store: TranslationReviewStore, page: PageTranslation) throws {

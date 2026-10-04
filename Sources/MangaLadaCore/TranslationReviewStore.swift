@@ -64,7 +64,7 @@ public struct TranslationReviewStore {
         private static func hasChanges(from original: TextBlock, to draft: TextBlock) -> Bool {
             original.originalText != draft.originalText || original.translatedText != draft.translatedText ||
                 original.textKind != draft.textKind || original.userDefinedTextKind != draft.userDefinedTextKind ||
-                original.effectStyleID != draft.effectStyleID
+                original.effectStyleID != draft.effectStyleID || original.maskedTextInterpretation != draft.maskedTextInterpretation
         }
 
         private static func merge(original: TextBlock, draft: TextBlock, current: TextBlock) -> TextBlock {
@@ -74,6 +74,7 @@ public struct TranslationReviewStore {
             if original.textKind != draft.textKind { result.textKind = draft.textKind }
             if original.userDefinedTextKind != draft.userDefinedTextKind { result.userDefinedTextKind = draft.userDefinedTextKind }
             if original.effectStyleID != draft.effectStyleID { result.effectStyleID = draft.effectStyleID }
+            if original.maskedTextInterpretation != draft.maskedTextInterpretation { result.maskedTextInterpretation = draft.maskedTextInterpretation }
             return result
         }
     }

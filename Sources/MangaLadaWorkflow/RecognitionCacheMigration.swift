@@ -46,6 +46,7 @@ package enum RecognitionCacheMigration {
             updated.userDefinedTextKind = prior.userDefinedTextKind
             updated.userDefinedOriginalText = prior.userDefinedOriginalText ?? (prior.originalText != block.originalText ? true : nil)
             updated.verifiedPunctuationBounds = prior.verifiedPunctuationBounds
+            updated.maskedTextInterpretation = prior.maskedTextInterpretation
             return updated
         }
     }

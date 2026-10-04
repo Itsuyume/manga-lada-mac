@@ -33,6 +33,9 @@ struct TranslatorSettingsView: View {
                     }
                 }
                 Section {
+                    Toggle("가린 단어 문맥 해석 · 로컬 Qwen", isOn: $configuration.interpretMaskedText)
+                    Text("뜻이 불분명한 가림말만 Qwen 3.5 9B로 해석합니다. 같은 문구와 문맥은 작은 캐시에 저장합니다. 추정 결과는 검수창에 표시하며 기존 번역은 자동으로 바꾸지 않습니다.")
+                        .font(.system(size: 11)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                     Toggle("효과음 추가 인식 · 느림 / 실험 단계", isOn: $configuration.enhanceSoundEffects)
                     Text("기본은 검출된 말풍선·문구를 먼저 번역합니다. 복잡한 효과음과 표지는 검수가 필요합니다.")
                         .font(.system(size: 11)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)

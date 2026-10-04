@@ -99,6 +99,12 @@ struct TranslationInspector: View {
             }
             TextField("일본어 원문", text: textBinding(block, \.originalText), axis: .vertical)
                 .font(.system(size: 11)).foregroundStyle(.secondary).disabled(editingDisabled)
+            if let interpretation = block.maskedTextInterpretation {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(interpretation.message).foregroundStyle(.orange)
+                    if let japanese = interpretation.japanese { Text(japanese).foregroundStyle(.secondary) }
+                }.font(.system(size: 10)).fixedSize(horizontal: false, vertical: true).textSelection(.enabled)
+            }
             Button("이 문구 다시 번역") {
                 if let draft, let index = draft.blocks.firstIndex(where: { $0.id == block.id }) {
                     state.retranslateBlock(in: draft, at: index)

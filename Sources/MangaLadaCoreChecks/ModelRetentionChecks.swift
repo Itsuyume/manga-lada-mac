@@ -9,10 +9,12 @@ enum ModelRetentionChecks {
         let file = root.appendingPathComponent("settings.json")
         let missing = try LocalTranslatorConfiguration.load(configURL: file, environment: [:])
         try check(missing.ollama.retention == .balanced, "Missing settings did not use bounded balanced retention.")
+        try check(missing.interpretMaskedText, "New app configuration did not enable context interpretation.")
         for json in ["{}", #"{"ollamaModel":"qwen3.5:9b"}"#, #"{"ollamaKeepAlive":null}"#] {
             try Data(json.utf8).write(to: file)
             let loaded = try LocalTranslatorConfiguration.load(configURL: file, environment: [:])
             try check(loaded.ollama.retention == .balanced, "Legacy or null retention did not migrate to the default.")
+            try check(loaded.interpretMaskedText, "Legacy app configuration did not enable context interpretation.")
         }
         for value in [#""-1m""#, #""forever""#, "0", "-1"] {
             let data = Data("{\"ollamaKeepAlive\":\(value)}".utf8)
@@ -24,6 +26,15 @@ enum ModelRetentionChecks {
             try check(try Data(contentsOf: file) == data, "Reading invalid settings overwrote the user's file.")
         }
         let original = LocalTranslatorConfiguration()
+        for enabled in [true, false] {
+            var policy = original; policy.interpretMaskedText = enabled
+            try policy.save(to: file)
+            let restored = try LocalTranslatorConfiguration.load(configURL: file, environment: [:])
+            try check(restored == policy && restored.cacheKey == original.cacheKey
+                      && !restored.requiresRetranslation(comparedTo: original)
+                      && !original.requiresRetranslation(comparedTo: restored),
+                      "Context policy lost its saved value or invalidated completed pages.")
+        }
         try check(OllamaConfiguration.Retention.allCases.map(\.duration) == [.seconds(60), .seconds(300), .seconds(900)],
                   "OCR session duration does not match the persisted model retention choices.")
         for retention in OllamaConfiguration.Retention.allCases {

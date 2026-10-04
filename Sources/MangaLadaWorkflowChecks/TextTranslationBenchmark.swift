@@ -12,7 +12,8 @@ enum TextTranslationBenchmark {
             throw BenchmarkError.invalidCases
         }
         let began = Date()
-        let pipeline = TranslationPipeline(sourceLanguage: .japanese, targetLanguage: .korean)
+        let pipeline = TranslationPipeline(sourceLanguage: .japanese, targetLanguage: .korean,
+            maskedResolver: MaskedContextResolver(directory: output.deletingLastPathComponent().appendingPathComponent("ContextInterpretations")))
         var reports: [CaseReport] = []
         for test in cases {
             try Task.checkCancellation()

@@ -1,0 +1,99 @@
+[
+  {
+    "id": "rice-ball",
+    "texts": [
+      "お○ぎりを二つ作って、海苔で包んでね。",
+      "明日はお弁当を持っていこう。"
+    ],
+    "reviewPoints": [
+      "가린 음식은 주먹밥으로 해석",
+      "OCR 원문 유지"
+    ]
+  },
+  {
+    "id": "ice-cream",
+    "texts": [
+      "暑いから、ア○スを食べよう。",
+      "冷凍庫にあるよ。"
+    ],
+    "reviewPoints": [
+      "아이스크림 의미",
+      "문맥 해석 표시"
+    ]
+  },
+  {
+    "id": "game-existing",
+    "texts": [
+      "昨日はス○ブラで対戦した。"
+    ],
+    "reviewPoints": [
+      "기존 고유명사 사전으로 Qwen 호출 생략"
+    ]
+  },
+  {
+    "id": "creature-context",
+    "texts": [
+      "このポケ○ンを捕まえたい。",
+      "モンスターボールが足りない。"
+    ],
+    "reviewPoints": [
+      "포켓몬으로 해석"
+    ]
+  },
+  {
+    "id": "anonymized-name",
+    "texts": [
+      "○○さんはもう帰りました。"
+    ],
+    "reviewPoints": [
+      "익명 인명 가림표 유지"
+    ]
+  },
+  {
+    "id": "company-counterexample",
+    "texts": [
+      "ア○スという会社に勤めています。"
+    ],
+    "reviewPoints": [
+      "회사명을 추측으로 확정하지 않음"
+    ]
+  },
+  {
+    "id": "ambiguous",
+    "texts": [
+      "カ○ーを持ってきて。"
+    ],
+    "reviewPoints": [
+      "다의적 표현의 추정 상태를 검수 필요로 표시"
+    ]
+  },
+  {
+    "id": "latin-mask",
+    "texts": [
+      "おOぎりを食べてから散歩しよう。"
+    ],
+    "reviewPoints": [
+      "일본어 사이 O만 가림표로 취급"
+    ]
+  },
+  {
+    "id": "ordinary-latin",
+    "texts": [
+      "Oリングを交換してください。"
+    ],
+    "reviewPoints": [
+      "O링 그대로",
+      "Qwen 호출 없음"
+    ]
+  },
+  {
+    "id": "numeric-zero",
+    "texts": [
+      "二〇二六年の記録です。"
+    ],
+    "reviewPoints": [
+      "2026년",
+      "Qwen 호출 없음"
+    ]
+  }
+]

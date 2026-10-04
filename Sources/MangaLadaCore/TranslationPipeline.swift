@@ -18,19 +18,22 @@ public struct TranslationPipeline: Sendable {
     private let refiner: KoreanTranslationRefiner
     private let progress: (@Sendable (TranslationProgress) async -> Void)?
     private let session: URLSession
+    private let maskedPreparation: MaskedPagePreparation
 
     public init(
         sourceLanguage: LanguageCode,
         targetLanguage: LanguageCode,
         refiner: KoreanTranslationRefiner = KoreanTranslationRefiner(),
         progress: (@Sendable (TranslationProgress) async -> Void)? = nil,
-        session: URLSession = .shared
+        session: URLSession = .shared,
+        maskedResolver: MaskedContextResolver? = nil
     ) {
         self.sourceLanguage = sourceLanguage
         self.targetLanguage = targetLanguage
         self.refiner = refiner
         self.progress = progress
         self.session = session
+        self.maskedPreparation = MaskedPagePreparation(resolver: maskedResolver, session: session)
     }
 
     /// Uses page context but replaces only selected text, retaining draft order and all metadata.
@@ -42,10 +45,11 @@ public struct TranslationPipeline: Sendable {
         guard selectedIDs.isSubset(of: ids) else { throw TranslationSelectionError.missingRegion }
         guard !selectedIDs.isEmpty else { return blocks }
         // Google translates independent strings; sending surrounding blocks there adds no context.
-        let input = configuration.provider == .googleWeb ? blocks.filter { selectedIDs.contains($0.id) } : blocks
+        let prepared = try await maskedPreparation.prepare(blocks, selectedIDs: selectedIDs, configuration: configuration, previousContext: previousContext)
+        let input = configuration.provider == .googleWeb ? prepared.filter { selectedIDs.contains($0.id) } : prepared
         let translated: [TextBlock]
         if configuration.provider == .googleWeb {
-            translated = try await translate(input, configuration: configuration, previousContext: previousContext)
+            translated = try await translatePrepared(input, configuration: configuration, translator: nil, previousContext: previousContext)
         } else {
             translated = try await translatePage(input, configuration: configuration, previousContext: previousContext, selectedIDs: selectedIDs)
         }
@@ -55,7 +59,9 @@ public struct TranslationPipeline: Sendable {
             guard let updated = translated.first(where: { $0.id == result[index].id }) else {
                 throw TranslationError.invalidPageResponse("선택한 영역의 번역이 빠졌습니다.")
             }
+            try MaskedTextTranslation.validateKnownNames(updated.translatedText, source: result[index].originalText)
             result[index].translatedText = updated.translatedText
+            result[index].maskedTextInterpretation = updated.maskedTextInterpretation
         }
         return result
     }
@@ -69,6 +75,13 @@ public struct TranslationPipeline: Sendable {
         try Task.checkCancellation()
         guard !blocks.isEmpty else { return [] }
         guard Set(blocks.map(\.id)).count == blocks.count else { throw TranslationSelectionError.duplicateRegions }
+        let prepared = try await maskedPreparation.prepare(blocks, selectedIDs: nil, configuration: configuration, previousContext: previousContext)
+        let translated = try await translatePrepared(prepared, configuration: configuration, translator: injectedTranslator, previousContext: previousContext)
+        return try MaskedPagePreparation.restore(translated, originals: blocks)
+    }
+
+    private func translatePrepared(_ blocks: [TextBlock], configuration: LocalTranslatorConfiguration,
+                                   translator injectedTranslator: TextTranslating?, previousContext: String) async throws -> [TextBlock] {
         if injectedTranslator == nil, configuration.provider != .googleWeb {
             return try await translatePage(blocks, configuration: configuration, previousContext: previousContext, selectedIDs: nil)
         }

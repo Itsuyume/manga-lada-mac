@@ -22,6 +22,7 @@ struct MangaLadaWorkflowChecks {
             return
         }
         var settings = LocalTranslatorConfiguration(enhanceSoundEffects: arguments.contains("--effects"))
+        settings.interpretMaskedText = arguments.contains("--masked-context")
         if let option = arguments.first(where: { $0.hasPrefix("--model=") }) { settings.ollama.model = String(option.dropFirst(8)) }
         if arguments.count >= 4, arguments[1] == "--text-benchmark" {
             do {

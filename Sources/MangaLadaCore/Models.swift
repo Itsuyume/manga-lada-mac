@@ -18,7 +18,9 @@ public struct TextBlock: Codable, Equatable, Identifiable, Sendable {
     /// Fresh OCR creates a new ID. Geometry refreshes retain it, even when a user edits the source text.
     public var id: UUID
     public var box: TextBox
-    public var originalText: String
+    public var originalText: String {
+        didSet { if originalText != oldValue { maskedTextInterpretation = nil } }
+    }
     public var translatedText: String
     public var confidence: Float
     public var sourceIsVertical: Bool?
@@ -33,6 +35,7 @@ public struct TextBlock: Codable, Equatable, Identifiable, Sendable {
     public var userDefinedOriginalText: Bool?
     /// Exact source region read by manual OCR for unchanged punctuation; absent in legacy caches.
     public var verifiedPunctuationBounds: TextBox?
+    public var maskedTextInterpretation: MaskedTextInterpretation?
 
     public init(
         id: UUID = UUID(),
@@ -49,7 +52,8 @@ public struct TextBlock: Codable, Equatable, Identifiable, Sendable {
         userDefinedBounds: TextBox? = nil,
         userDefinedTextKind: Bool? = nil,
         userDefinedOriginalText: Bool? = nil,
-        verifiedPunctuationBounds: TextBox? = nil
+        verifiedPunctuationBounds: TextBox? = nil,
+        maskedTextInterpretation: MaskedTextInterpretation? = nil
     ) {
         self.id = id
         self.box = box
@@ -66,6 +70,7 @@ public struct TextBlock: Codable, Equatable, Identifiable, Sendable {
         self.userDefinedTextKind = userDefinedTextKind
         self.userDefinedOriginalText = userDefinedOriginalText
         self.verifiedPunctuationBounds = verifiedPunctuationBounds
+        self.maskedTextInterpretation = maskedTextInterpretation
     }
 }
 

@@ -43,7 +43,11 @@ macOS 내장 libarchive를 사용하므로 7z 프로그램을 따로 설치할 �
 
 로컬 모델의 생성 완료 여부와 출력 제한 중단을 확인해, 잘린 문장을 완성된 번역으로 저장하지 않습니다. 한국어 문장에 일본어 한자가 남았거나 문구 종류가 누락된 응답은 검증 오류로 처리하고 한 번만 수정 요청을 보냅니다. 이 검사는 응답 누락을 막는 장치이며 인물 관계·말투·문맥의 의미 정확도를 보장하지 않습니다.
 
-0.2.23부터 가려 쓴 일반 고유명사(伏字)는 표기와 바로 뒤 문맥을 함께 확인합니다. 등록된 이름 한 글자만 `○/◯/〇/O/Ｏ`로 가렸고 게임·작품 문맥이 맞으면 한국어 명칭으로 번역합니다. 현재 등록은 **스매시브라더스·포켓몬·커비·마리오**이며 임의의 단어나 모든 복자를 복원하는 기능은 아닙니다. 가게 이름·사람 이름·여러 글자 가림처럼 확정하지 못한 경우에는 남은 가림표와 보이는 문구를 보존합니다. 연도의 〇나 O링의 O를 일괄 바꾸지 않습니다. 일본어 원문과 기존 검수본은 유지하며, 예전 결과는 **이 문구 다시 번역 → 수정 적용**으로 갱신합니다.
+0.2.23부터 가려 쓴 일반 고유명사(伏字)는 표기와 바로 뒤 문맥을 함께 확인합니다. 등록된 이름 한 글자만 `○/◯/〇/O/Ｏ`로 가렸고 게임·작품 문맥이 맞으면 한국어 명칭으로 번역합니다. 현재 등록은 **스매시브라더스·포켓몬·커비·마리오**입니다. 연도의 〇나 O링의 O를 일괄 바꾸지 않습니다. 일본어 원문과 기존 검수본은 유지하며, 예전 결과는 **이 문구 다시 번역 → 수정 적용**으로 갱신합니다.
+
+0.2.24는 **가린 단어 문맥 해석 · 로컬 Qwen**을 추가합니다. 등록 사전 → 같은 문맥의 해석 캐시 → 필요한 문구만 Qwen 3.5 9B 해석 → 선택한 번역 모델 순서입니다. 추가 모델 다운로드나 유료 API 전환은 없습니다. 같은 종류의 가나 사이 O/Ｏ는 요청할 때 가림표로 다루되 OCR 원문을 바꾸지 않습니다. Qwen이 보이는 글자까지 바꾸거나 원문에 없는 단어를 반환하면 한 번 교정을 요청한 뒤 거부합니다. 해석한 일본어와 검수 안내를 원문 아래에 표시하며, 이 안내는 저장·재실행·검수 수정에도 유지됩니다. 원문을 편집하면 이전 해석 표시는 해제합니다.
+
+캐시는 `Application Support/Manga Lada/ContextInterpretations`에서 **최대 256항목·512KiB**로 관리합니다. 원문·인접 문구·제공된 앞 페이지 문맥·모델·정책 버전이 같을 때만 재사용하며 모델 추측을 공용 단어 사전에 자동 등록하지 않습니다. 뜻을 확정하지 못한 응답도 같은 문맥에서는 재질문을 생략하고, 손상된 응답·캐시 오류는 검수 안내로 알립니다. 해결하지 못한 가림표를 번역 모델이 없애거나 일본어를 남기면 완료로 저장하지 않습니다. 모든 복자나 의미를 복원한다는 보장은 없으며 단서가 부족한 회사명·다의어는 원문 수정 후 재시도가 필요할 수 있습니다. 설정에서 끌 수 있고 변경은 다음 번역부터 적용됩니다. 기존 완성본·검수 임시본을 자동으로 지우지 않습니다.
 
 명칭은 닌텐도의 [일본어 공식 약칭 사용](https://www.smashbros.com/ja_JP/howtoplay/index.html), [한국어 공식 명칭](https://www.nintendo.com/kr/amiibo/lineup/328), [일본어 캐릭터 안내](https://www.smashbros.com/wii/jp/characters/index.html)를 참고합니다. 가린 표기를 해당 명칭으로 해석하는 조건은 앱의 제한적인 추론 규칙이며 공식 표기가 아닙니다.
 
@@ -178,11 +182,14 @@ swift run MangaLadaWorkflowChecks --text-benchmark fixtures/translation-selectio
 swift run MangaLadaWorkflowChecks --text-benchmark fixtures/translation-effect-edge-ja-ko.json /path/to/new-effect-edge-report.json --model=translategemma:12b
 swift run -c release MangaLadaWorkflowChecks --text-benchmark fixtures/translation-punctuation-ja-ko.json /path/to/new-punctuation-report.json --model=translategemma:12b
 swift run -c release MangaLadaWorkflowChecks --text-benchmark fixtures/translation-masked-names-ja-ko.json /path/to/new-masked-names-report.json --model=translategemma:12b
+swift run -c release MangaLadaWorkflowChecks --text-benchmark fixtures/translation-masked-context-ja-ko.json /path/to/new-context-report.json --masked-context
 ```
 
 선택 번역 비교 사례에는 문구별 `kinds`, 기존 검수 내용인 `reviewedTexts`, 0부터 시작하는 `selectedIndices`를 선택적으로 지정합니다. 문구 수·선택 번호를 검증하고 선택하지 않은 전체 영역 정보가 그대로인지 비교합니다. 같은 효과음을 단독 번역한 결과와 페이지 문맥으로 재번역한 결과가 나란히 저장됩니다. 속도에는 OCR·식자 시간이 포함되지 않습니다.
 
 `translation-masked-names-ja-ko.json`은 직접 작성한 중립 예문으로 등록 게임명 해석, 미등록 이름의 가림표, 같은 표기의 가게 이름, ○/◯/〇/O/Ｏ, 줄바꿈, 연도, 영문 O, 선택하지 않은 검수 보존을 대조합니다. 응답 검증 통과와 자연스러운 한국어 번역 여부는 별도로 확인합니다.
+
+`translation-masked-context-ja-ko.json`은 직접 작성한 음식·게임·익명 이름·다의어·영문 O·연도 예문 10개입니다. `--masked-context`를 붙이면 출력 보고서 옆 `ContextInterpretations`에 해석 캐시를 저장합니다. 같은 폴더의 새 보고서로 반복 실행해 재사용을 비교할 수 있습니다. 이 텍스트 검사는 원본 이미지의 OCR·식자 품질을 검증하지 않습니다. HTTP 경계 검사는 원문·좌표·선택하지 않은 검수 보존, 추정/실패 안내, 문맥 변경, 재실행, 동시 저장, 항목·용량 제한, 오류·취소의 파일 부작용도 확인합니다.
 
 `translation-effect-edge-ja-ko.json`은 직접 작성한 비성적 장면 20개로 부정문·과거 회상·비유·동시에 존재하는 소리·심리적 충격을 대조합니다. 효과음만 선택해 번역하므로 주변 검수 문구가 보존되는지도 함께 검사합니다. 소리의 원인이 여러 개이거나 설명이 부족한 사례는 하나의 정답 문자열을 강제하지 않습니다. `reviewPoints`와 실제 출력을 대조하고 그림 정보가 필요한 경우를 구분해야 합니다. 의성어 하나가 여러 소리·동작을 나타낼 수 있다는 언어적 근거는 일본 국립국어연구소의 [ごろごろ](https://www2.ninjal.ac.jp/Onomatope/50_on/gorogoro.html)와 [がたがた](https://www2.ninjal.ac.jp/Onomatope/50_on/gatagata.html) 설명을 참고했으며, 예제 문장은 별도로 작성했습니다.
 

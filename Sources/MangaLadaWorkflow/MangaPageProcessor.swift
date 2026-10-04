@@ -19,11 +19,14 @@ public final class MangaPageProcessor {
     private let engine: BallonsTranslatorEngine
     private let recognitionSession: JapaneseEngineSession
     private let cache: TranslationCache
+    public let textTranslator: TranslationPipeline
 
     public init(applicationSupportDirectory: URL) {
         let adapter = BallonsTranslatorEngine.standard(applicationSupportDirectory: applicationSupportDirectory)
         engine = adapter; recognitionSession = JapaneseEngineSession(engine: adapter)
         cache = TranslationCache(cacheDirectory: applicationSupportDirectory.appendingPathComponent("Cache"))
+        textTranslator = TranslationPipeline(sourceLanguage: .japanese, targetLanguage: .korean,
+            maskedResolver: MaskedContextResolver(directory: applicationSupportDirectory.appendingPathComponent("ContextInterpretations")))
     }
 
     public func process(imageURL: URL, destinationURL: URL, configuration: LocalTranslatorConfiguration,
@@ -36,7 +39,7 @@ public final class MangaPageProcessor {
             destinationURL: destinationURL, typography: typography, wasCached: draft.wasCached)
         guard configuration.enhanceSoundEffects else { return result }
         do {
-            return try await SupplementalPageTranslation(engine: engine, recognitionSession: recognitionSession, cache: cache).apply(to: result, configuration: configuration,
+            return try await SupplementalPageTranslation(engine: engine, recognitionSession: recognitionSession, cache: cache, pipeline: textTranslator).apply(to: result, configuration: configuration,
                 typography: typography, previousContext: previousContext, force: force, status: status)
         } catch is CancellationError { throw CancellationError() }
         catch {
@@ -83,7 +86,6 @@ public final class MangaPageProcessor {
             recognized.blocks[index].originalText = JapaneseTitleResolver.resolve(optical: recognized.blocks[index].originalText, bookTitle: bookTitle)
         }
         try Task.checkCancellation()
-        let pipeline = TranslationPipeline(sourceLanguage: .japanese, targetLanguage: .korean)
         let reusable = force ? nil : storedPrior
         let migrated = reusable.flatMap { RecognitionCacheMigration.reuse($0, for: recognized.blocks) }
         let blocks: [TextBlock]
@@ -92,7 +94,7 @@ public final class MangaPageProcessor {
         } else {
             await status("\(configuration.provider.displayName) · 페이지 문맥 번역 중")
             let reviewed = Dictionary(uniqueKeysWithValues: (migrated ?? []).filter { !$0.translatedText.isEmpty }.map { ($0.id, $0) })
-            let translated = try await pipeline.translate(migrated ?? recognized.blocks, configuration: configuration, previousContext: previousContext)
+            let translated = try await textTranslator.translate(migrated ?? recognized.blocks, configuration: configuration, previousContext: previousContext)
             blocks = translated.map { reviewed[$0.id] ?? $0 }
         }
         try Task.checkCancellation()
@@ -124,7 +126,7 @@ public final class MangaPageProcessor {
         guard ImageRegionSelection.validates(box), box.width >= 0.001, box.height >= 0.001 else { throw ManualRegionError.invalidBounds }
         let draft = try await preparePage(imageURL: imageURL, configuration: configuration, previousContext: "", bookTitle: bookTitle,
                                            force: false, status: status)
-        return try await ManualRegionTranslation(engine: engine, session: recognitionSession, cache: cache).apply(
+        return try await ManualRegionTranslation(engine: engine, session: recognitionSession, cache: cache, pipeline: textTranslator).apply(
             to: draft, box: box, kind: kind, destinationURL: destinationURL, configuration: configuration, typography: typography, status: status)
     }
 

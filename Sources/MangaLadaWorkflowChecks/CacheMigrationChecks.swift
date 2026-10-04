@@ -37,6 +37,10 @@ enum CacheMigrationChecks {
         try require(migrated.textKind == saved.textKind && migrated.effectStyleID == saved.effectStyleID,
                     "Edited kind or effect style was lost.")
         try require(rawOCR == before && page.blocks == [saved], "Migration mutated its source data.")
+        var interpreted = page
+        interpreted.blocks[0].maskedTextInterpretation = MaskedTextInterpretation(japanese: "推定した日本語", message: "뜻 확인")
+        try require(RecognitionCacheMigration.reuse(interpreted, for: [rawOCR])?.first?.maskedTextInterpretation
+                    == interpreted.blocks[0].maskedTextInterpretation, "Geometry refresh lost interpretation review information.")
         var automatic = page
         automatic.blocks[0].userDefinedTextKind = nil
         automatic.blocks[0].textKind = .dialogue

@@ -21,13 +21,32 @@ enum MaskedTextTranslation {
     }
 
     static func modelText(_ source: String) -> String { resolution(source).text }
+    /// An O between kana of the same script is a mask candidate; Oリング and O型 remain letters.
+    static func normalizedSpelling(_ source: String) -> String {
+        let pattern = #"(?:(?<=[\p{Hiragana}])[OＯ]+(?=[\p{Hiragana}])|(?<=[\p{Katakana}ー])[OＯ]+(?=[\p{Katakana}ー]))(?!リング)"#
+        var matches: [Range<String.Index>] = []
+        var remaining = source.startIndex..<source.endIndex
+        while let range = source.range(of: pattern, options: .regularExpression, range: remaining) {
+            matches.append(range); remaining = range.upperBound..<source.endIndex
+        }
+        var result = source
+        for range in matches.reversed() {
+            result.replaceSubrange(range, with: String(repeating: "○", count: source[range].count))
+        }
+        return result
+    }
+    static func hasUnresolvedCircles(_ source: String) -> Bool { !sourceLengths(in: source).isEmpty }
+
+    static func validateKnownNames(_ translated: String, source: String) throws {
+        for name in resolution(source).koreanNames where !translated.contains(name) {
+            throw TranslationError.invalidPageResponse("문맥으로 확인한 고유명사의 번역이 빠지거나 바뀌었습니다. 한국어 명칭 '\(name)'을 사용해야 합니다.")
+        }
+    }
 
     static func validated(_ translated: String, source: String) throws -> String {
         let resolved = resolution(source)
-        guard !resolved.koreanNames.isEmpty || !sourceLengths(in: source).isEmpty else { return translated }
-        for name in resolved.koreanNames where !translated.contains(name) {
-            throw TranslationError.invalidPageResponse("문맥으로 확인한 고유명사의 번역이 빠지거나 바뀌었습니다. 한국어 명칭 '\(name)'을 사용해야 합니다.")
-        }
+        guard !resolved.koreanNames.isEmpty || !sourceLengths(in: resolved.text).isEmpty else { return translated }
+        try validateKnownNames(translated, source: source)
         let expected = sourceLengths(in: resolved.text).sorted()
         let compact = compactedCircles(translated)
         let actual = groups(in: compact).map { compact[$0].count }.sorted()
@@ -38,7 +57,7 @@ enum MaskedTextTranslation {
     }
 
     private static func resolution(_ source: String) -> JapaneseMaskedNameLexicon.Resolution {
-        JapaneseMaskedNameLexicon.resolve(source, maskCharacters: circleCharacters + "OＯ")
+        JapaneseMaskedNameLexicon.resolve(normalizedSpelling(source), maskCharacters: circleCharacters + "OＯ")
     }
 
     private static func sourceLengths(in text: String) -> [Int] {

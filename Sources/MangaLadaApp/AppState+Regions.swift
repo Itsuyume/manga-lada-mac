@@ -32,8 +32,8 @@ extension AppState {
                 if configuration.provider == .ollama { try await runtime.ensureReady(model: configuration.ollama.model) }
                 statusMessage = "페이지 문맥을 참고해 선택한 문구를 다시 번역하는 중…"
                 var updated = translation
-                updated.blocks = try await TranslationPipeline(sourceLanguage: .japanese, targetLanguage: .korean)
-                    .translateSelected([translation.blocks[blockIndex].id], in: translation.blocks, configuration: configuration)
+                updated.blocks = try await processor.textTranslator.translateSelected(
+                    [translation.blocks[blockIndex].id], in: translation.blocks, configuration: configuration)
                 try Task.checkCancellation()
                 guard sessionID == id else { return }
                 try saveReview(updated, comparedTo: result.translation, at: page)

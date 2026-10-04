@@ -30,6 +30,10 @@ enum MaskedTextTranslationChecks {
             ("〇ページ", "0페이지", "0페이지"),
             ("〇", "0", "0"),
             ("Oリング", "O링", "O링"),
+            ("パッキンOリング", "패킹 O링", "패킹 O링"),
+            ("おOぎり", "오○기리", "오○기리"),
+            ("アＯス", "아○스", "아○스"),
+            ("おOOぎり", "오○○기리", "오○○기리"),
             ("○を選ぶ。", "○를 고른다.", "○를 고른다.")
         ] {
             let block = makeBlock(source)
@@ -44,7 +48,8 @@ enum MaskedTextTranslationChecks {
             ("〇ジャンプ", "점프"), ("ポ○モン", ""),
             ("ス○ブラしよう。", "스○브라 하자."), ("スOブラしよう。", "스... 블라블라 하자."),
             ("ポ○モンで遊ぼう。", "드래곤볼로 놀자."), ("ス○ブラという店", "스매시브라더스라는 가게"),
-            ("○○さんとポ○モンで遊ぼう。", "포켓몬으로 놀자.")
+            ("○○さんとポ○モンで遊ぼう。", "포켓몬으로 놀자."),
+            ("おOぎり", "오기리"), ("アＯス", "아스"), ("おOOぎり", "오○기리")
         ] {
             do { _ = try response(invalid, block: makeBlock(source)); throw Failure.failed("Invalid mask output was accepted: \(invalid)") }
             catch TranslationError.invalidPageResponse { }

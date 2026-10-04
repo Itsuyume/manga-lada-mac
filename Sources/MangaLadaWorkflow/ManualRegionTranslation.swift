@@ -8,6 +8,7 @@ package struct ManualRegionTranslation {
     let engine: BallonsTranslatorEngine
     let session: JapaneseEngineSession
     let cache: TranslationCache
+    let pipeline: TranslationPipeline
 
     func apply(to draft: MangaPageDraft, box: TextBox, kind: MangaTextKind, destinationURL: URL,
                configuration: LocalTranslatorConfiguration, typography: MangaTypography,
@@ -31,8 +32,7 @@ package struct ManualRegionTranslation {
         let selectedIDs = Set(recognized.map(\.id)), replacedIDs = Set(replaced.map(\.id))
         let context = MangaReadingOrder.sorted(draft.translation.blocks.filter { !replacedIDs.contains($0.id) } + recognized)
         var translation = draft.translation
-        translation.blocks = try await TranslationPipeline(sourceLanguage: .japanese, targetLanguage: .korean)
-            .translateSelected(selectedIDs, in: context, configuration: configuration)
+        translation.blocks = try await pipeline.translateSelected(selectedIDs, in: context, configuration: configuration)
         try Task.checkCancellation()
         let translated = translation.blocks.filter { selectedIDs.contains($0.id) }
         let cleanURL = engine.inpaintedImageURL(runID: translation.imageFingerprint + "-manual")

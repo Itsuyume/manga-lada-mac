@@ -9,6 +9,7 @@ struct SupplementalPageTranslation {
     let engine: BallonsTranslatorEngine
     let recognitionSession: JapaneseEngineSession
     let cache: TranslationCache
+    let pipeline: TranslationPipeline
 
     func apply(to base: ProcessedMangaPage, configuration: LocalTranslatorConfiguration, typography: MangaTypography,
                previousContext: String, force: Bool, status: @escaping @Sendable (String) async -> Void) async throws -> ProcessedMangaPage {
@@ -24,6 +25,7 @@ struct SupplementalPageTranslation {
                 var updated = block; updated.translatedText = primary.translatedText; updated.effectStyleID = primary.effectStyleID
                 updated.userDefinedBounds = primary.userDefinedBounds
                 updated.originalText = primary.originalText; updated.userDefinedOriginalText = primary.userDefinedOriginalText
+                updated.maskedTextInterpretation = primary.maskedTextInterpretation
                 if let kind = primary.textKind { updated.textKind = kind }
                 return updated
             }
@@ -41,7 +43,6 @@ struct SupplementalPageTranslation {
                                                                 idleTimeout: configuration.ollama.retention.duration)
         }
         try Task.checkCancellation()
-        let pipeline = TranslationPipeline(sourceLanguage: .japanese, targetLanguage: .korean)
         let translatedExtras = try await pipeline.translate(augmented.extras, configuration: configuration, previousContext: previousContext)
         let byID = Dictionary(uniqueKeysWithValues: translatedExtras.map { ($0.id, $0) })
         var translation = base.translation
