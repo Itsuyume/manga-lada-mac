@@ -8,6 +8,8 @@ struct MangaLadaRenderingChecks {
     @MainActor
     static func main() throws {
         let root = try temporaryDirectory()
+        stage("Original punctuation")
+        try checkOriginalPunctuation(in: root)
         stage("Curved line wrapping")
         try checkCurvedLineWrapping()
         stage("Sound effects")

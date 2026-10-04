@@ -29,6 +29,7 @@ public struct TextBlock: Codable, Equatable, Identifiable, Sendable {
     public var effectStyleID: String?
     public var userDefinedBounds: TextBox?
     public var userDefinedTextKind: Bool?
+    public var userDefinedOriginalText: Bool?
 
     public init(
         id: UUID = UUID(),
@@ -43,7 +44,8 @@ public struct TextBlock: Codable, Equatable, Identifiable, Sendable {
         balloonShape: BalloonShape? = nil,
         effectStyleID: String? = nil,
         userDefinedBounds: TextBox? = nil,
-        userDefinedTextKind: Bool? = nil
+        userDefinedTextKind: Bool? = nil,
+        userDefinedOriginalText: Bool? = nil
     ) {
         self.id = id
         self.box = box
@@ -58,6 +60,7 @@ public struct TextBlock: Codable, Equatable, Identifiable, Sendable {
         self.effectStyleID = effectStyleID
         self.userDefinedBounds = userDefinedBounds
         self.userDefinedTextKind = userDefinedTextKind
+        self.userDefinedOriginalText = userDefinedOriginalText
     }
 }
 

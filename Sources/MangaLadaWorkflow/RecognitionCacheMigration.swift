@@ -22,6 +22,7 @@ package enum RecognitionCacheMigration {
             updated.textKind = prior.userDefinedTextKind == true ? prior.textKind : block.textKind ?? prior.textKind
             updated.userDefinedBounds = prior.userDefinedBounds
             updated.userDefinedTextKind = prior.userDefinedTextKind
+            updated.userDefinedOriginalText = prior.originalText != block.originalText ? true : prior.userDefinedOriginalText
             return updated
         }
     }

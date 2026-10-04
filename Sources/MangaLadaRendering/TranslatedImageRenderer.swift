@@ -22,6 +22,7 @@ public enum TranslatedImageRenderError: LocalizedError, Equatable {
     case imageLoadFailed(URL)
     case noTranslationBlocks
     case pngEncodingFailed
+    case originalImageSizeMismatch
     case textDoesNotFit(UUID, String)
 
     public var errorDescription: String? {
@@ -32,6 +33,8 @@ public enum TranslatedImageRenderError: LocalizedError, Equatable {
             return "저장할 번역 블록이 없습니다."
         case .pngEncodingFailed:
             return "PNG 이미지로 변환하지 못했습니다."
+        case .originalImageSizeMismatch:
+            return "원본과 글자 제거 이미지의 크기가 달라 기호를 복원할 수 없습니다. 원본을 다시 열어주세요."
         case .textDoesNotFit(_, let text):
             return "말풍선에 문장이 들어가지 않습니다: ‘\(text.prefix(80))’. 문구 또는 인식 영역을 확인해주세요."
         }
@@ -48,7 +51,8 @@ public struct TranslatedImageRenderer {
         translation: PageTranslation,
         destinationURL: URL,
         fontScale: Double = 1.0,
-        backgroundStyle: TranslationTextBackgroundStyle = .redactionBubble
+        backgroundStyle: TranslationTextBackgroundStyle = .redactionBubble,
+        originalImageURL: URL? = nil
     ) throws -> RenderedImageFile {
         guard let image = NSImage(contentsOf: sourceImageURL) else {
             throw TranslatedImageRenderError.imageLoadFailed(sourceImageURL)
@@ -61,11 +65,20 @@ public struct TranslatedImageRenderer {
             throw TranslatedImageRenderError.noTranslationBlocks
         }
 
+        var original: NSImage?
+        if let originalImageURL, !originalPunctuationRegions(in: drawableBlocks, imageSize: pixelBackedSize(for: image)).isEmpty {
+            guard let loaded = NSImage(contentsOf: originalImageURL) else {
+                throw TranslatedImageRenderError.imageLoadFailed(originalImageURL)
+            }
+            original = loaded
+        }
+
         let output = try render(
             image: image,
             blocks: drawableBlocks,
             fontScale: fontScale,
-            backgroundStyle: backgroundStyle
+            backgroundStyle: backgroundStyle,
+            originalImage: original
         )
         guard let pngData = pngData(from: output) else {
             throw TranslatedImageRenderError.pngEncodingFailed
@@ -83,7 +96,8 @@ public struct TranslatedImageRenderer {
         image: NSImage,
         blocks: [TextBlock],
         fontScale: Double = 1.0,
-        backgroundStyle: TranslationTextBackgroundStyle = .redactionBubble
+        backgroundStyle: TranslationTextBackgroundStyle = .redactionBubble,
+        originalImage: NSImage? = nil
     ) throws -> NSImage {
         let size = pixelBackedSize(for: image)
         guard let bitmap = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: Int(size.width), pixelsHigh: Int(size.height),
@@ -105,9 +119,11 @@ public struct TranslatedImageRenderer {
             fraction: 1
         )
 
+        let preserved = try restoreOriginalPunctuation(originalImage, blocks: blocks, imageSize: size)
+
         let lightRegionDetector = LightRegionDetector(image: image, imageSize: size)
         let pageFontSize = DialogueTypesettingRules.pageFontSize(blocks: blocks, imageSize: size)
-        for block in blocks {
+        for (index, block) in blocks.enumerated() where !preserved.contains(index) {
             try draw(
                 block: block,
                 imageSize: size,

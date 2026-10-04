@@ -125,6 +125,13 @@ public final class MangaPageProcessor {
 
     public func applyEdits(to result: ProcessedMangaPage, translation: PageTranslation,
                            typography: MangaTypography) throws -> ProcessedMangaPage {
+        let saved = Dictionary(uniqueKeysWithValues: result.translation.blocks.map { ($0.id, $0) })
+        var translation = translation
+        translation.blocks = translation.blocks.map { block in
+            guard let original = saved[block.id], original.originalText != block.originalText else { return block }
+            var updated = block; updated.userDefinedOriginalText = true
+            return updated
+        }
         var edited = try PageImageRendering.render(translation: translation, cleanImageURL: result.cleanImageURL,
                                                   destinationURL: result.renderedImageURL, typography: typography, wasCached: true)
         edited.warnings = result.warnings

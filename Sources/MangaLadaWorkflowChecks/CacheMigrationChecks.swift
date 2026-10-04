@@ -31,6 +31,7 @@ enum CacheMigrationChecks {
         }
         try require(migrated.originalText == saved.originalText && migrated.translatedText == saved.translatedText,
                     "Edited Japanese or Korean was overwritten by raw OCR.")
+        try require(migrated.userDefinedOriginalText == true, "Legacy corrected source text lost its preservation marker.")
         try require(migrated.balloonShape == rawOCR.balloonShape && migrated.userDefinedBounds == saved.userDefinedBounds,
                     "New contours or manual placement were lost.")
         try require(migrated.textKind == saved.textKind && migrated.effectStyleID == saved.effectStyleID,

@@ -3,8 +3,8 @@ import MangaLadaCore
 import MangaLadaRendering
 
 @MainActor
-enum PageImageRendering {
-    static func render(translation: PageTranslation, cleanImageURL: URL, destinationURL: URL,
+package enum PageImageRendering {
+    package static func render(translation: PageTranslation, cleanImageURL: URL, destinationURL: URL,
                        typography: MangaTypography, wasCached: Bool) throws -> ProcessedMangaPage {
         if translation.blocks.isEmpty {
             try FileManager.default.createDirectory(at: destinationURL.deletingLastPathComponent(), withIntermediateDirectories: true)
@@ -12,7 +12,7 @@ enum PageImageRendering {
         } else {
             _ = try TranslatedImageRenderer(typography: typography).writePNG(
                 sourceImageURL: cleanImageURL, translation: translation, destinationURL: destinationURL,
-                fontScale: typography.fontScale, backgroundStyle: .none
+                fontScale: typography.fontScale, backgroundStyle: .none, originalImageURL: translation.imageURL
             )
         }
         return ProcessedMangaPage(translation: translation, cleanImageURL: cleanImageURL,

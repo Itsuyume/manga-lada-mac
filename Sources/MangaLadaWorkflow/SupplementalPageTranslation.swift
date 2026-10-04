@@ -23,6 +23,7 @@ struct SupplementalPageTranslation {
                 guard let primary = current[block.id] else { return block }
                 var updated = block; updated.translatedText = primary.translatedText; updated.effectStyleID = primary.effectStyleID
                 updated.userDefinedBounds = primary.userDefinedBounds
+                updated.originalText = primary.originalText; updated.userDefinedOriginalText = primary.userDefinedOriginalText
                 if let kind = primary.textKind { updated.textKind = kind }
                 return updated
             }

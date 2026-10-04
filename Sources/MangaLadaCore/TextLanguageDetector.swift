@@ -18,7 +18,7 @@ public enum TextLanguageDetector {
     }
 
     /// Pure symbols have no language to translate. Standalone kana still require translation.
-    static func isPunctuationOnly(_ text: String) -> Bool {
+    public static func isPunctuationOnly(_ text: String) -> Bool {
         containsOnlyMarks(text, marks: punctuation)
     }
 

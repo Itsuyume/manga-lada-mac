@@ -11,6 +11,7 @@ struct MangaLadaWorkflowChecks {
         let arguments = CommandLine.arguments
         if arguments.count == 2, arguments[1] == "--cache-migration" {
             try CacheMigrationChecks.run()
+            try PunctuationReviewChecks.run()
             return
         }
         if arguments.count == 5, arguments[1] == "--review" {
