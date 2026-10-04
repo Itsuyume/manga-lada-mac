@@ -69,7 +69,7 @@ struct TranslationInspector: View {
                 }.buttonStyle(.plain).help("이미지에서 \(index + 1)번 문구 표시")
                 Picker("문구 종류", selection: kindBinding(index)) {
                     ForEach(MangaTextKind.allCases, id: \.self) { Text($0.regionLabel).tag($0) }
-                }.labelsHidden().controlSize(.small)
+                }.labelsHidden().controlSize(.small).disabled(state.isBusy)
             }
             TextField("일본어 원문", text: originalBinding(index), axis: .vertical)
                 .font(.system(size: 11)).foregroundStyle(.secondary).disabled(state.isBusy)

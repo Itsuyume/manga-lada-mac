@@ -8,7 +8,7 @@ enum TextTranslationBenchmark {
         let source = try Data(contentsOf: input)
         let cases = try JSONDecoder().decode([TranslationCase].self, from: source)
         guard !cases.isEmpty, Set(cases.map(\.id)).count == cases.count,
-              cases.allSatisfy({ !$0.id.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !$0.texts.isEmpty && $0.texts.allSatisfy({ !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }) }) else {
+              cases.allSatisfy(\.isValid) else {
             throw BenchmarkError.invalidCases
         }
         let began = Date()
@@ -30,11 +30,21 @@ enum TextTranslationBenchmark {
                                  configuration: LocalTranslatorConfiguration) async throws -> CaseReport {
         let height = 1 / Double(test.texts.count)
         let blocks = test.texts.enumerated().map { index, text in
-            TextBlock(box: TextBox(x: 0.1, y: Double(index) * height, width: 0.8, height: height * 0.8), originalText: text)
+            TextBlock(box: TextBox(x: 0.1, y: Double(index) * height, width: 0.8, height: height * 0.8), originalText: text,
+                      translatedText: test.reviewedTexts?[index] ?? "", textKind: test.kinds?[index])
         }
         let began = Date()
         do {
-            let translated = try await pipeline.translate(blocks, configuration: configuration, previousContext: test.previousContext ?? "")
+            let translated: [TextBlock]
+            if let indices = test.selectedIndices {
+                let ids = Set(indices.map { blocks[$0].id })
+                translated = try await pipeline.translateSelected(ids, in: blocks, configuration: configuration, previousContext: test.previousContext ?? "")
+                guard blocks.filter({ !ids.contains($0.id) }).allSatisfy({ translated.contains($0) }) else {
+                    throw BenchmarkError.unselectedTextChanged
+                }
+            } else {
+                translated = try await pipeline.translate(blocks, configuration: configuration, previousContext: test.previousContext ?? "")
+            }
             guard translated.count == blocks.count, Set(translated.map(\.id)) == Set(blocks.map(\.id)) else {
                 throw BenchmarkError.regionIdentityChanged
             }
@@ -53,6 +63,18 @@ enum TextTranslationBenchmark {
         let texts: [String]
         let previousContext: String?
         let reviewPoints: [String]
+        let kinds: [MangaTextKind]?
+        let reviewedTexts: [String]?
+        let selectedIndices: [Int]?
+
+        var isValid: Bool {
+            guard !id.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, !texts.isEmpty,
+                  texts.allSatisfy({ !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }),
+                  kinds == nil || kinds?.count == texts.count,
+                  reviewedTexts == nil || reviewedTexts?.count == texts.count else { return false }
+            guard let selectedIndices else { return true }
+            return Set(selectedIndices).count == selectedIndices.count && selectedIndices.allSatisfy { texts.indices.contains($0) }
+        }
     }
     private struct CaseReport: Encodable {
         let input: TranslationCase
@@ -67,7 +89,7 @@ enum TextTranslationBenchmark {
         let cases: [CaseReport]
     }
     private enum BenchmarkError: LocalizedError {
-        case reportAlreadyExists, invalidCases, sourceChanged, failedCases, regionIdentityChanged
+        case reportAlreadyExists, invalidCases, sourceChanged, failedCases, regionIdentityChanged, unselectedTextChanged
         var errorDescription: String? {
             switch self {
             case .reportAlreadyExists: "이미 있는 보고서는 덮어쓰지 않습니다. 새 출력 파일을 지정해주세요."
@@ -75,6 +97,7 @@ enum TextTranslationBenchmark {
             case .sourceChanged: "검수 중 입력 파일이 변경되었습니다."
             case .failedCases: "일부 응답이 검증에 실패했습니다. 저장된 보고서에서 실패 원인을 확인해주세요."
             case .regionIdentityChanged: "번역 전후의 영역 번호가 달라졌습니다."
+            case .unselectedTextChanged: "선택하지 않은 영역의 검수 내용이 바뀌었습니다."
             }
         }
     }

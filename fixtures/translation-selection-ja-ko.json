@@ -1,0 +1,422 @@
+[
+  {
+    "id": "thunder-isolated",
+    "texts": [
+      "ゴロゴロ"
+    ],
+    "kinds": [
+      "soundEffect"
+    ],
+    "reviewPoints": [
+      "기존 단독 문구 재번역 경로 비교",
+      "천둥: 우르릉; 골목골목 금지"
+    ]
+  },
+  {
+    "id": "thunder-selected",
+    "texts": [
+      "雷が近づいてきた。空から低い音が響く。",
+      "ゴロゴロ"
+    ],
+    "kinds": [
+      "caption",
+      "soundEffect"
+    ],
+    "reviewedTexts": [
+      "검수 완료: thunder",
+      "기존 효과음"
+    ],
+    "selectedIndices": [
+      1
+    ],
+    "reviewPoints": [
+      "첫 문구의 검수 내용 보존",
+      "천둥: 우르릉; 골목골목 금지"
+    ]
+  },
+  {
+    "id": "cat-isolated",
+    "texts": [
+      "ゴロゴロ"
+    ],
+    "kinds": [
+      "soundEffect"
+    ],
+    "reviewPoints": [
+      "기존 단독 문구 재번역 경로 비교",
+      "고양이 가르랑 또는 골골; 천둥과 구분"
+    ]
+  },
+  {
+    "id": "cat-selected",
+    "texts": [
+      "猫が気持ちよさそうに喉を鳴らしている。",
+      "ゴロゴロ"
+    ],
+    "kinds": [
+      "caption",
+      "soundEffect"
+    ],
+    "reviewedTexts": [
+      "검수 완료: cat",
+      "기존 효과음"
+    ],
+    "selectedIndices": [
+      1
+    ],
+    "reviewPoints": [
+      "첫 문구의 검수 내용 보존",
+      "고양이 가르랑 또는 골골; 천둥과 구분"
+    ]
+  },
+  {
+    "id": "paper-isolated",
+    "texts": [
+      "パラパラ"
+    ],
+    "kinds": [
+      "soundEffect"
+    ],
+    "reviewPoints": [
+      "기존 단독 문구 재번역 경로 비교",
+      "종이: 팔락팔락; 비나 흩어짐 일반과 구분"
+    ]
+  },
+  {
+    "id": "paper-selected",
+    "texts": [
+      "本のページをめくっている。",
+      "パラパラ"
+    ],
+    "kinds": [
+      "caption",
+      "soundEffect"
+    ],
+    "reviewedTexts": [
+      "검수 완료: paper",
+      "기존 효과음"
+    ],
+    "selectedIndices": [
+      1
+    ],
+    "reviewPoints": [
+      "첫 문구의 검수 내용 보존",
+      "종이: 팔락팔락; 비나 흩어짐 일반과 구분"
+    ]
+  },
+  {
+    "id": "machine-isolated",
+    "texts": [
+      "ガタガタ"
+    ],
+    "kinds": [
+      "soundEffect"
+    ],
+    "reviewPoints": [
+      "기존 단독 문구 재번역 경로 비교",
+      "기계 떨림: 덜덜 또는 덜커덩; 가타가타 전사 금지"
+    ]
+  },
+  {
+    "id": "machine-selected",
+    "texts": [
+      "古い機械が激しく振動し、窓まで揺れている。",
+      "ガタガタ"
+    ],
+    "kinds": [
+      "caption",
+      "soundEffect"
+    ],
+    "reviewedTexts": [
+      "검수 완료: machine",
+      "기존 효과음"
+    ],
+    "selectedIndices": [
+      1
+    ],
+    "reviewPoints": [
+      "첫 문구의 검수 내용 보존",
+      "기계 떨림: 덜덜 또는 덜커덩; 가타가타 전사 금지"
+    ]
+  },
+  {
+    "id": "light-rain-isolated",
+    "texts": [
+      "パラパラ"
+    ],
+    "kinds": [
+      "soundEffect"
+    ],
+    "reviewPoints": [
+      "기존 단독 문구 재번역 경로 비교",
+      "비 후두둑/톡톡 계열, 종이 팔락 금지"
+    ]
+  },
+  {
+    "id": "light-rain-selected",
+    "texts": [
+      "小雨が降り出し、傘に水滴が当たっている。",
+      "パラパラ"
+    ],
+    "kinds": [
+      "caption",
+      "soundEffect"
+    ],
+    "reviewedTexts": [
+      "검수 완료: light-rain",
+      "기존 효과음"
+    ],
+    "selectedIndices": [
+      1
+    ],
+    "reviewPoints": [
+      "첫 문구의 검수 내용 보존",
+      "비 후두둑/톡톡 계열, 종이 팔락 금지"
+    ]
+  },
+  {
+    "id": "teeth-isolated",
+    "texts": [
+      "ガタガタ"
+    ],
+    "kinds": [
+      "soundEffect"
+    ],
+    "reviewPoints": [
+      "기존 단독 문구 재번역 경로 비교",
+      "추위 딱딱/덜덜, 엔진 부르릉 금지"
+    ]
+  },
+  {
+    "id": "teeth-selected",
+    "texts": [
+      "寒くて歯が鳴っている。",
+      "ガタガタ"
+    ],
+    "kinds": [
+      "caption",
+      "soundEffect"
+    ],
+    "reviewedTexts": [
+      "검수 완료: teeth",
+      "기존 효과음"
+    ],
+    "selectedIndices": [
+      1
+    ],
+    "reviewPoints": [
+      "첫 문구의 검수 내용 보존",
+      "추위 딱딱/덜덜, 엔진 부르릉 금지"
+    ]
+  },
+  {
+    "id": "rock-isolated",
+    "texts": [
+      "ゴロゴロ"
+    ],
+    "kinds": [
+      "soundEffect"
+    ],
+    "reviewPoints": [
+      "기존 단독 문구 재번역 경로 비교",
+      "바위 데굴데굴/우르르, 고양이 소리 금지"
+    ]
+  },
+  {
+    "id": "rock-selected",
+    "texts": [
+      "大きな岩が坂道を転がり落ちてきた。",
+      "ゴロゴロ"
+    ],
+    "kinds": [
+      "caption",
+      "soundEffect"
+    ],
+    "reviewedTexts": [
+      "검수 완료: rock",
+      "기존 효과음"
+    ],
+    "selectedIndices": [
+      1
+    ],
+    "reviewPoints": [
+      "첫 문구의 검수 내용 보존",
+      "바위 데굴데굴/우르르, 고양이 소리 금지"
+    ]
+  },
+  {
+    "id": "lazy-isolated",
+    "texts": [
+      "ゴロゴロ"
+    ],
+    "kinds": [
+      "soundEffect"
+    ],
+    "reviewPoints": [
+      "기존 단독 문구 재번역 경로 비교",
+      "빈둥빈둥/뒹굴뒹굴, 천둥 우르릉 금지"
+    ]
+  },
+  {
+    "id": "lazy-selected",
+    "texts": [
+      "今日は一日、布団の上で寝転んで過ごした。",
+      "ゴロゴロ"
+    ],
+    "kinds": [
+      "caption",
+      "soundEffect"
+    ],
+    "reviewedTexts": [
+      "검수 완료: lazy",
+      "기존 효과음"
+    ],
+    "selectedIndices": [
+      1
+    ],
+    "reviewPoints": [
+      "첫 문구의 검수 내용 보존",
+      "빈둥빈둥/뒹굴뒹굴, 천둥 우르릉 금지"
+    ]
+  },
+  {
+    "id": "fire-isolated",
+    "texts": [
+      "パチパチ"
+    ],
+    "kinds": [
+      "soundEffect"
+    ],
+    "reviewPoints": [
+      "기존 단독 문구 재번역 경로 비교",
+      "장작 타닥타닥, 박수 짝짝 금지"
+    ]
+  },
+  {
+    "id": "fire-selected",
+    "texts": [
+      "暖炉の薪が燃えて小さく弾けている。",
+      "パチパチ"
+    ],
+    "kinds": [
+      "caption",
+      "soundEffect"
+    ],
+    "reviewedTexts": [
+      "검수 완료: fire",
+      "기존 효과음"
+    ],
+    "selectedIndices": [
+      1
+    ],
+    "reviewPoints": [
+      "첫 문구의 검수 내용 보존",
+      "장작 타닥타닥, 박수 짝짝 금지"
+    ]
+  },
+  {
+    "id": "applause-isolated",
+    "texts": [
+      "パチパチ"
+    ],
+    "kinds": [
+      "soundEffect"
+    ],
+    "reviewPoints": [
+      "기존 단독 문구 재번역 경로 비교",
+      "박수 짝짝, 불 타닥 금지"
+    ]
+  },
+  {
+    "id": "applause-selected",
+    "texts": [
+      "演奏が終わり、観客が手をたたいている。",
+      "パチパチ"
+    ],
+    "kinds": [
+      "caption",
+      "soundEffect"
+    ],
+    "reviewedTexts": [
+      "검수 완료: applause",
+      "기존 효과음"
+    ],
+    "selectedIndices": [
+      1
+    ],
+    "reviewPoints": [
+      "첫 문구의 검수 내용 보존",
+      "박수 짝짝, 불 타닥 금지"
+    ]
+  },
+  {
+    "id": "door-knocking-isolated",
+    "texts": [
+      "ドンドン"
+    ],
+    "kinds": [
+      "soundEffect"
+    ],
+    "reviewPoints": [
+      "기존 단독 문구 재번역 경로 비교",
+      "문 쿵쿵/똑똑"
+    ]
+  },
+  {
+    "id": "door-knocking-selected",
+    "texts": [
+      "外にいる人が玄関のドアを強くたたいている。",
+      "ドンドン"
+    ],
+    "kinds": [
+      "caption",
+      "soundEffect"
+    ],
+    "reviewedTexts": [
+      "검수 완료: door-knocking",
+      "기존 효과음"
+    ],
+    "selectedIndices": [
+      1
+    ],
+    "reviewPoints": [
+      "첫 문구의 검수 내용 보존",
+      "문 쿵쿵/똑똑"
+    ]
+  },
+  {
+    "id": "festival-drum-isolated",
+    "texts": [
+      "ドンドン"
+    ],
+    "kinds": [
+      "soundEffect"
+    ],
+    "reviewPoints": [
+      "기존 단독 문구 재번역 경로 비교",
+      "북 둥둥/둥둥둥"
+    ]
+  },
+  {
+    "id": "festival-drum-selected",
+    "texts": [
+      "祭りの太鼓が力強く鳴り響いている。",
+      "ドンドン"
+    ],
+    "kinds": [
+      "caption",
+      "soundEffect"
+    ],
+    "reviewedTexts": [
+      "검수 완료: festival-drum",
+      "기존 효과음"
+    ],
+    "selectedIndices": [
+      1
+    ],
+    "reviewPoints": [
+      "첫 문구의 검수 내용 보존",
+      "북 둥둥/둥둥둥"
+    ]
+  }
+]

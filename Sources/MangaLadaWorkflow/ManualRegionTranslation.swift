@@ -21,14 +21,17 @@ struct ManualRegionTranslation {
             recognized[index].textKind = kind; recognized[index].detectedFontSize = nil; recognized[index].userDefinedTextKind = true
             if let original = replaced.first(where: { $0.id == recognized[index].id }) {
                 recognized[index].box = original.box; recognized[index].balloonShape = original.balloonShape
+                recognized[index].effectStyleID = original.effectStyleID; recognized[index].rotationDegrees = original.rotationDegrees
             }
         }
-        await status("지정 영역 · 한국어 번역 중")
-        let translated = try await TranslationPipeline(sourceLanguage: .japanese, targetLanguage: .korean)
-            .translate(recognized, configuration: configuration)
-        try Task.checkCancellation()
+        await status("지정 영역 · 페이지 문맥을 참고해 번역 중")
+        let selectedIDs = Set(recognized.map(\.id)), replacedIDs = Set(replaced.map(\.id))
+        let context = MangaReadingOrder.sorted(draft.translation.blocks.filter { !replacedIDs.contains($0.id) } + recognized)
         var translation = draft.translation
-        translation.blocks = MangaReadingOrder.sorted(draft.translation.blocks.filter { !ImageRegionSelection.containsCenter(box, of: $0.box) } + translated)
+        translation.blocks = try await TranslationPipeline(sourceLanguage: .japanese, targetLanguage: .korean)
+            .translateSelected(selectedIDs, in: context, configuration: configuration)
+        try Task.checkCancellation()
+        let translated = translation.blocks.filter { selectedIDs.contains($0.id) }
         let cleanURL = engine.inpaintedImageURL(runID: translation.imageFingerprint + "-manual")
         let candidate = cleanURL.deletingLastPathComponent().appendingPathComponent("manual-candidate.png")
         try FileManager.default.createDirectory(at: cleanURL.deletingLastPathComponent(), withIntermediateDirectories: true)

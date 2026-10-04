@@ -23,16 +23,27 @@ struct ComicPageImage: View {
                     .frame(width: size.width, height: size.height)
                     .background(.white).shadow(color: .black.opacity(0.28), radius: 8, y: 4)
                     .accessibilityLabel(url.lastPathComponent)
-                    .overlay { if let selection { ComicImageSelectionOverlay(selection: selection, size: size) } }
+                    .overlay { if let selection { ComicImageSelectionOverlay(selection: selection.wrappedValue, size: size) } }
                     .overlay { if !regions.isEmpty {
                         ComicRegionMarkers(blocks: regions, size: size, selectedID: selectedRegionID, selection: selection?.wrappedValue)
                     } }
+                    .contentShape(Rectangle())
+                    .simultaneousGesture(selectionGesture(in: size), including: selection == nil ? .none : .all)
             } else if let failure {
                 ContentUnavailableView("이미지를 읽을 수 없습니다", systemImage: "photo.badge.exclamationmark", description: Text(failure))
                     .frame(width: min(260, maximumSize.width), height: min(200, maximumSize.height))
             } else { ProgressView().frame(width: max(1, maximumSize.width), height: max(1, maximumSize.height)) }
         }
         .task(id: "\(url.path)-\(revision)") { await load() }
+    }
+
+    private func selectionGesture(in size: CGSize) -> some Gesture {
+        // Own dragging above both overlays so region badges do not cover its hit area.
+        DragGesture(minimumDistance: 3).onChanged { value in
+            selection?.wrappedValue = ImageRegionSelection.box(from: value.startLocation, to: value.location, in: size)
+        }.onEnded { value in
+            selection?.wrappedValue = ImageRegionSelection.box(from: value.startLocation, to: value.location, in: size)
+        }
     }
 
     private func fittedSize(_ source: NSSize) -> CGSize {

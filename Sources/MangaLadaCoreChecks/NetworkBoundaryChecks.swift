@@ -6,6 +6,7 @@ enum NetworkBoundaryChecks {
         let configuration = URLSessionConfiguration.ephemeral; configuration.protocolClasses = [FixtureProtocol.self]
         let session = URLSession(configuration: configuration)
         defer { session.invalidateAndCancel() }
+        try await checkSelections(session: session)
         let blocks = [TextBlock(box: TextBox(x: 0.2, y: 0.3, width: 0.2, height: 0.3), originalText: "ありがとう")]
         let page = #"{"translations":[{"id":0,"text":"고마워","kind":"dialogue"}]}"#
         FixtureProtocol.state.install { request in
@@ -34,6 +35,120 @@ enum NetworkBoundaryChecks {
         try check(cloud[0].translatedText == "고마워", "Gemini response did not map the page.")
         do { _ = try await GeminiPageTranslator(configuration: GeminiConfiguration(), session: session).translatePage(blocks); throw BoundaryCheckError.failed("Empty API key was accepted.") }
         catch TranslationError.missingConfiguration { }
+    }
+    private static func checkSelections(session: URLSession) async throws {
+        let pipeline = TranslationPipeline(sourceLanguage: .japanese, targetLanguage: .korean, session: session)
+        let bounds = TextBox(x: 0.2, y: 0.65, width: 0.4, height: 0.2)
+        let effect = TextBlock(box: bounds, originalText: "ゴロゴロ", translatedText: "기존 효과음", confidence: 0.9,
+                               sourceIsVertical: true, detectedFontSize: 22, textKind: .soundEffect, rotationDegrees: 8,
+                               effectStyleID: "impact", userDefinedBounds: bounds, userDefinedTextKind: true)
+        let caption = TextBlock(box: TextBox(x: 0.1, y: 0.1, width: 0.8, height: 0.2), originalText: "雷が鳴っている。",
+                                translatedText: "사용자가 검수한 천둥 설명", textKind: .caption)
+        let blocks = [effect, caption]
+        FixtureProtocol.state.install { _ in throw BoundaryCheckError.failed("Invalid or empty selection reached the network.") }
+        let empty = try await pipeline.translateSelected([], in: blocks, configuration: LocalTranslatorConfiguration())
+        try check(empty == blocks, "Empty selection modified a reviewed page.")
+        let blank = try await pipeline.translateSelected([], in: [], configuration: LocalTranslatorConfiguration())
+        try check(blank.isEmpty, "Empty page produced regions.")
+        do {
+            _ = try await pipeline.translateSelected([UUID()], in: blocks, configuration: LocalTranslatorConfiguration())
+            throw BoundaryCheckError.failed("Unknown selected ID was accepted.")
+        } catch TranslationSelectionError.missingRegion { }
+        do {
+            _ = try await pipeline.translateSelected([effect.id], in: [effect, effect], configuration: LocalTranslatorConfiguration())
+            throw BoundaryCheckError.failed("Duplicate region IDs were accepted.")
+        } catch TranslationSelectionError.duplicateRegions { }
+        try check(FixtureProtocol.state.count == 0, "Rejected selection had a network side effect.")
+        try await checkSelectionCancellation(pipeline: pipeline, blocks: blocks, session: session)
+        FixtureProtocol.state.install { request in
+            let body = try JSONDecoder().decode(GemmaProbe.self, from: Self.body(request))
+            try check(body.messages[0].content.contains("[R0] 雷が鳴っている。") && body.messages[0].content.contains("[R1] ゴロゴロ"),
+                      "Selected translation lost page context or reading order.")
+            let text = "[R0] 모델이 새로 쓴 천둥 설명\n[R1] 우르릉"
+            return (200, try JSONEncoder().encode(ChatReply(message: Message(role: "assistant", content: text))))
+        }
+        let selected = try await pipeline.translateSelected([effect.id], in: blocks, configuration: LocalTranslatorConfiguration())
+        var expected = blocks; expected[0].translatedText = "우르릉"
+        try check(selected == expected, "Selected retry changed another draft, metadata or array order.")
+        let multiple = try await pipeline.translateSelected(Set(blocks.map(\.id)), in: blocks, configuration: LocalTranslatorConfiguration())
+        expected[1].translatedText = "모델이 새로 쓴 천둥 설명"
+        try check(multiple == expected, "Multiple selection failed to update only the requested text fields.")
+        FixtureProtocol.state.install { _ in (503, Data()) }
+        do {
+            _ = try await pipeline.translateSelected([effect.id], in: blocks, configuration: LocalTranslatorConfiguration())
+            throw BoundaryCheckError.failed("Selected translation hid an HTTP error.")
+        } catch TranslationError.httpStatus(503) { }
+        FixtureProtocol.state.install { _ in
+            (200, try JSONEncoder().encode(ChatReply(message: Message(role: "assistant", content: "[R0] 천둥"))))
+        }
+        do {
+            _ = try await pipeline.translateSelected([effect.id], in: blocks, configuration: LocalTranslatorConfiguration())
+            throw BoundaryCheckError.failed("Missing selected result was accepted.")
+        } catch TranslationError.invalidPageResponse { }
+        try check(FixtureProtocol.state.count == 2 && blocks == [effect, caption], "Invalid reply retried indefinitely or changed input.")
+        try await checkConcurrentSelections(session: session, blocks: blocks)
+        try await checkSelectedProviders(session: session, blocks: blocks)
+        print("Selected translation passed: full page context, stable order/IDs/styles, unselected drafts preserved, empty/unknown/duplicate IDs, cancellation, HTTP/missing output and concurrent pages")
+    }
+    private static func checkSelectionCancellation(pipeline: TranslationPipeline, blocks: [TextBlock], session: URLSession) async throws {
+        let cancelled = Task {
+            withUnsafeCurrentTask { $0?.cancel() }
+            return try await pipeline.translateSelected([blocks[0].id], in: blocks, configuration: LocalTranslatorConfiguration())
+        }
+        do { _ = try await cancelled.value; throw BoundaryCheckError.failed("Cancelled selection started translating.") }
+        catch is CancellationError { }
+        try check(FixtureProtocol.state.count == 0, "Cancelled selection reached the network.")
+        FixtureProtocol.state.install { _ in
+            (200, try JSONEncoder().encode(ChatReply(message: Message(role: "assistant", content: "[R0] 천둥\n[R1] 우르릉"))))
+        }
+        let lateCancelled = Task {
+            let latePipeline = TranslationPipeline(sourceLanguage: .japanese, targetLanguage: .korean,
+                progress: { if $0.completed > 0 { withUnsafeCurrentTask { $0?.cancel() } } }, session: session)
+            return try await latePipeline.translateSelected([blocks[0].id], in: blocks, configuration: LocalTranslatorConfiguration())
+        }
+        do { _ = try await lateCancelled.value; throw BoundaryCheckError.failed("Cancellation after response returned edited text.") }
+        catch is CancellationError { }
+    }
+    private static func checkConcurrentSelections(session: URLSession, blocks: [TextBlock]) async throws {
+        let pipeline = TranslationPipeline(sourceLanguage: .japanese, targetLanguage: .korean, session: session)
+        var catDraft = blocks
+        catDraft[1].originalText = "猫が鳴いている。"; catDraft[1].translatedText = "검수한 고양이 설명"
+        let cat = catDraft
+        FixtureProtocol.state.install { request in
+            let body = try JSONDecoder().decode(GemmaProbe.self, from: Self.body(request))
+            let effect = body.messages[0].content.contains("猫が鳴いている。") ? "골골" : "우르릉"
+            return (200, try JSONEncoder().encode(ChatReply(message: Message(role: "assistant", content: "[R0] 주변 문구\n[R1] " + effect))))
+        }
+        async let thunderResult = pipeline.translateSelected([blocks[0].id], in: blocks, configuration: LocalTranslatorConfiguration())
+        async let catResult = pipeline.translateSelected([cat[0].id], in: cat, configuration: LocalTranslatorConfiguration())
+        let (thunder, purring) = try await (thunderResult, catResult)
+        try check(thunder[0].translatedText == "우르릉" && purring[0].translatedText == "골골"
+                  && thunder[1] == blocks[1] && purring[1] == cat[1], "Concurrent selection mixed page contexts or overwrote reviewed text.")
+    }
+    private static func checkSelectedProviders(session: URLSession, blocks: [TextBlock]) async throws {
+        let pipeline = TranslationPipeline(sourceLanguage: .japanese, targetLanguage: .korean, session: session)
+        let page = #"{"translations":[{"id":0,"text":"새 설명","kind":"dialogue"},{"id":1,"text":"우르릉","kind":"dialogue"}]}"#
+        FixtureProtocol.state.install { request in
+            try check(String(decoding: Self.body(request), as: UTF8.self).contains("雷が鳴っている。"), "Page provider lost selection context.")
+            if request.url?.host == "generativelanguage.googleapis.com" {
+                return (200, try JSONEncoder().encode(GeminiReply(candidates: [.init(content: .init(parts: [.init(text: page)]))])))
+            }
+            return (200, try JSONEncoder().encode(ChatReply(message: Message(role: "assistant", content: page))))
+        }
+        let configurations = [LocalTranslatorConfiguration(ollama: OllamaConfiguration(model: "qwen3.5:9b")),
+                              LocalTranslatorConfiguration(provider: .geminiFlashLite, gemini: GeminiConfiguration(apiKey: "fixture-key"))]
+        var expected = blocks; expected[0].translatedText = "우르릉"
+        for configuration in configurations {
+            let result = try await pipeline.translateSelected([blocks[0].id], in: blocks, configuration: configuration)
+            try check(result == expected, "Page provider overwrote reviewed content or user-selected kind.")
+        }
+        FixtureProtocol.state.install { request in
+            let query = URLComponents(url: request.url!, resolvingAgainstBaseURL: false)?.queryItems?.first { $0.name == "q" }?.value
+            try check(query == "ゴロゴロ", "Independent text provider sent unselected page content.")
+            return (200, Data(#"[[["우르릉","ゴロゴロ",null,null,1]]]"#.utf8))
+        }
+        let google = try await pipeline.translateSelected([blocks[0].id], in: blocks, configuration: LocalTranslatorConfiguration(provider: .googleWeb))
+        try check(google == expected && FixtureProtocol.state.count == 1, "Independent text selection changed other regions or sent excess requests.")
     }
     private static func checkGemma(_ blocks: [TextBlock], session: URLSession) async throws {
         FixtureProtocol.state.install { request in

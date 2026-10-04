@@ -22,18 +22,19 @@ extension AppState {
         if selectedBlockID != match?.id { focusBlock(match?.id) }
     }
     func retranslateBlock(in translation: PageTranslation, at blockIndex: Int) {
-        guard !isBusy, let result = currentResult, translation.blocks.indices.contains(blockIndex) else { return }
+        guard !isBusy, !isLoading, let result = currentResult, translation.blocks.indices.contains(blockIndex) else { return }
         let page = currentIndex, id = sessionID
         isBusy = true
         job = Task { [self] in
             defer { if sessionID == id { isBusy = false; job = nil } }
             do {
                 if configuration.provider == .ollama { try await runtime.ensureReady(model: configuration.ollama.model) }
-                statusMessage = "수정한 일본어 문구를 다시 번역하는 중…"
-                let translated = try await TranslationPipeline(sourceLanguage: .japanese, targetLanguage: .korean)
-                    .translate([translation.blocks[blockIndex]], configuration: configuration)
-                guard sessionID == id, let block = translated.first else { return }
-                var updated = translation; updated.blocks[blockIndex] = block
+                statusMessage = "페이지 문맥을 참고해 선택한 문구를 다시 번역하는 중…"
+                var updated = translation
+                updated.blocks = try await TranslationPipeline(sourceLanguage: .japanese, targetLanguage: .korean)
+                    .translateSelected([translation.blocks[blockIndex].id], in: translation.blocks, configuration: configuration)
+                try Task.checkCancellation()
+                guard sessionID == id else { return }
                 results[page] = try processor.applyEdits(to: result, translation: updated, typography: typography)
                 imageRevision += 1; statusMessage = "이 문구를 다시 번역해 저장했습니다."
             } catch is CancellationError { statusMessage = "문구 번역을 중단했습니다." }

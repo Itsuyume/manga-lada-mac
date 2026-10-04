@@ -98,6 +98,10 @@ Rendering 리소스의 `sound-effect-styles.json`이 12가지 스타일의 단�
 
 두 앱의 페이지 위에서 **트랙패드 두 손가락을 벌리면 확대, 오므리면 축소**합니다. 배율은 40–400%이며 한 번의 제스처가 시작한 배율을 기준으로 움직입니다. 중단되거나 페이지에서 나간 제스처는 종료하고, 배율 숫자를 누르면 100%로 돌아갑니다.
 
+**이 문구 다시 번역**과 **선택 영역 번역**은 로컬·Gemini 페이지 모델에 주변 일본어를 함께 전달합니다. 페이지 문맥을 참고하되 선택한 영역의 번역만 갱신하며, 다른 문구의 검수 내용과 글꼴·좌표는 보존합니다. Google 방식은 독립된 문자열 번역이므로 선택한 문구만 요청합니다. 문맥을 제공해도 효과음의 의미·표기가 항상 정확해지는 것은 아니므로 저장한 결과를 검수해야 합니다.
+
+번호 표시가 드래그를 가리지 않도록 이미지가 영역 선택 입력을 담당하고, 선택 사각형은 표시만 합니다. 번호 클릭은 검수 문구로 이동하고 드래그는 별도로 영역을 지정합니다. 번역 중에는 문구 종류 변경도 잠가 진행 중인 작업과 새 수정이 충돌하지 않게 합니다.
+
 연속 스크롤에서도 확대 후 좌우로 이동해 페이지의 양끝을 볼 수 있습니다. 배율 표시는 반올림하며 40%에서는 축소, 400%에서는 확대 버튼을 비활성화합니다. 버튼과 제스처는 같은 배율 상태를 사용합니다.
 
 앱이 비활성 상태여도 보이는 본창이 있으면 파일·폴더 선택창을 그 창에 연결합니다. 독립된 선택창이 뒤에 숨어 열기를 계속 기다리는 문제를 방지합니다.
@@ -138,7 +142,10 @@ swift run MangaLadaWorkflowChecks --book /path/to/book.zip /path/to/output-folde
 ```bash
 swift run MangaLadaWorkflowChecks --text-benchmark fixtures/translation-quality-ja-ko.json /path/to/new-report.json --model=translategemma:12b
 swift run MangaLadaWorkflowChecks --text-benchmark fixtures/translation-quality-extra-ja-ko.json /path/to/new-extra-report.json --model=qwen3.5:9b
+swift run MangaLadaWorkflowChecks --text-benchmark fixtures/translation-selection-ja-ko.json /path/to/new-selection-report.json --model=translategemma:12b
 ```
+
+선택 번역 비교 사례에는 문구별 `kinds`, 기존 검수 내용인 `reviewedTexts`, 0부터 시작하는 `selectedIndices`를 선택적으로 지정합니다. 문구 수·선택 번호를 검증하고 선택하지 않은 전체 영역 정보가 그대로인지 비교합니다. 같은 효과음을 단독 번역한 결과와 페이지 문맥으로 재번역한 결과가 나란히 저장됩니다. 속도에는 OCR·식자 시간이 포함되지 않습니다.
 
 행동 검증은 빈/텍스트/이미지 클립보드·외부 이미지 격리·임시 파일 소멸·선택 영역의 역방향 드래그/경계/빈 크기/저장·빈 입력·끝 페이지·양면 순서·번호 누락·잘못된 모델 응답·외부 HTTP 실패·이미지 크기·가로 식자·원본 보존·압축 재사용/동시 접근·저장 폴더 격리·CBZ 왕복을 확인합니다. 내부 구현을 mock하지 않으며 네트워크 경계만 대체합니다. CI가 의존 경계·순환·복잡도·빌드·가벼운 행동 검증을 실행합니다. 외부 OCR 모델이 필요한 검증은 로컬에서 별도로 실행합니다.
 
