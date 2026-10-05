@@ -1,5 +1,4 @@
 """Recognition-only decisions for decorated Japanese crops. No translation or erasure."""
-from collections import Counter
 from dataclasses import dataclass
 from typing import Callable, Literal
 import unicodedata
@@ -57,8 +56,9 @@ def crop_variants(crop: np.ndarray) -> list[np.ndarray]:
 def read_lettering(crop: np.ndarray, recognize: Callable[[np.ndarray], str]) -> LetteringReading:
     """Two matching views are evidence, not a calibrated accuracy probability.
 
-    A third view is read when the first two disagree or contain repeated short kana. Never majority-vote
-    empty/non-Japanese results or collapse repeated letters to manufacture agreement.
+    A third view is read when the first two disagree or contain repeated short kana. Altered views
+    must corroborate the source reading; shared preprocessing mistakes cannot overrule it. Never
+    accept empty/non-Japanese results or collapse repeated letters to manufacture agreement.
     Model failures propagate to the caller; a disagreement preserves all readings.
     """
     variants = crop_variants(crop)
@@ -70,6 +70,6 @@ def read_lettering(crop: np.ndarray, recognize: Callable[[np.ndarray], str]) -> 
     if first == second and japanese_reading(first) and not repeated_lettering(first):
         return LetteringReading("consistent", first, tuple(readings))
     readings.append(recognize(variants[2]).strip())
-    counts = Counter(normalized_reading(text) for text in readings)
-    agreed = [text for text, count in counts.items() if count >= (3 if repeated_lettering(text) else 2) and japanese_reading(text)]
-    return LetteringReading("consistent" if agreed else "needsReview", agreed[0] if agreed else None, tuple(readings))
+    confirmations = sum(normalized_reading(text) == first for text in readings)
+    agreed = japanese_reading(first) and confirmations >= (3 if repeated_lettering(first) else 2)
+    return LetteringReading("consistent" if agreed else "needsReview", first if agreed else None, tuple(readings))

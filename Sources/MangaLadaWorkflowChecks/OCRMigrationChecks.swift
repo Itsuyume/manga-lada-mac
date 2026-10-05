@@ -57,6 +57,14 @@ enum OCRMigrationChecks {
                     "Previous Hayai OCR is unavailable for preserving manual source edits")
         try require(new.previous.contains(old.translation + "-hayai-v1"),
                     "Previous Hayai review is unavailable for migration")
+        for (keys, suffix) in [(new, "-hayai-v2"), (detected, "-hayai-detected-v1")] {
+            let priorRecognition = old.recognitionBeforeCleanupUpdate + suffix + "-ink-v2"
+            let priorTranslation = old.translation + suffix
+            try require(keys.recognition != priorRecognition && keys.translation != priorTranslation,
+                        "Source-disagreement policy reused an old automatic acceptance")
+            try require(keys.previousRecognition.contains(priorRecognition) && keys.previous.contains(priorTranslation),
+                        "Source-disagreement policy lost previous manual reviews")
+        }
         for keys in [old, new, detected] {
             try require(keys.recognition != keys.recognitionBeforeCleanupUpdate && keys.previousRecognition.first == keys.recognitionBeforeCleanupUpdate,
                         "Unsafe old cleanup image can bypass regeneration")

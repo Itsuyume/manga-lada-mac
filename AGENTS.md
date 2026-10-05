@@ -88,6 +88,8 @@ OCR 이전의 누락 후보 탐색은 Ballons의 `balloon_candidates.py`, 크롭
 
 장식 글자의 인식 경계는 `region_ocr`/`lettering_regions` → `lettering_ocr` → 외부 `hayai_lettering`입니다. 후보는 기존 `BalloonCandidate`를 재사용합니다. 연결된 큰 획을 허용하는 탐색은 읽기 전용 요청과 명시적으로 선택한 Hayai 경로에서 켜며 CTD의 삭제 마스크 승인 조건은 완화하지 않습니다. `letteringOnly: scan/crop` 요청은 검출·OCR 결과만 반환하고 번역·LaMa·페이지 캐시·출력 이미지를 쓰지 않습니다. 같은 모듈을 `scripts/inspect_lettering.py`에서도 호출합니다. 서로 다른 전처리의 일치는 신뢰도 확률이 아니며, 결과가 다르면 `needsReview`와 모든 후보를 남깁니다. 반복 문자·작은 가나·가림표를 지워 일치를 만들지 않습니다. Hayai 모델의 버전·해시·수정 지점은 `hayai_lettering` 한 곳에서 관리하고 설치 시에만 내려받습니다. 추론은 검증된 로컬 코드·설정만 사용하며 다른 모델로 자동 대체하지 않습니다. 공개 글자 크롭 검증과 사용자 원본 전체 검증을 구분합니다.
 
+장식 글자 대조는 원본 읽기를 기준으로 합니다. 여백·흑백 두 전처리의 다수결이 원본과 다른 문구를 확정하지 못하며, 원본 결과가 빈 값·비일본어일 때도 같은 규칙을 적용합니다. 원본과 한 전처리의 일치, 반복 가나의 세 결과 일치만 확정하고 모든 불일치 후보를 보존합니다. 정책 변경은 `JapanesePageKeys`의 Hayai별 키와 이전 키 이관에만 적용하여 오래된 자동 번역 재사용을 막고 수동 원문·배치·원본 유지 선택을 보존합니다.
+
 앱의 OCR 선택은 Core의 `JapaneseOCRBackend`와 `LocalTranslatorConfiguration.japaneseOCR`가 소유하고 기본값은 manga입니다. Workflow는 자동·드래그·보완 요청 모두에 선택값을 전달합니다. `JapanesePageKeys`가 OCR별 키를 구분하며 첫 Hayai 이관에서는 기존 자동 원문을 같은 UUID로 다시 읽습니다. 검수 원문 수정 여부는 이전 원문 OCR과 대조하고 이미 Hayai로 저장한 결과를 구형 OCR과 다시 대조하지 않습니다. 원문이 달라졌다면 예전 자동 번역을 재사용하지 않으며 수동 원문·배치·원본 유지 선택은 보존합니다. 강제 재번역에서도 수동 원문을 보존하되 이전 번역문은 재사용하지 않습니다.
 
 `TextBlock.recognitionAlternatives`가 non-nil이면 인식 검수 대기이며 빈 배열은 읽을 후보가 없는 영역입니다. 사용자의 삭제 선택인 `keepsOriginal`과 구분하고, 공용 `preservesOriginalArtwork`로 모델 요청·배치·원본 픽셀 복원을 일관되게 제어합니다. 후보 확정이나 직접 원문 수정 전에는 제목 보정·가로 OCR 대조·중복 병합으로 이 상태를 해제하지 않습니다. 저장된 검수의 필드별 병합도 이 상태를 보존합니다. UI 후보 선택은 기존 검수 임시 저장을 사용하며 모델 호출·이미지 저장을 암묵적으로 실행하지 않습니다. 수동 영역 OCR이 불일치하면 원본 제거 전에 오류를 표시합니다. 번들에 복사한 실제 리소스로 인식 경계 검사를 실행하고, `MangaLadaBallonsChecks --ocr-session`은 실제 설치 모델·번들 worker 경로와 원본 보존을 따로 검증합니다.

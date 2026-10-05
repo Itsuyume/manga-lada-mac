@@ -17,10 +17,15 @@ package struct JapanesePageKeys {
         let prefix = "\(image)-jp-"
         let suffix = "balloons-\(configuration.cacheKey)-"
         let ocrSuffix: String
+        let priorOCRSuffixes: [String]
         switch configuration.japaneseOCR {
-        case .manga: ocrSuffix = ""
-        case .hayai: ocrSuffix = "-hayai-v2"
-        case .hayaiDetected: ocrSuffix = "-hayai-detected-v1"
+        case .manga:
+            ocrSuffix = ""; priorOCRSuffixes = []
+        case .hayai:
+            ocrSuffix = "-hayai-v3"; priorOCRSuffixes = ["-hayai-v2", "-hayai-v1", ""]
+        case .hayaiDetected:
+            ocrSuffix = "-hayai-detected-v2"
+            priorOCRSuffixes = ["-hayai-detected-v1", "-hayai-v3", "-hayai-v2", "-hayai-v1", ""]
         }
         let baseTranslation = "\(prefix)v\(Self.translationVersion)-\(suffix)\(newContext)"
         // Cleanup has its own key. Keep committed/pending review fingerprints stable.
@@ -28,15 +33,16 @@ package struct JapanesePageKeys {
         let baseRecognition = prefix + "ocr-v\(Self.recognitionVersion)-balloons"
         recognitionBeforeCleanupUpdate = baseRecognition + ocrSuffix
         recognition = recognitionBeforeCleanupUpdate + "-ink-v2"
-        let priorHayai = configuration.japaneseOCR == .hayaiDetected ? ["-hayai-v2-ink-v2", "-hayai-v2"] : []
-        previousRecognition = [recognitionBeforeCleanupUpdate] + priorHayai.map { baseRecognition + $0 }
-            + (ocrSuffix.isEmpty ? [] : [baseRecognition + "-hayai-v1", baseRecognition])
-            + ((Self.recognitionVersion - 3)..<Self.recognitionVersion).reversed().map { prefix + "ocr-v\($0)-balloons" }
+        let priorRecognition: [String] = priorOCRSuffixes.flatMap { value in
+            let key = baseRecognition + value
+            return [key + "-ink-v2", key]
+        }
+        let olderRecognition = ((Self.recognitionVersion - 3)..<Self.recognitionVersion).reversed().map { prefix + "ocr-v\($0)-balloons" }
+        previousRecognition = [recognitionBeforeCleanupUpdate] + priorRecognition + olderRecognition
         let contexts = newContext == oldContext ? [newContext] : [newContext, oldContext]
         let olderTranslations: [String] = stride(from: Self.translationVersion - 1, through: 11, by: -1).flatMap { version in
             contexts.map { "\(prefix)v\(version)-\(suffix)\($0)" }
         }
-        previous = (configuration.japaneseOCR == .hayaiDetected ? [baseTranslation + "-hayai-v2"] : [])
-            + (ocrSuffix.isEmpty ? [] : [baseTranslation + "-hayai-v1", baseTranslation]) + olderTranslations
+        previous = priorOCRSuffixes.map { baseTranslation + $0 } + olderTranslations
     }
 }

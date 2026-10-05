@@ -93,6 +93,18 @@ assert result.readings == ("パチパチパチ", "パチパチ", "ポチ")
 assert len(disagreement.calls) == 3, "Unbounded model retries"
 assert np.array_equal(crop, before)
 
+# Two altered views may share the same wrong kana; they cannot overrule the source.
+for source in ("少し黙っていろ", "", "NOT TEXT"):
+    changed = ModelBoundary([source, "少し黙っている", "少し黙っている"])
+    result = read_lettering(crop, changed)
+    assert result.status == "needsReview" and result.text is None, "Altered views overruled the source reading"
+    assert result.readings == (source, "少し黙っている", "少し黙っている")
+    assert len(changed.calls) == 3 and np.array_equal(crop, before)
+for backend in ("hayai", "hayai-detected"):
+    changed = recognize_region(crop, ModelBoundary(["少し黙っていろ", "少し黙っている", "少し黙っている"]), backend)
+    assert changed["originalText"] == "少し黙っていろ"
+    assert changed["recognitionAlternatives"] == ["少し黙っていろ", "少し黙っている"]
+
 empty = read_lettering(crop, ModelBoundary(["", "", ""]))
 assert empty.text is None and empty.status == "needsReview", "Empty agreement is not recognition"
 non_japanese = read_lettering(crop, ModelBoundary(["NOT TEXT", "NOT TEXT", "NOT TEXT"]))
