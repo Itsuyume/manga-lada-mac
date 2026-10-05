@@ -5,8 +5,6 @@ struct ContentView: View {
     @EnvironmentObject private var state: AppState
     var body: some View {
         VStack(spacing: 0) {
-            TranslatorHeader()
-            Divider()
             TranslatorActions()
             if state.isSelectingRegion { RegionSelectionControls(state: state) }
             Divider()

@@ -10,7 +10,7 @@ struct TranslationInspector: View {
     private var editingDisabled: Bool { state.isBusy || state.isLoading || state.reviewErrors[state.currentIndex] != nil }
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack { Text("번역 검수").font(.system(size: 13, weight: .semibold)); Spacer(); Text("\(state.currentIndex + 1)쪽").foregroundStyle(.secondary) }
+            header
             if draft != nil {
                 Text(isPending ? "인식한 원문을 수정하거나 번역을 직접 입력할 수 있습니다. 모든 문구를 채운 뒤 ‘수정 적용’을 누르세요."
                      : "번호로 위치를 확인하세요. 분류가 다르면 종류를 바꾼 뒤 ‘수정 적용’을 누르세요.")
@@ -70,6 +70,16 @@ struct TranslationInspector: View {
                 Label(state.outputRoot?.lastPathComponent ?? "완성본 폴더 지정", systemImage: "folder").lineLimit(1)
             }.disabled(state.isBusy).help(state.outputRoot?.path ?? "완성본을 저장할 폴더를 선택해주세요.")
         }.font(.system(size: 12)).padding(16).background(Color(nsColor: .controlBackgroundColor))
+    }
+    private var header: some View {
+        HStack(spacing: 10) {
+            Text("번역 검수").font(.system(size: 13, weight: .semibold))
+            Spacer()
+            Text("\(state.currentIndex + 1)쪽").foregroundStyle(.secondary)
+            Button("번역 검수 닫기", systemImage: "xmark") { state.showInspector = false }
+                .labelStyle(.iconOnly).buttonStyle(.borderless).controlSize(.small)
+                .help("검수창을 닫고 만화를 넓게 보기 · 임시 수정은 유지됩니다.")
+        }
     }
     @ViewBuilder private var reviewNotice: some View {
         if let error = state.reviewErrors[state.currentIndex] {

@@ -1,28 +1,13 @@
 import MangaLadaCore
-import MangaLadaViewerUI
 import SwiftUI
-
-struct TranslatorHeader: View {
-    @EnvironmentObject private var state: AppState
-    var body: some View {
-        HStack(spacing: 14) {
-            AppBrand("Manga translator", symbol: "character.book.closed.ja")
-            Text(state.configuration.provider == .ollama ? "일본어 → 한국어 · 로컬" : "일본어 → 한국어 · 저가 API")
-                .font(.system(size: 11, weight: .medium)).foregroundStyle(state.configuration.provider == .ollama ? .green : .orange)
-                .padding(.horizontal, 8).padding(.vertical, 5).background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 5))
-            Spacer(minLength: 8)
-            Button("파일 열기", systemImage: "doc") { state.chooseBook() }
-            Button("폴더 열기", systemImage: "folder") { state.chooseBook(folderOnly: true) }
-            Button { state.showSettings = true } label: { Image(systemName: "slider.horizontal.3") }.disabled(state.isBusy).help("모델·글꼴 설정")
-        }.buttonStyle(.bordered).controlSize(.small).padding(.horizontal, 20).padding(.top, 30).padding(.bottom, 14)
-    }
-}
 
 struct TranslatorActions: View {
     @EnvironmentObject private var state: AppState
     var body: some View {
-        HStack(spacing: 12) {
-            Toggle("열면 자동 번역", isOn: $state.autoTranslate).toggleStyle(.switch).controlSize(.mini)
+        HStack(spacing: 8) {
+            openMenu
+            Toggle("자동 번역", isOn: $state.autoTranslate).toggleStyle(.switch).controlSize(.mini)
+                .help("파일을 열면 자동으로 번역합니다.")
             Button(translationButtonTitle, systemImage: "captions.bubble") { state.startTranslation() }
                 .buttonStyle(.borderedProminent).disabled(state.pages.isEmpty || state.isBusy || state.isLoading || allPagesComplete)
             if state.isBusy { Button("중단", systemImage: "stop.fill") { state.stop() } }
@@ -33,7 +18,10 @@ struct TranslatorActions: View {
             Picker("원문 / 번역", selection: $state.mode) {
                 Text("원문").tag(AppMode.imageOnly); Text("번역").tag(AppMode.translated)
             }.pickerStyle(.segmented).labelsHidden().frame(width: 112).fixedSize()
-            Button { state.showInspector.toggle() } label: { Image(systemName: "sidebar.right") }.help("번역 검수 표시 / 숨기기")
+            Button(state.showInspector ? "검수 닫기" : "검수 열기", systemImage: "sidebar.right") {
+                state.showInspector.toggle()
+            }.disabled(state.pages.isEmpty).keyboardShortcut("i", modifiers: [.command, .option])
+                .help("번역 검수창 열기 / 닫기 · ⌥⌘I · 임시 수정은 유지됩니다.")
             Menu {
                 Button("완성본 저장 폴더 지정…") { state.chooseOutputFolder() }.disabled(state.isBusy)
                 Button("결과 폴더 보기") { state.revealOutput() }
@@ -41,8 +29,21 @@ struct TranslatorActions: View {
                 Button("현재 PNG 저장…") { state.exportCurrentPNG() }.disabled(state.currentResult == nil)
                 Button("완성본 CBZ 저장…") { state.exportCBZ() }.disabled(state.results.count != state.pages.count || state.results.isEmpty || state.isBusy || !state.failures.isEmpty)
             } label: { Label("저장", systemImage: "square.and.arrow.down") }.fixedSize()
-            Button("Reader로 읽기", systemImage: "book") { state.openInReader() }.disabled(state.results.isEmpty || state.isBusy)
-        }.buttonStyle(.bordered).controlSize(.small).padding(.horizontal, 18).padding(.vertical, 10).background(.bar)
+            Button("Reader로 읽기", systemImage: "book") { state.openInReader() }
+                .labelStyle(.iconOnly).disabled(state.results.isEmpty || state.isBusy).help("Reader로 읽기")
+            Button("설정", systemImage: "slider.horizontal.3") { state.showSettings = true }
+                .labelStyle(.iconOnly).disabled(state.isBusy).help("모델·글꼴 설정")
+        }.buttonStyle(.bordered).controlSize(.small).padding(.horizontal, 14).padding(.vertical, 8).background(.bar)
+    }
+    private var openMenu: some View {
+        Menu {
+            Button("파일 열기…", systemImage: "doc") { state.chooseBook() }
+            Button("폴더 열기…", systemImage: "folder") { state.chooseBook(folderOnly: true) }
+        } label: {
+            Label("열기", systemImage: "folder")
+        } primaryAction: {
+            state.chooseBook()
+        }.fixedSize().help("파일 열기 · 화살표를 누르면 폴더도 선택할 수 있습니다.")
     }
     private var allPagesComplete: Bool { !state.pages.isEmpty && state.results.count == state.pages.count && state.failures.isEmpty }
     private var translationButtonTitle: String {
