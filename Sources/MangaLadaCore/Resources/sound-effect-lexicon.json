@@ -15,6 +15,7 @@
     "changes": "Mimetic kana readings and glosses extracted with reading-specific sense restrictions; kana variants generated; curated spellings take precedence; ordinary timing adverb excluded from automatic sound-effect recognition."
   },
   "reviewGroups": [
+    {"sources":["バビュン","ばびゅん"],"options":[{"context":"빠르게 날아가거나 지나감","korean":"슈웅"},{"context":"순간적으로 움직임","korean":"휙"}]},
     {"sources":["ごろん","ゴロン"],"options":[{"context":"몸을 뒹굴거나 돌아누움","korean":"뒹굴"},{"context":"몸을 눕힘","korean":"벌렁"},{"context":"물체가 구름","korean":"데굴"}]},
     {"sources":["もじ","モジ"],"options":[{"context":"손가락을 움직임","korean":"꼼지락"},{"context":"수줍게 망설임","korean":"머뭇"}]},
     {"sources":["にちっ","ニチッ","にちゃっ","ニチャッ"],"options":[{"context":"끈적한 접촉","korean":"질척"},{"context":"떼어내는 소리","korean":"쩍"},{"context":"점성 있는 촉감","korean":"끈적"}]},
@@ -27,6 +28,7 @@
     {"sources":["ドンドン","どんどん","ドンドンドン","ゴンゴン","ごんごん"],"options":[{"context":"문·발구르기","korean":"쿵쿵"},{"context":"북","korean":"둥둥"},{"context":"강한 충돌","korean":"쾅쾅"}],"jmdictIDs":[1009320,2517030]}
   ],
   "entries": [
+    {"sources":["バビュン","ばびゅん"],"korean":"슈웅","meaning":"A whoosh of rapid movement or something whizzing past. This editable Korean default describes motion, not spoken dialogue.","curated":true,"references":["https://www.ssw.co.jp/products/vocaloid6/tsuina/voice.html","https://ncode.syosetu.com/n5000di/43/"]},
     {"sources":["ごろん","ゴロン"],"korean":"뒹굴","meaning":"Short manga form related to ごろんと: a body or object rolls or flops over. Not a stomach rumble. Select the scene-specific Korean variant when needed.","curated":true,"jmdictIDs":[2029185]},
     {"sources":["もじ","モジ"],"korean":"꼼지락","meaning":"Short manga effect related to もじもじ: bashful fidgeting. Only use when explicitly classified as an effect; ordinary 文字 (text/letters) has the same reading.","recognition":false,"curated":true,"jmdictIDs":[1012570]},
     {"sources":["にちっ","ニチッ","にちゃっ","ニチャッ"],"korean":"질척","meaning":"A brief sticky or slimy contact sound; not a cat's meow. The Korean default is editable for the scene."},

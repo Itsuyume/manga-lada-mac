@@ -23,6 +23,7 @@ class JapaneseEngine:
         self.root = root.resolve()
         self.lettering = None
         self.lettering_detector = None
+        self.lettering_segmenter = None
         sys.path.insert(0, str(root))
         os.chdir(root)
         import cv2
@@ -88,7 +89,8 @@ class JapaneseEngine:
         lettering_boxes = []
         if backend == "hayai-detected":
             from lettering_recovery import recover_lettering
-            lettering_mask, extras = recover_lettering(image, blocks, self.text_detector(), self.recognize_lettering)
+            lettering_mask, extras = recover_lettering(image, blocks, self.text_detector(), self.recognize_lettering,
+                                                       segment=self.segment_lettering)
             mask = self.cv2.bitwise_or(mask, lettering_mask)
             blocks = blocks + extras
             lettering_boxes = [source_rectangle(block["box"], width, height) for block in extras]
@@ -144,6 +146,12 @@ class JapaneseEngine:
             device = "mps" if torch.backends.mps.is_available() else "cpu"
             self.lettering = HayaiLetteringOCR(self.root.parent / "LetteringOCR", device)
         return self.lettering(crop)
+
+    def segment_lettering(self, crop, bounds):
+        from lettering_strokes import LetteringStrokeSegmenter, MODEL_FILE
+        if self.lettering_segmenter is None:
+            self.lettering_segmenter = LetteringStrokeSegmenter(self.root.parent / "LetteringStrokes" / MODEL_FILE)
+        return self.lettering_segmenter(crop, bounds)
 
     def read_region(self, crop, backend: str) -> dict:
         from region_ocr import recognize_region

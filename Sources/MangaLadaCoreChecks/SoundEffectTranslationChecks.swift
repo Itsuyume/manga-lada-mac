@@ -111,7 +111,7 @@ enum SoundEffectTranslationChecks {
         for source in ["カチッ", "ｶﾁｯ。", "バタンバタン", "ザアァーッ", "ゴロゴロ", "にちっ", "ニチッ", "ﾆﾁｯ", "にちゃっ", "にちゃにちゃ", "ニチャニチャ"] {
             try check(lexicon.recognizes(source), "A catalog form or complete effect pattern was missed: \(source)")
         }
-        for source in ["", "ナナ", "あっ", "ああ", "ふふふ", "あっさり", "カチッと音がした", "大きなバタン", "バタンと", "にちっと音がした", "こんにちは", "にゃっ", "ニチカ", "きっと"] {
+        for source in ["", "ナナ", "あっ", "ああ", "ふふふ", "あっさり", "カチッと音がした", "大きなバタン", "バタンと", "にちっと音がした", "こんにちは", "にゃっ", "ニチカ", "きっと", "バビュンと走った", "バビュ"] {
             try check(!lexicon.recognizes(source), "Dialogue, a name, or a partial match became an effect: \(source)")
         }
         let bounds = TextBox(x: 0.2, y: 0.6, width: 0.5, height: 0.08)

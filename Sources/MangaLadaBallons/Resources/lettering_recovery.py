@@ -1,4 +1,4 @@
-"""Recover missed enclosed lettering using independent detector, interior and OCR evidence."""
+"""Recover missed lettering using independent detection, bounded strokes and source OCR."""
 from typing import Callable
 import uuid
 import cv2
@@ -12,7 +12,9 @@ from text_region_geometry import intersection_area, validate_bgr_image, validate
 
 def recover_lettering(image: np.ndarray, blocks: list[dict],
                       detect: Callable[[np.ndarray], list[TextDetection]],
-                      recognize: Callable[[np.ndarray], str], limit: int = 8) -> tuple[np.ndarray, list[dict]]:
+                      recognize: Callable[[np.ndarray], str], limit: int = 8,
+                      segment: Callable[[np.ndarray, tuple[int, int, int, int]], list[np.ndarray]] | None = None
+                      ) -> tuple[np.ndarray, list[dict]]:
     validate_bgr_image(image)
     if type(limit) is not int or not 0 <= limit <= 8:
         raise ValueError("Lettering recovery budget must be between zero and eight")
@@ -34,8 +36,9 @@ def recover_lettering(image: np.ndarray, blocks: list[dict],
             raise ValueError("Text detector returned a region outside the page")
     candidates = balloon_candidates(image, [], connected_lettering=True)
     extras = []
+    attempted = 0
     for proposal in proposals:
-        if len(extras) >= limit:
+        if attempted >= limit:
             break
         if proposal.score < .35:
             continue
@@ -43,12 +46,25 @@ def recover_lettering(image: np.ndarray, blocks: list[dict],
         crop_box = dict(x=left, y=top, width=right-left, height=bottom-top)
         if any(intersection_area(crop_box, box) > 0 for box in occupied):
             continue
+        attempted += 1
         confirmed = enclosed_ink(candidates, proposal, (left, top, right, bottom))
         if confirmed is None:
-            continue
-        candidate, ink = confirmed
-        crop = candidate_crop(image, candidate, (left, top, right, bottom))
-        reading = recognize_region(crop, recognize, 'hayai')
+            if segment is None:
+                continue
+            crop = image[top:bottom, left:right].copy()
+            reading = recognize_region(crop, recognize, 'hayai')
+            if reading.get('recognitionAlternatives') is not None:
+                continue
+            from lettering_strokes import confirmed_strokes
+            px1, py1, px2, py2 = proposal.bounds
+            masks = segment(crop.copy(), (px1-left, py1-top, px2-left, py2-top))
+            ink = confirmed_strokes(crop, reading['originalText'], masks, recognize)
+            if ink is None:
+                continue
+        else:
+            candidate, ink = confirmed
+            crop = candidate_crop(image, candidate, (left, top, right, bottom))
+            reading = recognize_region(crop, recognize, 'hayai')
         extras.append(dict(id=str(uuid.uuid4()),
             box=dict(x=left/width, y=top/height, width=(right-left)/width, height=(bottom-top)/height),
             **reading, translatedText='', sourceIsVertical=bottom-top > right-left,

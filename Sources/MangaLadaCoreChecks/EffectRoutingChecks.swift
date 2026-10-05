@@ -34,9 +34,11 @@ extension NetworkBoundaryChecks {
             try check(corrected == [expected, neighbor] && FixtureProtocol.state.count == 0,
                       "OCR whitespace missed the fixed effect or changed source/neighbor without a selection.")
         }
-        let simple = ["バシャバシャ", "ポタポタ", "ガヤガヤ"].map { TextBlock(box: box, originalText: $0, textKind: .dialogue) }
+        let simple = ["バシャバシャ", "ポタポタ", "ガヤガヤ", "バビュン", "ばびゅん", " ﾊﾞﾋﾞｭ\nﾝ！ "]
+            .map { TextBlock(box: box, originalText: $0, textKind: .dialogue) }
         let locallyTranslated = try await pipeline.translate(simple, configuration: LocalTranslatorConfiguration())
-        try check(locallyTranslated.map(\.translatedText) == ["첨벙첨벙", "똑똑", "웅성웅성"]
+        try check(locallyTranslated.map(\.translatedText) == ["첨벙첨벙", "똑똑", "웅성웅성", "슈웅", "슈웅", "슈웅"]
+                  && locallyTranslated.allSatisfy({ $0.textKind == .soundEffect })
                   && locallyTranslated.map(\.id) == simple.map(\.id) && FixtureProtocol.state.count == 0,
                   "Reading-specific defaults changed identities or called the model.")
         let handwritten = ["ごろん", "もじ．．．"].map { TextBlock(box: box, originalText: $0, textKind: .soundEffect, userDefinedTextKind: true) }

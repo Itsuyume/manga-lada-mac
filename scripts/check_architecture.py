@@ -36,13 +36,14 @@ for target, permitted in allowed.items():
 adapters = root / "Sources" / "MangaLadaBallons" / "Resources"
 python_modules = {path.stem: path for path in adapters.glob("*.py")}
 python_allowed = {
-    "japanese_engine_worker": {"balloon_geometry", "text_region_kind", "text_region_geometry", "optical_effects", "flat_background", "sentence_punctuation", "erase_supplemental_text", "detection_refinement", "balloon_partition", "balloon_lobes", "balloon_recovery", "lettering_regions", "hayai_lettering", "region_ocr", "manga_text_detector", "balloon_erase_mask", "lettering_recovery"},
+    "japanese_engine_worker": {"balloon_geometry", "text_region_kind", "text_region_geometry", "optical_effects", "flat_background", "sentence_punctuation", "erase_supplemental_text", "detection_refinement", "balloon_partition", "balloon_lobes", "balloon_recovery", "lettering_regions", "hayai_lettering", "region_ocr", "manga_text_detector", "balloon_erase_mask", "lettering_recovery", "lettering_strokes"},
     "balloon_recovery": {"balloon_candidates", "detection_refinement", "text_region_geometry"},
     "balloon_candidates": {"dotted_balloon"},
     "region_ocr": {"lettering_ocr"},
     "lettering_ocr": {"text_region_geometry"}, "hayai_lettering": set(),
     "lettering_regions": {"balloon_candidates", "lettering_ocr", "text_detection", "text_region_geometry"},
-    "lettering_recovery": {"balloon_candidates", "lettering_regions", "region_ocr", "text_detection", "text_region_geometry"},
+    "lettering_recovery": {"balloon_candidates", "lettering_regions", "region_ocr", "text_detection", "text_region_geometry", "lettering_strokes"},
+    "lettering_strokes": {"lettering_ocr", "text_region_geometry"},
     "text_detection": {"text_region_geometry"}, "manga_text_detector": {"text_detection"},
     "detection_refinement": {"balloon_geometry", "text_region_geometry"},
     "optical_effects": {"erase_supplemental_text", "text_region_kind", "text_region_geometry"},

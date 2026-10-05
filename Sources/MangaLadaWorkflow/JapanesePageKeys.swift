@@ -24,8 +24,8 @@ package struct JapanesePageKeys {
         case .hayai:
             ocrSuffix = "-hayai-v3"; priorOCRSuffixes = ["-hayai-v2", "-hayai-v1", ""]
         case .hayaiDetected:
-            ocrSuffix = "-hayai-detected-v2"
-            priorOCRSuffixes = ["-hayai-detected-v1", "-hayai-v3", "-hayai-v2", "-hayai-v1", ""]
+            ocrSuffix = "-hayai-detected-v3"
+            priorOCRSuffixes = ["-hayai-detected-v2", "-hayai-detected-v1", "-hayai-v3", "-hayai-v2", "-hayai-v1", ""]
         }
         let baseTranslation = "\(prefix)v\(Self.translationVersion)-\(suffix)\(newContext)"
         // Cleanup has its own key. Keep committed/pending review fingerprints stable.

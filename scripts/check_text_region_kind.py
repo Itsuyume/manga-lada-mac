@@ -55,11 +55,12 @@ def run():
     check_kind(image, block, None)  # Dark dialogue is not automatically narration.
     blank = np.zeros((1, 1, 3), np.uint8)
     for text in ("", "あっ", "アッ", "うん", "ナナ", "ママ", "ココ", "キキ", "ホテル", "ありがとう", "雨が降ってきた",
-                 "にちっと音がした", "こんにちは", "にゃっ", "ニチカ", "きっと"):
+                 "にちっと音がした", "こんにちは", "にゃっ", "ニチカ", "きっと", "バビュンと走った", "バビュ"):
         check_kind(blank, {"originalText": text, "balloonShape": None}, None)
     for text in ("ザアア", "ザーッ", "ゴゴゴ", "ドンドン", "カチッ", "ガチャン", "バタン", "ゴロゴロ", "ｻﾞｱｱ", "ザアア…",
                  "ザアァーッ", "バタンバタン", "ガチャガチャ", "ゴロゴロゴロゴロ", "ピッピッピッ",
-                 "にちっ", "ニチッ", "ﾆﾁｯ", "にちゃっ", "にちゃにちゃ", "ニチャニチャ", "ニャー", "ねばねば", "プニプニ"):
+                 "にちっ", "ニチッ", "ﾆﾁｯ", "にちゃっ", "にちゃにちゃ", "ニチャニチャ", "ニャー", "ねばねば", "プニプニ",
+                 "バビュン", "ばびゅん", " ﾊﾞﾋﾞｭ\nﾝ！ "):
         effect = {"originalText": text, "balloonShape": None}
         check_kind(blank, effect, "soundEffect")
         effect.update(textKind="dialogue")

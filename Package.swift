@@ -42,7 +42,8 @@ let package = Package(
                         .copy("Resources/flat_background.py"), .copy("Resources/sentence_punctuation.py"), .copy("Resources/balloon_erase_mask.py"),
                         .copy("Resources/text_region_geometry.py"), .copy("Resources/lettering_ocr.py"),
                         .copy("Resources/lettering_regions.py"), .copy("Resources/hayai_lettering.py"), .copy("Resources/region_ocr.py"),
-                        .copy("Resources/text_detection.py"), .copy("Resources/manga_text_detector.py"), .copy("Resources/lettering_recovery.py")]
+                        .copy("Resources/text_detection.py"), .copy("Resources/manga_text_detector.py"), .copy("Resources/lettering_recovery.py"),
+                        .copy("Resources/lettering_strokes.py")]
         ),
         .executableTarget(
             name: "MangaLadaApp",
