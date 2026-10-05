@@ -36,9 +36,11 @@ for target, permitted in allowed.items():
 adapters = root / "Sources" / "MangaLadaBallons" / "Resources"
 python_modules = {path.stem: path for path in adapters.glob("*.py")}
 python_allowed = {
-    "japanese_engine_worker": {"balloon_geometry", "text_region_kind", "optical_effects", "flat_background", "sentence_punctuation", "erase_supplemental_text", "detection_refinement", "balloon_partition", "balloon_lobes", "balloon_recovery"},
+    "japanese_engine_worker": {"balloon_geometry", "text_region_kind", "optical_effects", "flat_background", "sentence_punctuation", "erase_supplemental_text", "detection_refinement", "balloon_partition", "balloon_lobes", "balloon_recovery", "lettering_regions", "hayai_lettering"},
     "balloon_recovery": {"balloon_candidates", "detection_refinement", "text_region_geometry"},
     "balloon_candidates": {"dotted_balloon"},
+    "lettering_ocr": set(), "hayai_lettering": set(),
+    "lettering_regions": {"balloon_candidates", "lettering_ocr"},
     "detection_refinement": {"balloon_geometry", "text_region_geometry"},
     "optical_effects": {"erase_supplemental_text", "text_region_kind", "text_region_geometry"},
     "sentence_punctuation": {"text_region_geometry"}, "text_region_geometry": set(),

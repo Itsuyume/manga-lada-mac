@@ -13,7 +13,7 @@ class BalloonCandidate:
 
 
 def balloon_candidates(source: np.ndarray, occupied: list[tuple[int, int, int, int]],
-                       limit: int = 8) -> list[BalloonCandidate]:
+                       limit: int = 8, *, connected_lettering: bool = False) -> list[BalloonCandidate]:
     """Use closed/broken borders plus flat interiors as crop proposals, not OCR results.
 
     Bounded to 1280 pixels and eight crops. Local text detection must still
@@ -50,7 +50,7 @@ def balloon_candidates(source: np.ndarray, occupied: list[tuple[int, int, int, i
                       (int(np.ceil(x2 * scale)), int(np.ceil(y2 * scale))), 255, -1)
     candidates = []
     for contour in sorted(contours, key=cv2.contourArea):
-        candidate = candidate_from_contour(image, covered, contour)
+        candidate = candidate_from_contour(image, covered, contour, connected_lettering=connected_lettering)
         if candidate is None or any(same_candidate(candidate, other) for other in candidates):
             continue
         candidates.append(candidate)
@@ -58,10 +58,12 @@ def balloon_candidates(source: np.ndarray, occupied: list[tuple[int, int, int, i
     return [rescaled(candidate, scale, width, height) for candidate in candidates[:limit]]
 
 
-def candidate_from_contour(image: np.ndarray, covered: np.ndarray, contour: np.ndarray) -> BalloonCandidate | None:
+def candidate_from_contour(image: np.ndarray, covered: np.ndarray, contour: np.ndarray,
+                           *, connected_lettering: bool = False) -> BalloonCandidate | None:
     area = cv2.contourArea(contour)
     x, y, width, height = cv2.boundingRect(contour)
-    if not 180 <= area <= image.shape[0] * image.shape[1] * .16 or min(width, height) < 18:
+    maximum_area = .35 if connected_lettering else .16
+    if not 180 <= area <= image.shape[0] * image.shape[1] * maximum_area or min(width, height) < 18:
         return None
     if x <= 1 or y <= 1 or x + width >= image.shape[1] - 1 or y + height >= image.shape[0] - 1:
         return None  # A crop/page edge cannot manufacture an enclosed balloon.
@@ -83,8 +85,12 @@ def candidate_from_contour(image: np.ndarray, covered: np.ndarray, contour: np.n
     edge = cv2.dilate((interior == 0).astype(np.uint8), np.ones((3, 3), np.uint8))
     touching = set(np.unique(labels[edge > 0]))
     selected = [i for i in range(1, count) if i not in touching and 4 <= stats[i, 4] <= area * .3]
-    if len(selected) < 2:
+    if len(selected) < (1 if connected_lettering else 2):
         return None
+    if connected_lettering and len(selected) == 1:
+        component = stats[selected[0]]
+        if component[4] / (component[2] * component[3]) > .7:
+            return None  # A filled coloured patch is not a connected glyph.
     glyphs = np.isin(labels, selected).astype(np.uint8) * 255
     amount = np.count_nonzero(glyphs)
     if not max(16, len(pixels) * .008) <= amount <= len(pixels) * .4:

@@ -20,6 +20,8 @@ protocol_output = sys.stdout
 
 class JapaneseEngine:
     def __init__(self, root: Path):
+        self.root = root.resolve()
+        self.lettering = None
         sys.path.insert(0, str(root))
         os.chdir(root)
         import cv2
@@ -52,6 +54,8 @@ class JapaneseEngine:
         image = self.cv2.imread(request["source"], self.cv2.IMREAD_COLOR)
         if image is None:
             raise ValueError("Cannot decode source image")
+        if "letteringOnly" in request:
+            return {"lettering": self.read_lettering_only(image, request["letteringOnly"])}
         if request.get("regions") is not None:
             return {"blocks": self.read_proposed_regions(image, request["regions"])}
         height, width = image.shape[:2]
@@ -107,6 +111,17 @@ class JapaneseEngine:
             raise OSError("Cannot save clean page")
         os.replace(temporary, destination)
         return {"blocks": blocks, "elapsed": time.monotonic() - began}
+
+    def read_lettering_only(self, image, mode: str) -> list[dict]:
+        from lettering_regions import inspect_lettering_regions
+        from hayai_lettering import HayaiLetteringOCR
+        def recognize(crop):
+            if self.lettering is None:
+                import torch
+                device = "mps" if torch.backends.mps.is_available() else "cpu"
+                self.lettering = HayaiLetteringOCR(self.root.parent / "LetteringOCR", device)
+            return self.lettering(crop)
+        return inspect_lettering_regions(image, recognize, mode)
 
     def add_optical_effects(self, image, blocks: list[dict], request: dict) -> tuple:
         from optical_effects import plan_effects, confirmed_effects, effect_mask

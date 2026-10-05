@@ -17,6 +17,7 @@ jobs:
       - run: python3 scripts/check_balloon_lobes.py
       - run: python3 scripts/check_detection_refinement.py
       - run: python3 scripts/check_balloon_candidates.py
+      - run: python3 scripts/check_lettering_ocr.py
       - run: python3 scripts/check_text_region_kind.py
       - run: python3 scripts/check_effect_catalog.py
       - run: python3 scripts/check_optical_effects.py
