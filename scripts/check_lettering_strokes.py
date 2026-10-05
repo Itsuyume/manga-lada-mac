@@ -36,6 +36,41 @@ assert len(stroke_points(image,(20,40,210,120))) <= 4
 assert all(mask[y,x] for x,y in stroke_points(image,(20,40,210,120)))
 assert not stroke_points(np.full_like(image,255),(0,0,240,160)), 'Blank background generated prompts'
 
+# Bright lettering uses the same bounded masks and source-reading requirement.
+bright_source = 255-image
+bright_before = bright_source.copy()
+class ContrastRecognizer:
+    def __call__(self, isolated):
+        assert np.median(isolated[0]) == 255, 'Bright strokes were not normalized for isolated OCR'
+        assert np.array_equal(isolated[mask > 0], image[mask > 0])
+        return 'テスト'
+
+bright_confirmed = confirmed_strokes(bright_source, 'テスト', [mask], ContrastRecognizer())
+assert np.array_equal(confirmed, bright_confirmed), 'Polarity changed glyph coordinates or mask extent'
+assert np.array_equal(bright_source, bright_before), 'Polarity normalization modified the source'
+assert confirmed_strokes(bright_source, 'テスト', [mask], Recognizer(['別の文'])) is None
+
+# Corroborating the white fill is insufficient: its offset black shadow must
+# also be removed, without recruiting a nearby border or connected artwork.
+for scale in (1, 2):
+    shaded = np.full((160*scale, 240*scale, 3), 64, np.uint8)
+    shadow = np.zeros(shaded.shape[:2], np.uint8)
+    cv2.putText(shadow, 'BAM', (37*scale, 103*scale), cv2.FONT_HERSHEY_DUPLEX, 1.6*scale, 255, 6*scale)
+    fill = cv2.resize(original_mask, (240*scale, 160*scale), interpolation=cv2.INTER_NEAREST)
+    shaded[shadow > 0] = 0
+    shaded[fill > 0] = 255
+    shaded[:, :3*scale] = 0
+    before = shaded.copy()
+    completed = confirmed_strokes(shaded, 'テスト', [fill], Recognizer(['テスト']))
+    assert completed is not None and np.all(completed[shadow > 0] == 255), 'Offset glyph shadow remains'
+    assert not completed[:, :10*scale].any(), 'Shadow completion erased a separate border'
+    assert np.array_equal(shaded, before) and np.array_equal(mask, original_mask)
+
+    # A line extending from the glyph to the crop edge is not a text shadow.
+    cv2.line(shaded, (103*scale, 103*scale), (239*scale, 155*scale), (0, 0, 0), 2*scale)
+    completed = confirmed_strokes(shaded, 'テスト', [fill], Recognizer(['テスト']))
+    assert completed is not None and not completed[140*scale:, 210*scale:].any(), 'Connected artwork was erased'
+
 reader = Recognizer([])
 assert confirmed_strokes(image,'テスト',[],reader) is None
 assert confirmed_strokes(image,'テスト',[np.zeros_like(mask),np.full_like(mask,255)],reader) is None

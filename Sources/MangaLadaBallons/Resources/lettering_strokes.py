@@ -1,7 +1,7 @@
-"""Optional dark decorative-stroke segmentation, corroborated by source OCR.
+"""Optional decorative-stroke segmentation, corroborated by source OCR.
 
 Model masks and predicted IoUs alone never authorize erasing artwork. This
-boundary supports dark, substantial lettering; other styles remain unaccepted.
+boundary supports substantial lettering on a contrasting background.
 """
 import hashlib
 import math
@@ -23,6 +23,14 @@ def verify_stroke_model(path: Path) -> None:
     with path.open("rb") as stream:
         if hashlib.file_digest(stream, "sha256").hexdigest() != MODEL_SHA256:
             raise ValueError("Lettering stroke model checksum mismatch")
+
+
+def stroke_contrast(image: np.ndarray) -> np.ndarray:
+    """Normalize bright ink for segmentation only; keep original pixel coordinates."""
+    validate_bgr_image(image)
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    border = np.concatenate((gray[0], gray[-1], gray[:, 0], gray[:, -1]))
+    return 255-image if np.median(border) < 128 else image.copy()
 
 
 def stroke_points(image: np.ndarray, bounds: tuple[int, int, int, int]) -> list[list[int]]:
@@ -53,7 +61,7 @@ def confirmed_strokes(image: np.ndarray, source_text: str, masks: list[np.ndarra
 The caller must supply a previously corroborated source reading. Isolated-stroke
 OCR is additional evidence, never a replacement for that source reading.
 """
-    validate_bgr_image(image)
+    image = stroke_contrast(image)
     if not source_text or len(masks) > 3:
         raise ValueError("Stroke confirmation needs a source reading and at most three masks")
     for mask in masks:
@@ -74,9 +82,42 @@ OCR is additional evidence, never a replacement for that source reading.
         isolated[mask > 0] = image[mask > 0]
         if normalized_reading(recognize(isolated)) != normalized_reading(source_text):
             continue  # Missing accents or complete characters can still look plausible.
-        radius = min(3, max(1, math.ceil(max(image.shape[:2]) / 256)))
-        return cv2.dilate(mask, np.ones((2 * radius + 1, 2 * radius + 1), np.uint8))
+        return complete_stroke_edges(gray, mask)
     return None
+
+
+def complete_stroke_edges(gray: np.ndarray, mask: np.ndarray) -> np.ndarray:
+    """Complete observed opposite-color shadows attached to corroborated ink.
+
+    Work in normalized dark-ink polarity. A shadow must contrast with measured
+    background, stay near the glyph and remain independent of crop-edge artwork.
+    """
+    radius = min(3, max(1, math.ceil(max(gray.shape) / 256)))
+    completed = cv2.dilate(mask, np.ones((2 * radius + 1, 2 * radius + 1), np.uint8))
+    border = np.concatenate((gray[0], gray[-1], gray[:, 0], gray[:, -1]))
+    background = float(np.median(border))
+    variation = float(np.median(np.abs(border.astype(float) - background)))
+    threshold = background + max(12, variation * 4)
+    if variation > 12 or threshold >= 255:
+        return completed
+    depth = cv2.distanceTransform(completed, cv2.DIST_L2, 5)
+    reach = max(radius * 3, math.ceil(np.percentile(depth[completed > 0], 90)))
+    distance = cv2.distanceTransform((completed == 0).astype(np.uint8), cv2.DIST_L2, 5)
+    connected = ((completed > 0) | (gray > threshold)).astype(np.uint8)
+    _, labels, stats, _ = cv2.connectedComponentsWithStats(connected, 8)
+    shadows = np.zeros_like(mask)
+    height, width = gray.shape
+    # Inspect only components touching confirmed ink, not every texture speck.
+    for index in np.unique(labels[completed > 0]):
+        x, y, w, h, amount = stats[index]
+        if x <= 1 or y <= 1 or x+w >= width-1 or y+h >= height-1:
+            continue
+        selected = labels == index
+        evidence = np.count_nonzero(selected & (completed > 0))
+        if not evidence or amount > evidence * 2 or distance[selected].max() > reach:
+            continue
+        shadows[selected] = 255
+    return completed | cv2.dilate(shadows, np.ones((3, 3), np.uint8))
 
 
 class LetteringStrokeSegmenter:
@@ -88,6 +129,7 @@ class LetteringStrokeSegmenter:
         self.net.setPreferableTarget(cv2.dnn.DNN_TARGET_CPU)
 
     def __call__(self, image: np.ndarray, bounds: tuple[int, int, int, int]) -> list[np.ndarray]:
+        image = stroke_contrast(image)
         seeds = stroke_points(image, bounds)
         if not seeds:
             return []

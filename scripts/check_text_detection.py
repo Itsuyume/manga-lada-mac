@@ -52,7 +52,11 @@ class TextDetectionChecks(unittest.TestCase):
     def test_views_round_trip_and_no_source_mutation(self):
         before = self.page.copy()
         views = list(detection_views(self.page))
-        self.assertEqual(len(views), 2)
+        self.assertEqual(len(views), 4)
+        inverted = views[2]
+        x1, y1, x2, y2 = inverted.content
+        expected = cv2.resize(255-self.page, (x2-x1, y2-y1))
+        self.assertTrue(np.array_equal(inverted.pixels[y1:y2, x1:x2], expected))
         for view in views:
             self.assertEqual(view.pixels.shape, (1024, 1024, 3))
             self.assertEqual(view.restore(view.content, (140, 100)), (0, 0, 140, 100))
@@ -67,8 +71,8 @@ class TextDetectionChecks(unittest.TestCase):
     def test_large_image_tiles_and_seams(self):
         page = np.full((1801, 2307, 3), 255, np.uint8)
         views = list(detection_views(page))
-        self.assertEqual(len(views), 6)
-        for view in views[2:]:
+        self.assertEqual(len(views), 8)
+        for view in views[4:]:
             self.assertIsNone(view.restore(view.content, (2307, 1801)), "Internal seam accepted a partial word")
             x1, y1, x2, y2 = view.content
             safe = view.restore((x1+30, y1+30, x2-30, y2-30), (2307, 1801))

@@ -70,12 +70,14 @@ def detector_view(image: np.ndarray, bounds: tuple[int, int, int, int], margin: 
 
 
 def detection_views(image: np.ndarray) -> Iterator[DetectionView]:
-    """At most six fixed-size views, preserving aspect ratio and original coordinates."""
+    """At most eight views, including inverted contrast for bright lettering."""
     validate_bgr_image(image)
     height, width = image.shape[:2]
     whole = (0, 0, width, height)
     yield detector_view(image, whole)
     yield detector_view(image, whole, margin=.5)
+    yield detector_view(255-image, whole)
+    yield detector_view(255-image, whole, margin=.5)
     if max(width, height) <= 1600:
         return
     tile_width, tile_height = math.ceil(width*.6), math.ceil(height*.6)
