@@ -25,6 +25,10 @@ struct MangaLadaWorkflowChecks {
         var settings = LocalTranslatorConfiguration(enhanceSoundEffects: arguments.contains("--effects"))
         settings.interpretMaskedText = arguments.contains("--masked-context")
         if let option = arguments.first(where: { $0.hasPrefix("--model=") }) { settings.ollama.model = String(option.dropFirst(8)) }
+        if let option = arguments.first(where: { $0.hasPrefix("--ocr=") }) {
+            guard let backend = JapaneseOCRBackend(rawValue: String(option.dropFirst(6))) else { throw CheckFailure.invalidOCR }
+            settings.japaneseOCR = backend
+        }
         if arguments.count >= 5, arguments[1] == "--real-regression" {
             do {
                 try await RealPageRegressionChecks.run(manifest: URL(fileURLWithPath: arguments[2]), output: URL(fileURLWithPath: arguments[3]),
@@ -58,12 +62,12 @@ struct MangaLadaWorkflowChecks {
             .appendingPathComponent("Manga Lada")
         let original = try Data(contentsOf: source)
         let processor = MangaPageProcessor(applicationSupportDirectory: support)
-        let bookTitle = arguments.count > 3 ? arguments[3] : ""
+        let bookTitle = arguments.dropFirst(3).first { !$0.hasPrefix("--") } ?? ""
         if let region = arguments.first(where: { $0.hasPrefix("--region=") }) {
             let values = region.dropFirst(9).split(separator: ",").compactMap { Double($0) }
             guard values.count == 4 else { throw CheckFailure.invalidRegion }
             try await ManualRegionChecks.run(source: source, output: output,
-                box: TextBox(x: values[0], y: values[1], width: values[2], height: values[3]), title: bookTitle)
+                box: TextBox(x: values[0], y: values[1], width: values[2], height: values[3]), title: bookTitle, configuration: settings)
             return
         }
         let result = try await processor.process(imageURL: source, destinationURL: output,
@@ -84,5 +88,5 @@ struct MangaLadaWorkflowChecks {
 }
 
 private enum CheckFailure: Error {
-    case sourceChanged, noText, missingTranslation, cacheMismatch, invalidPNG, invalidRegion
+    case sourceChanged, noText, missingTranslation, cacheMismatch, invalidPNG, invalidRegion, invalidOCR
 }

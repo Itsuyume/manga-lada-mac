@@ -42,6 +42,13 @@ extension NetworkBoundaryChecks {
         try configuration.save(to: url)
         let loaded = try LocalTranslatorConfiguration.load(configURL: url, environment: [:])
         try check(loaded.japaneseOCR == .hayai, "Selected OCR backend was not saved")
+        var detected = configuration; detected.japaneseOCR = .hayaiDetected
+        try detected.save(to: url)
+        try check(try LocalTranslatorConfiguration.load(configURL: url, environment: [:]).japaneseOCR == .hayaiDetected,
+                  "Detector-assisted OCR selection was not saved")
+        try check(detected.japaneseOCR.usesLetteringOCR && !JapaneseOCRBackend.manga.usesLetteringOCR,
+                  "The detector option changed recognizers implicitly")
+        try check(!detected.requiresRetranslation(comparedTo: configuration), "Detector selection discarded existing reviews")
         var changed = configuration; changed.japaneseOCR = .manga
         try check(!changed.requiresRetranslation(comparedTo: configuration), "OCR selection discarded saved reviews")
         try Data("{}".utf8).write(to: url)

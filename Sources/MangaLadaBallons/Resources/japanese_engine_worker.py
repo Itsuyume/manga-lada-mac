@@ -69,7 +69,7 @@ class JapaneseEngine:
             mask, detected = refine_detection(image, mask, detected, detail_mask, details)
         from balloon_recovery import recover_balloons
         mask, detected = recover_balloons(image, mask, detected, self.detector.detect, request.get("blocks"),
-                                         connected_lettering=backend == "hayai")
+                                         connected_lettering=backend != "manga")
         from balloon_lobes import detect_lobes, retain_cached_regions, source_rectangle
         lobes = detect_lobes(image, mask, detected)
         detected = lobes.blocks
@@ -85,6 +85,13 @@ class JapaneseEngine:
             additions = missing_detections(detected, blocks, width, height)
             if additions:
                 blocks = blocks + self.read_blocks(image, additions, backend)
+        lettering_boxes = []
+        if backend == "hayai-detected":
+            from lettering_recovery import recover_lettering
+            lettering_mask, extras = recover_lettering(image, blocks, self.text_detector(), self.recognize_lettering)
+            mask = self.cv2.bitwise_or(mask, lettering_mask)
+            blocks = blocks + extras
+            lettering_boxes = [source_rectangle(block["box"], width, height) for block in extras]
         optical_mask, optical_boxes = self.add_optical_effects(image, blocks, request, backend)
         mask = self.cv2.bitwise_or(mask, optical_mask)
         from balloon_geometry import BalloonGeometry
@@ -104,7 +111,7 @@ class JapaneseEngine:
         mask = self.expand_outline_mask(image, mask, detected)
         from balloon_erase_mask import protect_balloon_outlines
         mask = protect_balloon_outlines(mask, blocks, geometry)
-        paint_blocks = self.inpainting_blocks(detected, width, height) + self.inpainting_regions(optical_boxes + punctuation_boxes)
+        paint_blocks = self.inpainting_blocks(detected, width, height) + self.inpainting_regions(optical_boxes + punctuation_boxes + lettering_boxes)
         from flat_background import prepare_flat_backgrounds
         prepared, pending = prepare_flat_backgrounds(image, image, mask, [block.xyxy for block in paint_blocks])
         unresolved = [block for block in paint_blocks if pending[block.xyxy[1]:block.xyxy[3], block.xyxy[0]:block.xyxy[2]].any()]
@@ -121,11 +128,14 @@ class JapaneseEngine:
     def read_lettering_only(self, image, mode: str) -> list[dict]:
         from lettering_regions import inspect_lettering_regions, inspect_detected_lettering
         if mode == "detect":
-            from manga_text_detector import MangaTextDetector, MODEL_FILE
-            if self.lettering_detector is None:
-                self.lettering_detector = MangaTextDetector(self.root.parent / "TextDetector" / MODEL_FILE)
-            return inspect_detected_lettering(image, self.recognize_lettering, self.lettering_detector)
+            return inspect_detected_lettering(image, self.recognize_lettering, self.text_detector())
         return inspect_lettering_regions(image, self.recognize_lettering, mode)
+
+    def text_detector(self):
+        from manga_text_detector import MangaTextDetector, MODEL_FILE
+        if self.lettering_detector is None:
+            self.lettering_detector = MangaTextDetector(self.root.parent / "TextDetector" / MODEL_FILE)
+        return self.lettering_detector
 
     def recognize_lettering(self, crop):
         from hayai_lettering import HayaiLetteringOCR
@@ -137,7 +147,7 @@ class JapaneseEngine:
 
     def read_region(self, crop, backend: str) -> dict:
         from region_ocr import recognize_region
-        if backend == "hayai":
+        if backend != "manga":
             return recognize_region(crop, self.recognize_lettering, backend)
         self.ocr.load_model()
         return recognize_region(crop, self.ocr.ocr_img, backend)

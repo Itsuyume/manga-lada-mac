@@ -3,11 +3,11 @@ from typing import Callable, Literal
 import numpy as np
 from lettering_ocr import read_lettering, normalized_reading
 
-OCRBackend = Literal["manga", "hayai"]
+OCRBackend = Literal["manga", "hayai", "hayai-detected"]
 
 
 def validate_backend(value: str) -> OCRBackend:
-    if value not in ("manga", "hayai"):
+    if value not in ("manga", "hayai", "hayai-detected"):
         raise ValueError("Unknown Japanese OCR backend")
     return value
 

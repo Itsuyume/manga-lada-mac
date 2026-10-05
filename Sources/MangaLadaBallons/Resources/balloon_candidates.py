@@ -104,7 +104,9 @@ def candidate_from_contour(image: np.ndarray, covered: np.ndarray, contour: np.n
 def same_candidate(first: BalloonCandidate, second: BalloonCandidate) -> bool:
     a, b = first.bounds, second.bounds
     intersection = max(0, min(a[2], b[2]) - max(a[0], b[0])) * max(0, min(a[3], b[3]) - max(a[1], b[1]))
-    return intersection > min((a[2]-a[0]) * (a[3]-a[1]), (b[2]-b[0]) * (b[3]-b[1])) * .7
+    # A hole inside a large decorative glyph is not the surrounding balloon.
+    # Compare both extents, otherwise the first tiny contour suppresses its parent.
+    return intersection > max((a[2]-a[0]) * (a[3]-a[1]), (b[2]-b[0]) * (b[3]-b[1])) * .7
 
 
 def rescaled(candidate: BalloonCandidate, scale: float, width: int, height: int) -> BalloonCandidate:

@@ -79,7 +79,7 @@ public final class MangaPageProcessor {
                                                retention: configuration.ollama.retention, ocrBackend: configuration.japaneseOCR, status: status)
         recognized.blocks = JapaneseSpeechGrouping.resolve(recognized.blocks)
         var storedPrior = try storedCurrent ?? previousTranslation(keys.previous)
-        if storedCurrent == nil, configuration.japaneseOCR == .hayai,
+        if storedCurrent == nil, configuration.japaneseOCR.usesLetteringOCR,
            let oldOCR = try previousTranslation(keys.previousRecognition), var stored = storedPrior {
             stored.blocks = RecognitionCacheMigration.recordSourceEdits(in: stored.blocks, recognized: oldOCR.blocks)
             storedPrior = stored
@@ -100,7 +100,7 @@ public final class MangaPageProcessor {
         }
         try Task.checkCancellation()
         let migrated = storedPrior.flatMap { RecognitionCacheMigration.reuse($0, for: recognized.blocks, preservingOriginalOnly: force,
-                                                                            requiresMatchingSource: configuration.japaneseOCR == .hayai) }
+                                                                            requiresMatchingSource: configuration.japaneseOCR.usesLetteringOCR) }
         let baseline = PageTranslation(imageURL: imageURL, imageFingerprint: keys.translation,
             sourceLanguage: .japanese, targetLanguage: .korean, blocks: migrated ?? recognized.blocks)
         let selectedClean = try await manualCleanImage(for: baseline, sourceCleanURL: cleanURL)
@@ -210,14 +210,14 @@ public final class MangaPageProcessor {
         await status("일본어 글자·효과음 위치 대조 중")
         let observations = try await VisionOCRService().recognizeText(in: imageURL, recognitionLanguages: ["ja-JP"], effectLexicon: lexicon)
         try Task.checkCancellation()
-        if ocrBackend == .hayai {
+        if ocrBackend.usesLetteringOCR {
             await status("일본어 글자 검출 · Hayai OCR 대조 · 원문 제거 중")
         } else {
             await status(prior == nil ? "일본어 글자 검출 · 만화 OCR · 원문 제거 중" : "기존 일본어 인식 재사용 · 원문 복원 갱신 중")
         }
         var result = try await recognitionSession.recognizeAndClean(source: imageURL, runID: key, priorBlocks: prior?.blocks,
             opticalCandidates: observations, ocrBackend: ocrBackend,
-            rereadExisting: ocrBackend == .hayai && prior?.imageFingerprint != reusableOCRKey,
+            rereadExisting: ocrBackend.usesLetteringOCR && prior?.imageFingerprint != reusableOCRKey,
             idleTimeout: retention.duration)
         try Task.checkCancellation()
         if result.blocks.contains(where: { JapaneseHorizontalOCR.canRefine($0) }) {

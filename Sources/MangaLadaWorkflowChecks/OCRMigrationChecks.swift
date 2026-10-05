@@ -45,6 +45,11 @@ enum OCRMigrationChecks {
         defer { try? FileManager.default.removeItem(at: url) }
         let old = try JapanesePageKeys(imageURL: url, configuration: .init(), context: "", title: "")
         let new = try JapanesePageKeys(imageURL: url, configuration: .init(japaneseOCR: .hayai), context: "", title: "")
+        let detected = try JapanesePageKeys(imageURL: url, configuration: .init(japaneseOCR: .hayaiDetected), context: "", title: "")
+        try require(detected.translation != new.translation && detected.recognition != new.recognition,
+                    "Detector-assisted OCR reused a cache without the newly recovered regions")
+        try require(detected.previousRecognition.contains(new.recognition) && detected.previous.contains(new.translation),
+                    "Detector upgrade cannot preserve existing Hayai review edits")
         try require(old.translation != new.translation && old.recognition != new.recognition, "OCR backends shared stale cache keys")
         try require(new.previousRecognition.first == new.recognitionBeforeCleanupUpdate,
                     "Cleanup refresh cannot reuse the matching OCR policy")
@@ -52,7 +57,7 @@ enum OCRMigrationChecks {
                     "Previous Hayai OCR is unavailable for preserving manual source edits")
         try require(new.previous.contains(old.translation + "-hayai-v1"),
                     "Previous Hayai review is unavailable for migration")
-        for keys in [old, new] {
+        for keys in [old, new, detected] {
             try require(keys.recognition != keys.recognitionBeforeCleanupUpdate && keys.previousRecognition.first == keys.recognitionBeforeCleanupUpdate,
                         "Unsafe old cleanup image can bypass regeneration")
             try require(keys.previous.first != keys.translation && Set(keys.previous).count == keys.previous.count,
