@@ -24,7 +24,8 @@ def source_rectangle(box: dict, width: int, height: int) -> tuple[int, int, int,
             round((box["x"] + box["width"]) * width), round((box["y"] + box["height"]) * height))
 
 
-def split_contour(mask: np.ndarray, lines: np.ndarray, font_size: float) -> list[tuple[np.ndarray, list[int]]]:
+def split_contour(mask: np.ndarray, lines: np.ndarray, font_size: float,
+                  text_mask: np.ndarray | None = None) -> list[tuple[np.ndarray, list[int]]]:
     """Only split when two significant inward notches separate whole OCR columns."""
     if len(lines) < 2 or font_size <= 0:
         return []
@@ -47,7 +48,7 @@ def split_contour(mask: np.ndarray, lines: np.ndarray, font_size: float) -> list
         divided = mask.copy()
         cv2.line(divided, tuple(first), tuple(second), 0, 2)
         _, labels, stats, _ = cv2.connectedComponentsWithStats(divided, 8)
-        groups = column_groups(labels, lines)
+        groups = column_groups(labels, lines, text_mask)
         if len(groups) != 2 or any(stats[label, 4] < font_size ** 2 for label in groups):
             continue
         if sum(stats[label, 4] for label in groups) < np.count_nonzero(mask) * .92:
@@ -56,11 +57,16 @@ def split_contour(mask: np.ndarray, lines: np.ndarray, font_size: float) -> list
     return []
 
 
-def column_groups(labels: np.ndarray, lines: np.ndarray) -> dict[int, list[int]]:
+def column_groups(labels: np.ndarray, lines: np.ndarray, text_mask: np.ndarray | None = None) -> dict[int, list[int]]:
     groups: dict[int, list[int]] = {}
     for index, line in enumerate(lines):
         glyph = np.zeros(labels.shape, np.uint8)
         cv2.fillPoly(glyph, [line.astype(np.int32)], 1)
+        if text_mask is not None:
+            # Detector rectangles include blank corners and border dashes.
+            # Test the observed text footprint, using the same mask as enclosure
+            # validation; never lower the whole-column containment threshold.
+            glyph &= (text_mask > 0).astype(np.uint8)
         values, counts = np.unique(labels[glyph > 0], return_counts=True)
         if len(values) == 0:
             return {}
@@ -85,7 +91,8 @@ def detect_lobes(image: np.ndarray, mask: np.ndarray, blocks: list["TextBlock"])
             continue
         interior, x, y = enclosure
         lines = np.asarray(block.lines)
-        parts = split_contour(interior, lines - [x, y], block._detected_font_size)
+        glyphs = geometry.glyphs(x, y, interior.shape[1], interior.shape[0])
+        parts = split_contour(interior, lines - [x, y], block._detected_font_size, glyphs)
         if not parts:
             result.blocks.append(block)
             continue
@@ -97,17 +104,69 @@ def detect_lobes(image: np.ndarray, mask: np.ndarray, blocks: list["TextBlock"])
             separated.xyxy = [int(extent[:, 0].min()), int(extent[:, 1].min()),
                               int(extent[:, 0].max()), int(extent[:, 1].max())]
             center = (separated.xyxy[0] + separated.xyxy[2]) / 2 - x
-            shape = sampled_shape(pixels, x, y, width, height, center)
-            if shape is None:
-                raise ValueError("A separated balloon has no writable rows")
-            # Bounds describe this lobe, not the original compound balloon.
-            rows = shape["rows"]
-            left, right = min(row["left"] for row in rows), max(row["right"] for row in rows)
-            top, bottom = min(row["y"] for row in rows), max(row["y"] for row in rows)
-            shape["bounds"] = dict(x=left, y=top, width=right-left, height=bottom-top)
             result.blocks.append(separated)
-            result.shapes[tuple(separated.xyxy)] = shape
+            result.shapes[tuple(separated.xyxy)] = lobe_shape(pixels, x, y, width, height, center)
+    assign_shared_lobes(result, geometry, width, height)
     return result
+
+
+def lobe_shape(pixels: np.ndarray, x: int, y: int, width: int, height: int, center: float) -> dict:
+    shape = sampled_shape(pixels, x, y, width, height, center)
+    if shape is None:
+        raise ValueError("A separated balloon has no writable rows")
+    rows = shape["rows"]
+    left, right = min(row["left"] for row in rows), max(row["right"] for row in rows)
+    top, bottom = min(row["y"] for row in rows), max(row["y"] for row in rows)
+    shape["bounds"] = dict(x=left, y=top, width=right-left, height=bottom-top)
+    return shape
+
+
+def assign_shared_lobes(result: LobeDetections, geometry: BalloonGeometry, width: int, height: int) -> None:
+    """Separate physical lobes even when CTD already returned separate columns.
+
+    Existing blocks/IDs stay intact. Use the same notch/whole-column test as
+    detector splitting, before sampled rows lose the compound outline's neck.
+    """
+    pending = [block for block in result.blocks if block.src_is_vertical and len(block.lines)
+               and tuple(map(int, block.xyxy)) not in result.shapes]
+    for block in pending:
+        if tuple(map(int, block.xyxy)) in result.shapes:
+            continue
+        enclosure = geometry.enclosure(rectangle(block, width, height), block._detected_font_size)
+        if enclosure is None:
+            continue
+        interior, x, y = enclosure
+        glyphs = geometry.glyphs(x, y, interior.shape[1], interior.shape[0])
+        owners, lines = [], []
+        for other in pending:
+            if tuple(map(int, other.xyxy)) in result.shapes:
+                continue
+            columns = np.asarray(other.lines) - [x, y]
+            if not column_groups((interior > 0).astype(np.uint8), columns, glyphs):
+                continue
+            owners.extend([other] * len(columns))
+            lines.extend(columns)
+        if len({id(owner) for owner in owners}) < 2:
+            continue
+        parts = split_contour(interior, np.asarray(lines), block._detected_font_size, glyphs)
+        if not parts or not whole_block_parts(parts, owners):
+            continue
+        for pixels, indices in parts:
+            for index in indices:
+                owner = owners[index]
+                center = (owner.xyxy[0] + owner.xyxy[2]) / 2 - x
+                result.shapes[tuple(map(int, owner.xyxy))] = lobe_shape(pixels, x, y, width, height, center)
+
+
+def whole_block_parts(parts: list[tuple[np.ndarray, list[int]]], owners: list["TextBlock"]) -> bool:
+    assigned: dict[int, int] = {}
+    for part, (_, indices) in enumerate(parts):
+        for index in indices:
+            identity = id(owners[index])
+            if identity in assigned and assigned[identity] != part:
+                return False  # Changing a block's columns requires fresh OCR IDs.
+            assigned[identity] = part
+    return True
 
 
 def retain_cached_regions(blocks: list[dict], replaced: set[tuple], width: int, height: int) -> list[dict]:

@@ -2,6 +2,7 @@
 import cv2
 import numpy as np
 import text_region_geometry as geometry
+from dotted_balloon import dotted_contours
 
 
 def light_background(image: np.ndarray) -> np.ndarray:
@@ -42,16 +43,14 @@ class BalloonGeometry:
         x, y, w, h = (box[key] * scale for key, scale in (("x", self.width), ("y", self.height), ("width", self.width), ("height", self.height)))
         if w < 1 or h < 1:
             return None
-        center_x, center_y = x + w / 2, y + h / 2
         text_points = self.text_points(x, y, w, h)
         patch = self.source[max(0, int(y)):min(self.height, int(y + h)), max(0, int(x)):min(self.width, int(x + w))]
         if patch.size == 0:
             return None
         glyphs = self.glyphs(int(x), int(y), patch.shape[1], patch.shape[0])
-        colors = patch[glyphs == 0]
-        if len(colors) < patch.shape[0] * patch.shape[1] * .1:
+        background = source_background(patch, glyphs)
+        if background is None:
             return None
-        background = np.median(colors, axis=0)
         different = ((~background_matches(patch, background)) & (glyphs == 0)
                      & (np.abs(patch.astype(np.float32) - background).max(axis=2) > 45)).astype(np.uint8)
         _, _, sizes, _ = cv2.connectedComponentsWithStats(different, 8)
@@ -65,8 +64,26 @@ class BalloonGeometry:
                 cv2.rectangle(barrier, (0, 0), (self.width - 1, self.height - 1), 255, 1)
                 contours, _ = cv2.findContours(barrier, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
                 self.contours[kernel].extend(contours)
+        rectangle = (x, y, w, h)
+        colored = self.colored_contours(background, font_size)
+        outlines = self.contours[kernel] + colored
+        candidates = self.enclosing_candidates(outlines, rectangle, font_size, background, text_points)
+        if colored or not candidates:
+            # Similar clothes can extend a colour-only outline beyond the
+            # balloon. Compare it with observed dashes before choosing an area.
+            outlines = dotted_contours(self.source, self.text_mask, rectangle, font_size)
+            candidates += self.enclosing_candidates(outlines, rectangle, font_size, background, text_points)
+        if not candidates:
+            return None
+        _, bx, by, mask = min(candidates, key=lambda item: item[0])
+        return mask, bx, by
+
+    def enclosing_candidates(self, contours: list, rectangle: tuple, font_size: float,
+                             background: np.ndarray, text_points: tuple | None) -> list:
+        x, y, w, h = rectangle
+        center_x, center_y = x + w / 2, y + h / 2
         candidates = []
-        for contour in self.contours[kernel] + self.colored_contours(background, font_size):
+        for contour in contours:
             area = cv2.contourArea(contour)
             bx, by, bw, bh = cv2.boundingRect(contour)
             minimum_area = .45 if text_points is not None else .9
@@ -99,10 +116,7 @@ class BalloonGeometry:
                 if shape is None or not self.caption_space(shape, (bx, by, bw, bh), (x, y, w, h), font_size, background):
                     continue
             candidates.append((area, bx, by, local))
-        if not candidates:
-            return None
-        _, bx, by, mask = min(candidates, key=lambda item: item[0])
-        return mask, bx, by
+        return candidates
 
     def glyphs(self, x: int, y: int, width: int, height: int) -> np.ndarray:
         if self.text_mask is None:
@@ -163,6 +177,23 @@ class BalloonGeometry:
                     max(0, int(x - bx)):min(width, int(np.ceil(x + w - bx)))]
         full_area = (int(np.ceil(x + w)) - int(x)) * (int(np.ceil(y + h)) - int(y))
         return full_area > 0 and np.count_nonzero(area) >= full_area * .90
+
+
+def source_background(patch: np.ndarray, glyphs: np.ndarray) -> np.ndarray | None:
+    """CTD may cover a whole text column, including the paper between glyphs."""
+    colors = patch[glyphs == 0]
+    if len(colors) >= min(32, patch.shape[0] * patch.shape[1] * .1):
+        return np.median(colors, axis=0)
+    # A dominant colour is evidence even when the detector masked all of it.
+    # Busy patches without a stable mode remain unknown. The full enclosure
+    # must independently pass the existing 75% background agreement check.
+    pixels = patch.reshape(-1, 3)
+    bins = (pixels.astype(np.int32) // 16) @ np.array([256, 16, 1])
+    counts = np.bincount(bins, minlength=4096)
+    dominant = int(counts.argmax())
+    if counts[dominant] < len(pixels) * .25:
+        return None
+    return np.median(pixels[bins == dominant], axis=0)
 
 
 def background_matches(colors: np.ndarray, reference: np.ndarray) -> np.ndarray:

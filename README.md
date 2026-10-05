@@ -13,6 +13,8 @@
 
 ## 사용 방법
 
+0.2.35는 끊긴 점선 말풍선에 짧은 틈을 연결하는 윤곽 보정을 추가합니다. 글자 크기에 비례한 범위에서 실제 테두리 조각이 둘러싼 내부만 근사하고, 큰 틈·잘린 경계·그림 침범은 검증합니다. OCR이 연결된 작은/큰 말풍선을 이미 별도 영역으로 반환한 경우에도 전체 픽셀 윤곽의 연결부에서 공간을 나눕니다. 기존 문구·번호는 유지하며 원본 픽셀을 변경하지 않습니다. 이전 결과는 같은 원본을 새로 열어 처리하면 기존 검수 문구를 이관하고 윤곽을 갱신합니다. 의미 번역이나 효과음 인식 전체를 해결하는 변경은 아닙니다.
+
 1. Manga translator에서 파일 또는 폴더를 엽니다. 상단의 **전체 번역 시작**을 누르거나 **열면 자동 번역**을 켭니다. 자동 번역은 최초 기본값으로 켜져 있으며 변경한 선택을 기억합니다.
 2. 처음에는 완성본 저장 폴더를 선택합니다. 책마다 `책이름_한국어/00001.png` 형태로 저장합니다. 원본 파일을 수정하지 않습니다.
 3. 진행 중에도 원문·완성 페이지를 볼 수 있습니다. **중단**하면 저장한 페이지와 캐시를 보존합니다. 같은 책을 다시 열어 이어갈 수 있습니다.
@@ -190,6 +192,8 @@ swift run MangaLadaWorkflowChecks --cache-migration
 swift run MangaLadaImportChecks --export /path/to/completed-folder /path/to/output.cbz
 # 외부 엔진의 Python 환경에서
 python scripts/check_balloon_geometry.py
+python scripts/check_dotted_balloons.py
+python scripts/check_balloon_lobes.py
 python scripts/check_detection_refinement.py
 python scripts/check_text_region_kind.py
 python scripts/check_optical_effects.py

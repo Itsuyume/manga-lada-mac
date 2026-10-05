@@ -40,7 +40,9 @@ python_allowed = {
     "detection_refinement": {"balloon_geometry", "text_region_geometry"},
     "optical_effects": {"erase_supplemental_text", "text_region_kind", "text_region_geometry"},
     "sentence_punctuation": {"text_region_geometry"}, "text_region_geometry": set(),
-    "balloon_lobes": {"balloon_geometry", "detection_refinement"}, "balloon_partition": set(), "balloon_geometry": {"text_region_geometry"}, "text_region_kind": {"text_region_geometry"},
+    "balloon_lobes": {"balloon_geometry", "detection_refinement"}, "balloon_partition": set(),
+    "balloon_geometry": {"text_region_geometry", "dotted_balloon"}, "dotted_balloon": set(),
+    "text_region_kind": {"text_region_geometry"},
     "erase_supplemental_text": {"flat_background"}, "flat_background": set(),
 }
 for module, path in python_modules.items():
