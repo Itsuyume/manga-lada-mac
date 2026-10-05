@@ -6,6 +6,7 @@ extension TextBlock {
         var result = self
         if baseline.originalText != edited.originalText { result.originalText = edited.originalText }
         if baseline.translatedText != edited.translatedText { result.translatedText = edited.translatedText }
+        if baseline.keepsOriginal != edited.keepsOriginal { result.keepsOriginal = edited.keepsOriginal }
         if baseline.textKind != edited.textKind
             || (edited.userDefinedTextKind == true && baseline.userDefinedTextKind != true) {
             result.textKind = edited.textKind

@@ -15,11 +15,11 @@ extension MangaLadaRenderingChecks {
             let original = makePunctuationImage(pointScale: pointScale)
             let clean = makePunctuationImage(cleanedDots: [184], pointScale: pointScale)
             let originalBytes = original.tiffRepresentation, cleanBytes = clean.tiffRepresentation
-            let reference = try punctuationPixels(renderer.render(image: original, blocks: []))
+            let reference = try imagePixels(renderer.render(image: original, blocks: []))
             var blank = punctuation; blank.originalText = ""; blank.translatedText = ""
-            let baseline = try punctuationPixels(renderer.render(image: clean, blocks: [caption, blank], backgroundStyle: .none))
+            let baseline = try imagePixels(renderer.render(image: clean, blocks: [caption, blank], backgroundStyle: .none))
             let output = try renderer.render(image: clean, blocks: [caption, punctuation], backgroundStyle: .none, originalImage: original)
-            let pixels = try punctuationPixels(output)
+            let pixels = try imagePixels(output)
             var restored = 0
             for y in 0..<400 {
                 for x in 0..<400 {
@@ -53,7 +53,7 @@ extension MangaLadaRenderingChecks {
             let clean = makePunctuationImage(cleanedDots: [100, 184, 268], pointScale: scale)
             let before = clean.tiffRepresentation
             let output = try renderer.render(image: clean, blocks: [punctuation], originalImage: original)
-            try require(try punctuationPixels(output) == punctuationPixels(renderer.render(image: original, blocks: [])),
+            try require(try imagePixels(output) == imagePixels(renderer.render(image: original, blocks: [])),
                         "Verified manual punctuation changed source size, spacing or unrelated pixels.")
             try require(clean.tiffRepresentation == before, "Manual punctuation changed the input image.")
         }
@@ -68,12 +68,12 @@ extension MangaLadaRenderingChecks {
         for block in [legacy, unverified, edited, translated, styled, narrowed, invalid] {
             let expected = try renderer.render(image: clean, blocks: [block])
             let actual = try renderer.render(image: clean, blocks: [block], originalImage: original)
-            try require(try punctuationPixels(actual) == punctuationPixels(expected), "Manual artwork overrode an edit or invalid/unverified bounds.")
+            try require(try imagePixels(actual) == imagePixels(expected), "Manual artwork overrode an edit or invalid/unverified bounds.")
         }
         let neighbor = TextBlock(box: .init(x: 0.25, y: 0.6, width: 0.1, height: 0.1), originalText: "音", translatedText: "소리")
         let overlapping = [punctuation, neighbor]
         let actual = try renderer.render(image: clean, blocks: overlapping, originalImage: original)
-        try require(try punctuationPixels(actual) == punctuationPixels(renderer.render(image: clean, blocks: overlapping)),
+        try require(try imagePixels(actual) == imagePixels(renderer.render(image: clean, blocks: overlapping)),
                     "Manual punctuation restored original pixels over another region outside its old OCR box.")
         print("Manual punctuation pixels passed: original size/spacing, pixel scales, legacy/unknown/edited/style/bounds/overlap protection")
     }
@@ -84,13 +84,13 @@ extension MangaLadaRenderingChecks {
         var tight = punctuation
         // OCR may stop before the antialiased fringe as well as the final dark row.
         tight.box = TextBox(x: 184.0 / 400, y: 244.0 / 400, width: 32.0 / 400, height: 30.0 / 400)
-        let expected = try punctuationPixels(renderer.render(image: original, blocks: []))
-        let actual = try punctuationPixels(renderer.render(image: clean, blocks: [tight], originalImage: original))
+        let expected = try imagePixels(renderer.render(image: original, blocks: []))
+        let actual = try imagePixels(renderer.render(image: clean, blocks: [tight], originalImage: original))
         try require(actual == expected, "Tight OCR bounds clipped the final row of an original punctuation glyph.")
         let neighbor = TextBlock(box: TextBox(x: 216.0 / 400, y: 244.0 / 400, width: 0.2, height: 0.1),
                                  originalText: "音", translatedText: "소리", detectedFontSize: 18)
-        let overlapping = try punctuationPixels(renderer.render(image: clean, blocks: [tight, neighbor], originalImage: original))
-        let typeset = try punctuationPixels(renderer.render(image: clean, blocks: [tight, neighbor]))
+        let overlapping = try imagePixels(renderer.render(image: clean, blocks: [tight, neighbor], originalImage: original))
+        let typeset = try imagePixels(renderer.render(image: clean, blocks: [tight, neighbor]))
         try require(overlapping == typeset, "Restoration margin overlapped neighboring text.")
     }
 
@@ -104,8 +104,8 @@ extension MangaLadaRenderingChecks {
         var word = punctuation; word.originalText = "音"; word.translatedText = "소리"
         var corrected = punctuation; corrected.originalText = "!"; corrected.translatedText = "!"; corrected.userDefinedOriginalText = true
         for block in [edited, placed, classified, styled, word, corrected] {
-            let expected = try punctuationPixels(renderer.render(image: clean, blocks: [caption, block], backgroundStyle: .none))
-            let actual = try punctuationPixels(renderer.render(image: clean, blocks: [caption, block], backgroundStyle: .none, originalImage: original))
+            let expected = try imagePixels(renderer.render(image: clean, blocks: [caption, block], backgroundStyle: .none))
+            let actual = try imagePixels(renderer.render(image: clean, blocks: [caption, block], backgroundStyle: .none, originalImage: original))
             try require(actual == expected, "Original glyph restoration overrode a user edit, style, placement or lexical translation.")
         }
         for bounds in [false, true] {
@@ -121,12 +121,12 @@ extension MangaLadaRenderingChecks {
                 }
                 continue
             }
-            let expected = try punctuationPixels(renderer.render(image: clean, blocks: [adjacent, punctuation], backgroundStyle: .none))
-            let actual = try punctuationPixels(renderer.render(image: clean, blocks: [adjacent, punctuation], backgroundStyle: .none, originalImage: original))
+            let expected = try imagePixels(renderer.render(image: clean, blocks: [adjacent, punctuation], backgroundStyle: .none))
+            let actual = try imagePixels(renderer.render(image: clean, blocks: [adjacent, punctuation], backgroundStyle: .none, originalImage: original))
             try require(actual == expected, "Punctuation restored Japanese pixels over another text region or manual placement.")
         }
-        let empty = try punctuationPixels(renderer.render(image: clean, blocks: [], originalImage: original))
-        let baseline = try punctuationPixels(renderer.render(image: clean, blocks: []))
+        let empty = try imagePixels(renderer.render(image: clean, blocks: [], originalImage: original))
+        let baseline = try imagePixels(renderer.render(image: clean, blocks: []))
         try require(empty == baseline, "An empty page restored unrelated artwork.")
     }
 
@@ -142,7 +142,7 @@ extension MangaLadaRenderingChecks {
         let saved = try Data(contentsOf: destination)
         let image = NSImage(contentsOf: destination)!
         let direct = try renderer.render(image: clean, blocks: translation.blocks, backgroundStyle: .none, originalImage: original)
-        try require(try punctuationPixels(image) == punctuationPixels(direct), "PNG saving lost original punctuation pixels.")
+        try require(try imagePixels(image) == imagePixels(direct), "PNG saving lost original punctuation pixels.")
         do {
             _ = try renderer.writePNG(sourceImageURL: cleanURL, translation: translation, destinationURL: destination,
                                       backgroundStyle: .none, originalImageURL: missing)
@@ -178,14 +178,4 @@ extension MangaLadaRenderingChecks {
         return image
     }
 
-    @MainActor
-    private static func punctuationPixels(_ image: NSImage) throws -> [UInt32] {
-        guard let data = image.tiffRepresentation, let bitmap = NSBitmapImageRep(data: data) else { throw CocoaError(.coderReadCorrupt) }
-        try require(bitmap.pixelsWide == 400 && bitmap.pixelsHigh == 400, "Punctuation rendering changed pixel dimensions.")
-        return (0..<400).flatMap { y in (0..<400).map { x in
-            let color = bitmap.colorAt(x: x, y: y)!.usingColorSpace(.deviceRGB)!
-            let components = [color.redComponent, color.greenComponent, color.blueComponent, color.alphaComponent]
-            return components.reduce(UInt32(0)) { ($0 << 8) | UInt32(($1 * 255).rounded()) }
-        } }
-    }
 }

@@ -25,13 +25,13 @@ package enum RecognitionCacheMigration {
         block.userDefinedOriginalText == nil && PunctuationArtworkPolicy.isCandidate(block)
     }
 
-    package static func reuse(_ stored: PageTranslation, for recognized: [TextBlock]) -> [TextBlock]? {
+    package static func reuse(_ stored: PageTranslation, for recognized: [TextBlock], preservingOriginalOnly: Bool = false) -> [TextBlock]? {
         guard Set(stored.blocks.map(\.id)).count == stored.blocks.count,
               Set(recognized.map(\.id)).count == recognized.count else { return nil }
         let byID = Dictionary(uniqueKeysWithValues: stored.blocks.map { ($0.id, $0) })
         let unchanged = recognized.filter { block in
             guard let prior = byID[block.id] else { return false }
-            return prior.box == block.box && !prior.translatedText.isEmpty
+            return prior.box == block.box && (prior.keepsOriginal == true || (!preservingOriginalOnly && !prior.translatedText.isEmpty))
         }
         guard !unchanged.isEmpty else { return nil }
         let reusableIDs = Set(unchanged.map(\.id))
@@ -40,6 +40,7 @@ package enum RecognitionCacheMigration {
             var updated = block
             updated.originalText = prior.originalText
             updated.translatedText = prior.translatedText
+            updated.keepsOriginal = prior.keepsOriginal
             updated.effectStyleID = prior.effectStyleID
             updated.textDirection = prior.textDirection
             updated.fontScale = prior.fontScale

@@ -19,7 +19,8 @@ struct SupplementalPageTranslation {
         let cleanURL = engine.inpaintedImageURL(runID: key)
         let warningsURL = cleanURL.deletingLastPathComponent().appendingPathComponent("effects-warnings.json")
         let primaryURL = cleanURL.deletingLastPathComponent().appendingPathComponent("effects-primary.json")
-        if !force, var stored = try cache.load(fingerprint: key), FileManager.default.fileExists(atPath: cleanURL.path) {
+        let previous = try cache.load(fingerprint: key)
+        if !force, var stored = previous, FileManager.default.fileExists(atPath: cleanURL.path) {
             let current = Dictionary(uniqueKeysWithValues: base.translation.blocks.map { ($0.id, $0) })
             let baseline = try JSONDecoder().decode(PageTranslation.self, from: Data(contentsOf: primaryURL))
             let beforeEffects = Dictionary(uniqueKeysWithValues: baseline.blocks.map { ($0.id, $0) })
@@ -39,7 +40,9 @@ struct SupplementalPageTranslation {
             return rendered
         }
         await status("대사 저장 완료 · 로컬 시각 모델로 효과음 보완 중")
-        let augmented = try await SupplementalJapaneseOCR.recognize(in: base.translation.imageURL, existing: base.translation.blocks,
+        let baseIDs = Set(base.translation.blocks.map(\.id))
+        let keptExtras = previous?.blocks.filter { $0.keepsOriginal == true && !baseIDs.contains($0.id) } ?? []
+        let augmented = try await SupplementalJapaneseOCR.recognize(in: base.translation.imageURL, existing: base.translation.blocks + keptExtras,
                                                                     retention: configuration.ollama.retention) { proposals in
             try await recognitionSession.verifyProposedRegions(source: base.translation.imageURL, regions: proposals,
                                                                 idleTimeout: configuration.ollama.retention.duration)

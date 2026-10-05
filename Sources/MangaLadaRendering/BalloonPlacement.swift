@@ -4,14 +4,15 @@ import MangaLadaCore
 extension TranslatedImageRenderer {
     /// Reserve disjoint reading space before fitting text, including neighbors whose contour was missed.
     func balloonContainers(blocks: [TextBlock], imageSize: NSSize, detector: LightRegionDetector?) throws -> [UUID: BalloonShape] {
-        let speech = blocks.filter { $0.textKind != .soundEffect && $0.textKind != .title && !displayText(for: $0).isEmpty }
+        let speech = blocks.filter { $0.textKind != .soundEffect && $0.textKind != .title && ($0.keepsOriginal == true || !displayText(for: $0).isEmpty) }
         let proposed = try speech.map { try balloonContainer(block: $0, imageSize: imageSize, detector: detector) }
         var result: [UUID: BalloonShape] = [:]
-        for (index, block) in speech.enumerated() {
+        for (index, block) in speech.enumerated() where block.keepsOriginal != true {
             var space = TextBox(x: 0, y: 0, width: 1, height: 1)
             for (otherIndex, other) in speech.enumerated() where index != otherIndex {
                 guard proposed[index].bounds.intersectionArea(with: proposed[otherIndex].bounds) > 0 else { continue }
                 guard let boundary = separatingSpace(for: block.box, from: other.box, imageSize: imageSize) else {
+                    if other.keepsOriginal == true { continue }
                     throw TranslatedImageRenderError.overlappingRegions(block.id, other.id)
                 }
                 let left = max(space.x, boundary.x), top = max(space.y, boundary.y)
@@ -28,6 +29,9 @@ extension TranslatedImageRenderer {
     }
 
     private func balloonContainer(block: TextBlock, imageSize: NSSize, detector: LightRegionDetector?) throws -> BalloonShape {
+        if block.keepsOriginal == true {
+            return block.balloonShape ?? DialogueTypesettingRules.rectangularShape(box: block.userDefinedBounds ?? block.box)
+        }
         if let selected = block.textLayoutBounds ?? block.userDefinedBounds {
             guard let contour = block.balloonShape else { return DialogueTypesettingRules.rectangularShape(box: selected) }
             guard let clipped = contour.clipped(to: selected) else {

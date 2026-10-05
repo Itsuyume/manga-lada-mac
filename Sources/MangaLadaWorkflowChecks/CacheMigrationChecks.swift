@@ -89,6 +89,12 @@ enum CacheMigrationChecks {
         }
         try require(separated[0].translatedText == saved.translatedText && separated[0].effectStyleID == saved.effectStyleID
                     && separated[1].translatedText.isEmpty, "A new lobe reused its old combined sentence or lost a neighboring review.")
+        var keptPage = page; keptPage.blocks[0].keepsOriginal = true; keptPage.blocks[0].translatedText = ""
+        let kept = RecognitionCacheMigration.reuse(keptPage, for: [rawOCR, extra], preservingOriginalOnly: true)
+        try require(kept?.first?.keepsOriginal == true && kept?.first?.translatedText == "" && kept?.last == extra,
+                    "Forced recognition refresh lost explicit original-only choice or changed its neighbor.")
+        try require(RecognitionCacheMigration.reuse(page, for: [rawOCR], preservingOriginalOnly: true) == nil,
+                    "Forced refresh reused a non-excluded translation.")
         print("Cache migration checks passed: edited Japanese/Korean, new contours, manual bounds/kind/style, missing/duplicate/new/moved regions, source preserved")
     }
     private static func require(_ value: Bool, _ message: String) throws {

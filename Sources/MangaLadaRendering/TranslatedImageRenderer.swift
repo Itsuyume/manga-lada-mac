@@ -23,6 +23,8 @@ public enum TranslatedImageRenderError: LocalizedError, Equatable {
     case noTranslationBlocks
     case pngEncodingFailed
     case originalImageSizeMismatch
+    case originalImageRequired
+    case invalidOriginalBounds
     case textDoesNotFit(UUID, String)
     case overlappingRegions(UUID, UUID)
 
@@ -35,7 +37,11 @@ public enum TranslatedImageRenderError: LocalizedError, Equatable {
         case .pngEncodingFailed:
             return "PNG 이미지로 변환하지 못했습니다."
         case .originalImageSizeMismatch:
-            return "원본과 글자 제거 이미지의 크기가 달라 기호를 복원할 수 없습니다. 원본을 다시 열어주세요."
+            return "원본과 글자 제거 이미지의 크기가 달라 원문을 복원할 수 없습니다. 원본을 다시 열어주세요."
+        case .originalImageRequired:
+            return "원문을 복원하려면 원본 이미지가 필요합니다. 원본을 다시 열어주세요."
+        case .invalidOriginalBounds:
+            return "원문 복원 영역이 이미지 밖에 있습니다. 영역을 다시 지정해주세요."
         case .textDoesNotFit(_, let text):
             return "말풍선에 문장이 들어가지 않습니다: ‘\(text.prefix(80))’. 문구 또는 인식 영역을 확인해주세요."
         case .overlappingRegions:
@@ -62,18 +68,21 @@ public struct TranslatedImageRenderer {
         }
 
         let drawableBlocks = translation.blocks.filter { block in
-            !displayText(for: block).isEmpty
+            block.keepsOriginal == true || !displayText(for: block).isEmpty
         }
         guard !drawableBlocks.isEmpty else {
             throw TranslatedImageRenderError.noTranslationBlocks
         }
 
         var original: NSImage?
-        let needsLettering = drawableBlocks.contains {
+        let activeBlocks = drawableBlocks.filter { $0.keepsOriginal != true }
+        let keepsOriginal = activeBlocks.count != drawableBlocks.count
+        let needsLettering = activeBlocks.contains {
             ($0.effectStyleID ?? ($0.textKind == .soundEffect ? typography.effectStyleID : nil)) == "automatic"
         }
         let needsPunctuation = !originalPunctuationRegions(in: drawableBlocks, imageSize: pixelBackedSize(for: image)).isEmpty
-        if let originalImageURL, needsLettering || needsPunctuation {
+        if let originalImageURL = originalImageURL ?? (keepsOriginal ? translation.imageURL : nil),
+           needsLettering || needsPunctuation || keepsOriginal {
             guard let loaded = NSImage(contentsOf: originalImageURL) else {
                 throw TranslatedImageRenderError.imageLoadFailed(originalImageURL)
             }
@@ -106,7 +115,7 @@ public struct TranslatedImageRenderer {
         backgroundStyle: TranslationTextBackgroundStyle = .redactionBubble,
         originalImage: NSImage? = nil
     ) throws -> NSImage {
-        try blocks.forEach { try LetteringPreferences.validate($0) }
+        try blocks.filter { $0.keepsOriginal != true }.forEach { try LetteringPreferences.validate($0) }
         let size = pixelBackedSize(for: image)
         guard let bitmap = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: Int(size.width), pixelsHigh: Int(size.height),
                                             bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
@@ -127,6 +136,7 @@ public struct TranslatedImageRenderer {
             fraction: 1
         )
 
+        try restoreOriginalSelections(originalImage, blocks: blocks, imageSize: size)
         let preserved = try restoreOriginalPunctuation(originalImage, blocks: blocks, imageSize: size)
 
         let lightRegionDetector = LightRegionDetector(image: image, imageSize: size)
@@ -134,7 +144,7 @@ public struct TranslatedImageRenderer {
         let sourceLettering = originalImage.flatMap { SourceLettering(image: $0) }
         let containers = backgroundStyle == .none
             ? try balloonContainers(blocks: blocks, imageSize: size, detector: lightRegionDetector) : [:]
-        for (index, block) in blocks.enumerated() where !preserved.contains(index) {
+        for (index, block) in blocks.enumerated() where block.keepsOriginal != true && !preserved.contains(index) {
             try draw(
                 block: block,
                 imageSize: size,

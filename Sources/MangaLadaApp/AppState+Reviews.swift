@@ -7,6 +7,23 @@ extension AppState {
     var currentReview: PageTranslation? { reviewDrafts[currentIndex] ?? currentReviewBaseline }
     var hasCurrentReview: Bool { reviewDrafts[currentIndex] != nil || reviewErrors[currentIndex] != nil }
 
+    func setKeepsOriginal(_ id: UUID, _ value: Bool) {
+        guard !isBusy, !isLoading, reviewErrors[currentIndex] == nil,
+              let saved = currentReviewBaseline, var edited = currentReview else { return }
+        guard let index = edited.blocks.firstIndex(where: { $0.id == id }) else {
+            errorMessage = "편집할 문구가 바뀌었습니다. 현재 페이지의 문구를 다시 선택해주세요."; return
+        }
+        edited.blocks[index].keepsOriginal = value ? true : nil
+        do {
+            try saveReview(edited, comparedTo: saved, at: currentIndex)
+            if placementBlockID == id { placementBlockID = nil; isSelectingRegion = false; selectedRegion = nil }
+            focusBlock(id); mode = .translated; showInspector = true
+            scheduleLetteringPreview()
+            statusMessage = value ? "원본 유지로 바꿨습니다. ‘수정 적용’을 누르면 저장하고 재번역에서도 제외합니다."
+                : "기존 번역을 다시 사용합니다. ‘수정 적용’을 눌러 저장하세요."
+        } catch { errorMessage = "임시 수정을 저장하지 못했습니다. \(error.localizedDescription)" }
+    }
+
     func applyDictionaryEffect(_ id: UUID) {
         guard let block = currentReview?.blocks.first(where: { $0.id == id }),
               let korean = effectLexicon?.translation(for: block.originalText) else {

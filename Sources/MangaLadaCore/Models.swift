@@ -22,6 +22,9 @@ public struct TextBlock: Codable, Equatable, Identifiable, Sendable {
         didSet { if originalText != oldValue { maskedTextInterpretation = nil } }
     }
     public var translatedText: String
+    /// Explicit user choice: restore source artwork and exclude this region from translation.
+    /// Nil in older caches means normal translation. Previous text is retained for undo.
+    public var keepsOriginal: Bool?
     public var confidence: Float
     public var sourceIsVertical: Bool?
     public var detectedFontSize: Double?
@@ -48,6 +51,7 @@ public struct TextBlock: Codable, Equatable, Identifiable, Sendable {
         box: TextBox,
         originalText: String,
         translatedText: String = "",
+        keepsOriginal: Bool? = nil,
         confidence: Float = 0,
         sourceIsVertical: Bool? = nil,
         detectedFontSize: Double? = nil,
@@ -69,6 +73,7 @@ public struct TextBlock: Codable, Equatable, Identifiable, Sendable {
         self.box = box
         self.originalText = originalText
         self.translatedText = translatedText
+        self.keepsOriginal = keepsOriginal
         self.confidence = confidence
         self.sourceIsVertical = sourceIsVertical
         self.detectedFontSize = detectedFontSize
@@ -96,10 +101,10 @@ public struct PageTranslation: Codable, Equatable, Sendable {
     public var createdAt: Date
     public var blocks: [TextBlock]
     public var untranslatedBlockIDs: Set<UUID> {
-        Set(blocks.filter { $0.translatedText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }.map(\.id))
+        Set(blocks.filter { $0.keepsOriginal != true && $0.translatedText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }.map(\.id))
     }
     public var maskedTextReviewIDs: Set<UUID> {
-        Set(blocks.filter { MaskedTextTranslation.reviewMessage(for: $0) != nil }.map(\.id))
+        Set(blocks.filter { $0.keepsOriginal != true && MaskedTextTranslation.reviewMessage(for: $0) != nil }.map(\.id))
     }
 
     public init(

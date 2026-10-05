@@ -37,22 +37,24 @@ enum SupplementalCacheChecks {
         try JSONEncoder().encode(primary).write(to: directory.appendingPathComponent("effects-primary.json"))
         try JSONEncoder().encode([String]()).write(to: directory.appendingPathComponent("effects-warnings.json"))
         let processor = MangaPageProcessor(applicationSupportDirectory: root)
-        for scenario in 0..<3 {
+        for scenario in 0..<4 {
             if scenario == 1 { primary.blocks[0].effectStyleID = "impact" }
             if scenario == 2 {
                 primary.blocks[0].translatedText = "직접 고친 말"
                 primary.blocks[0].textKind = .dialogue; primary.blocks[0].userDefinedTextKind = true
             }
+            if scenario == 3 { primary.blocks[0].keepsOriginal = true }
             try cache.save(primary)
             let result = try await processor.process(imageURL: source, destinationURL: output,
                 configuration: configuration, typography: MangaTypography())
-            let text = scenario == 2 ? "직접 고친 말" : "딸깍"
-            let kind: MangaTextKind = scenario == 2 ? .dialogue : .soundEffect
+            let text = scenario >= 2 ? "직접 고친 말" : "딸깍"
+            let kind: MangaTextKind = scenario >= 2 ? .dialogue : .soundEffect
             guard result.warnings.isEmpty, result.translation.blocks[0].translatedText == text,
                   result.translation.blocks[0].textKind == kind else {
                 throw Failure.staleTranslation(scenario, result.translation.blocks[0], result.warnings)
             }
             guard result.translation.blocks[0].effectStyleID == primary.blocks[0].effectStyleID else { throw Failure.reviewLost }
+            guard result.translation.blocks[0].keepsOriginal == primary.blocks[0].keepsOriginal else { throw Failure.reviewLost }
             if scenario == 2, result.translation.blocks[0].userDefinedTextKind != true { throw Failure.reviewLost }
             let saved = try Data(contentsOf: output)
             let repeated = try await processor.process(imageURL: source, destinationURL: output,

@@ -28,7 +28,7 @@ enum PageReviewReadiness {
         var errorDescription: String? {
             switch self {
             case .changedPage: "페이지나 인식 영역이 바뀌어 수정본을 저장할 수 없습니다."
-            case .untranslated(let count): "빈 번역 문구가 \(count)개 있습니다. 문구를 번역하거나 직접 입력한 뒤 수정 적용을 눌러주세요."
+            case .untranslated(let count): "빈 번역 문구가 \(count)개 있습니다. 번역을 입력하거나 ‘번역 삭제 · 원본 유지’를 선택한 뒤 수정 적용을 눌러주세요."
             }
         }
     }

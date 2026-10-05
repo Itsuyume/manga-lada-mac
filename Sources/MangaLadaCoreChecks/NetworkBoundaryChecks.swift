@@ -6,6 +6,7 @@ enum NetworkBoundaryChecks {
         let configuration = URLSessionConfiguration.ephemeral; configuration.protocolClasses = [FixtureProtocol.self]
         let session = URLSession(configuration: configuration)
         defer { session.invalidateAndCancel() }
+        try await checkOriginalRegions(session: session)
         try await checkPunctuationPreservation(session: session)
         try await checkEffectRouting(session: session)
         try await checkSelections(session: session)

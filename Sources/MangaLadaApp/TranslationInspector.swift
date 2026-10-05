@@ -12,8 +12,8 @@ struct TranslationInspector: View {
         VStack(alignment: .leading, spacing: 12) {
             header
             if draft != nil {
-                Text(isPending ? "인식한 원문을 수정하거나 번역을 직접 입력할 수 있습니다. 모든 문구를 채운 뒤 ‘수정 적용’을 누르세요."
-                     : "번호로 위치를 확인하세요. 분류가 다르면 종류를 바꾼 뒤 ‘수정 적용’을 누르세요.")
+                Text(isPending ? "번역을 입력하거나 ‘원본 유지’를 선택한 뒤 ‘수정 적용’을 누르세요."
+                     : "번호로 위치를 확인하세요. 틀린 번역은 ‘번역 삭제 · 원본 유지’로 되돌린 뒤 ‘수정 적용’을 누르세요.")
                     .font(.system(size: 10)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             }
             ForEach(state.currentResult?.warnings ?? [], id: \.self) { warning in
@@ -128,10 +128,26 @@ struct TranslationInspector: View {
                 }.buttonStyle(.plain).help("이미지에서 \(number)번 문구 표시")
                 Picker("문구 종류", selection: kindBinding(block)) {
                     ForEach(MangaTextKind.allCases, id: \.self) { Text($0.regionLabel).tag($0) }
-                }.labelsHidden().controlSize(.small).disabled(editingDisabled)
+                }.labelsHidden().controlSize(.small).disabled(editingDisabled || block.keepsOriginal == true)
             }
             TextField("일본어 원문", text: textBinding(block, \.originalText), axis: .vertical)
-                .font(.system(size: 11)).foregroundStyle(.secondary).disabled(editingDisabled)
+                .font(.system(size: 11)).foregroundStyle(.secondary).disabled(editingDisabled || block.keepsOriginal == true)
+            Button(block.keepsOriginal == true ? "번역 다시 사용" : "번역 삭제 · 원본 유지",
+                   systemImage: block.keepsOriginal == true ? "arrow.uturn.backward" : "arrow.uturn.backward.circle") {
+                state.setKeepsOriginal(block.id, block.keepsOriginal != true)
+            }.font(.system(size: 11)).disabled(editingDisabled)
+                .accessibilityLabel("\(number)번 " + (block.keepsOriginal == true ? "번역 다시 사용" : "번역 삭제 · 원본 유지"))
+                .help("이 영역만 원본으로 되돌립니다. ‘수정 적용’으로 저장하며, 기존 번역은 다시 사용할 수 있습니다.")
+            if block.keepsOriginal == true {
+                Label("원본 유지 · 재번역 제외", systemImage: "photo")
+                    .font(.system(size: 11)).foregroundStyle(.secondary)
+            } else {
+                translationControls(block, number: number)
+            }
+        }.padding(7).background(active ? Color.accentColor.opacity(0.08) : Color.clear, in: RoundedRectangle(cornerRadius: 7))
+            .overlay { RoundedRectangle(cornerRadius: 7).stroke(active ? Color.accentColor : Color.clear, lineWidth: 1) }
+    }
+    @ViewBuilder private func translationControls(_ block: TextBlock, number: Int) -> some View {
             if let message = MaskedTextTranslation.reviewMessage(for: block) {
                 Text(message).font(.system(size: 10)).foregroundStyle(.orange).fixedSize(horizontal: false, vertical: true)
             }
@@ -176,8 +192,6 @@ struct TranslationInspector: View {
                     state.editReviewBlock(block.id) { $0.translatedText = korean }
                 }.disabled(editingDisabled)
             }
-        }.padding(7).background(active ? Color.accentColor.opacity(0.08) : Color.clear, in: RoundedRectangle(cornerRadius: 7))
-            .overlay { RoundedRectangle(cornerRadius: 7).stroke(active ? Color.accentColor : Color.clear, lineWidth: 1) }
     }
     private var failureList: some View {
         DisclosureGroup("실패한 페이지 \(state.failures.count)개") {

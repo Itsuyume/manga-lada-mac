@@ -89,17 +89,18 @@ public final class MangaPageProcessor {
             recognized.blocks[index].originalText = JapaneseTitleResolver.resolve(optical: recognized.blocks[index].originalText, bookTitle: bookTitle)
         }
         try Task.checkCancellation()
-        let reusable = force ? nil : storedPrior
-        let migrated = reusable.flatMap { RecognitionCacheMigration.reuse($0, for: recognized.blocks) }
+        let migrated = storedPrior.flatMap { RecognitionCacheMigration.reuse($0, for: recognized.blocks, preservingOriginalOnly: force) }
         let baseline = PageTranslation(imageURL: imageURL, imageFingerprint: keys.translation,
             sourceLanguage: .japanese, targetLanguage: .korean, blocks: migrated ?? recognized.blocks)
         let selectedClean = try await manualCleanImage(for: baseline, sourceCleanURL: cleanURL)
         let blocks: [TextBlock]
-        if let migrated, migrated.allSatisfy({ !$0.translatedText.isEmpty }) {
+        if let migrated, migrated.allSatisfy({ $0.keepsOriginal == true || (!force && !$0.translatedText.isEmpty) }) {
             await status("기존 번역 문구 재사용 · 말풍선 배치 계산 중"); blocks = migrated
         } else {
             await status("\(configuration.provider.displayName) · 페이지 문맥 번역 중")
-            let reviewed = Dictionary(uniqueKeysWithValues: (migrated ?? []).filter { !$0.translatedText.isEmpty }.map { ($0.id, $0) })
+            let reviewed = Dictionary(uniqueKeysWithValues: (migrated ?? []).filter {
+                $0.keepsOriginal == true || (!force && !$0.translatedText.isEmpty)
+            }.map { ($0.id, $0) })
             do {
                 let translated = try await textTranslator.translate(baseline.blocks, configuration: configuration,
                     previousContext: previousContext, refreshMaskedContext: force)

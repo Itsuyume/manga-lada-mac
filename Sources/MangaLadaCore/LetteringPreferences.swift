@@ -18,13 +18,15 @@ public enum LetteringPreferences {
     }
 
     public static func displayBounds(for block: TextBlock) -> TextBox {
+        if block.keepsOriginal == true { return layoutBounds(for: block) }
         var bounds = layoutBounds(for: block)
         bounds.x += block.textOffset?.x ?? 0; bounds.y += block.textOffset?.y ?? 0
         return bounds
     }
 
     public static func layoutBounds(for block: TextBlock) -> TextBox {
-        block.textLayoutBounds ?? block.userDefinedBounds
+        if block.keepsOriginal == true { return block.userDefinedBounds ?? block.balloonShape?.bounds ?? block.box }
+        return block.textLayoutBounds ?? block.userDefinedBounds
             ?? (block.textKind == .soundEffect ? block.box : block.balloonShape?.bounds ?? block.box)
     }
 

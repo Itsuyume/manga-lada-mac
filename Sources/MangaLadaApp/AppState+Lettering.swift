@@ -5,7 +5,7 @@ import MangaLadaRendering
 extension AppState {
     func beginLetteringPlacement(_ id: UUID) {
         guard !isBusy, !isLoading, reviewErrors[currentIndex] == nil,
-              let block = currentReview?.blocks.first(where: { $0.id == id }) else { return }
+              let block = currentReview?.blocks.first(where: { $0.id == id }), block.keepsOriginal != true else { return }
         placementBlockID = id; isSelectingRegion = true; showInspector = true
         selectedRegion = LetteringPreferences.layoutBounds(for: block)
         focusBlock(id)
@@ -14,7 +14,7 @@ extension AppState {
     func stageLetteringPlacement() {
         guard !isBusy, !isLoading, let id = placementBlockID, let selectedRegion,
               let saved = currentReviewBaseline, var draft = currentReview,
-              let index = draft.blocks.firstIndex(where: { $0.id == id }) else { return }
+              let index = draft.blocks.firstIndex(where: { $0.id == id }), draft.blocks[index].keepsOriginal != true else { return }
         draft.blocks[index].textLayoutBounds = selectedRegion
         draft.blocks[index].textOffset = nil
         do {
@@ -29,7 +29,7 @@ extension AppState {
     func moveLettering(_ id: UUID, by delta: CGSize) {
         guard !isBusy, !isLoading, reviewErrors[currentIndex] == nil,
               let saved = currentReviewBaseline, var draft = currentReview,
-              let index = draft.blocks.firstIndex(where: { $0.id == id }) else { return }
+              let index = draft.blocks.firstIndex(where: { $0.id == id }), draft.blocks[index].keepsOriginal != true else { return }
         do {
             draft.blocks[index] = try LetteringPreferences.moved(draft.blocks[index], by: .init(x: delta.width, y: delta.height))
             try saveReview(draft, comparedTo: saved, at: currentIndex)

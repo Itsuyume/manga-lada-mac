@@ -44,8 +44,9 @@ public struct TranslationPipeline: Sendable {
         let ids = Set(blocks.map(\.id))
         guard ids.count == blocks.count else { throw TranslationSelectionError.duplicateRegions }
         guard selectedIDs.isSubset(of: ids) else { throw TranslationSelectionError.missingRegion }
+        let selectedIDs = selectedIDs.subtracting(blocks.filter { $0.keepsOriginal == true }.map(\.id))
         guard !selectedIDs.isEmpty else { return blocks }
-        let translated = try await translateRequest(blocks, selectedIDs: selectedIDs, configuration: configuration,
+        let translated = try await translateRequest(blocks.filter { $0.keepsOriginal != true }, selectedIDs: selectedIDs, configuration: configuration,
             translator: nil, previousContext: previousContext, refreshMaskedContext: refreshMaskedContext)
         try Task.checkCancellation()
         var result = blocks
@@ -71,9 +72,19 @@ public struct TranslationPipeline: Sendable {
         try Task.checkCancellation()
         guard !blocks.isEmpty else { return [] }
         guard Set(blocks.map(\.id)).count == blocks.count else { throw TranslationSelectionError.duplicateRegions }
-        let translated = try await translateRequest(blocks, selectedIDs: nil, configuration: configuration,
+        let active = blocks.filter { $0.keepsOriginal != true }
+        guard !active.isEmpty else { return blocks }
+        let translated = try await translateRequest(active, selectedIDs: nil, configuration: configuration,
             translator: injectedTranslator, previousContext: previousContext, refreshMaskedContext: refreshMaskedContext)
-        return try MaskedPagePreparation.restore(translated, originals: blocks)
+        let restored = try MaskedPagePreparation.restore(translated, originals: active)
+        guard active.count != blocks.count else { return restored }
+        let byID = Dictionary(uniqueKeysWithValues: restored.map { ($0.id, $0) })
+        let ordered = injectedTranslator == nil && configuration.provider != .googleWeb ? MangaReadingOrder.sorted(blocks) : blocks
+        return try ordered.map { block in
+            if block.keepsOriginal == true { return block }
+            guard let updated = byID[block.id] else { throw TranslationSelectionError.missingRegion }
+            return updated
+        }
     }
 
     private func translateRequest(_ blocks: [TextBlock], selectedIDs: Set<UUID>?, configuration: LocalTranslatorConfiguration,
