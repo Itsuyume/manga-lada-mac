@@ -16,15 +16,16 @@ package struct JapanesePageKeys {
         let prefix = "\(image)-jp-"
         let suffix = "balloons-\(configuration.cacheKey)-"
         let ocrSuffix = configuration.japaneseOCR == .hayai ? "-hayai-v1" : ""
-        translation = prefix + "v\(Self.translationVersion)-" + suffix + newContext + ocrSuffix
+        let baseTranslation = "\(prefix)v\(Self.translationVersion)-\(suffix)\(newContext)"
+        translation = baseTranslation + ocrSuffix
         let baseRecognition = prefix + "ocr-v\(Self.recognitionVersion)-balloons"
         recognition = baseRecognition + ocrSuffix
         previousRecognition = (ocrSuffix.isEmpty ? [] : [baseRecognition])
             + ((Self.recognitionVersion - 3)..<Self.recognitionVersion).reversed().map { prefix + "ocr-v\($0)-balloons" }
         let contexts = newContext == oldContext ? [newContext] : [newContext, oldContext]
-        previous = (ocrSuffix.isEmpty ? [] : [prefix + "v\(Self.translationVersion)-" + suffix + newContext])
-            + stride(from: Self.translationVersion - 1, through: 11, by: -1).flatMap { version in
-            contexts.map { prefix + "v\(version)-" + suffix + $0 }
+        let olderTranslations: [String] = stride(from: Self.translationVersion - 1, through: 11, by: -1).flatMap { version in
+            contexts.map { "\(prefix)v\(version)-\(suffix)\($0)" }
         }
+        previous = (ocrSuffix.isEmpty ? [] : [baseTranslation]) + olderTranslations
     }
 }
