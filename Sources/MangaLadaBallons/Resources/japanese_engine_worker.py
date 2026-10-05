@@ -22,6 +22,7 @@ class JapaneseEngine:
     def __init__(self, root: Path):
         self.root = root.resolve()
         self.lettering = None
+        self.lettering_detector = None
         sys.path.insert(0, str(root))
         os.chdir(root)
         import cv2
@@ -116,7 +117,12 @@ class JapaneseEngine:
         return {"blocks": blocks, "elapsed": time.monotonic() - began}
 
     def read_lettering_only(self, image, mode: str) -> list[dict]:
-        from lettering_regions import inspect_lettering_regions
+        from lettering_regions import inspect_lettering_regions, inspect_detected_lettering
+        if mode == "detect":
+            from manga_text_detector import MangaTextDetector, MODEL_FILE
+            if self.lettering_detector is None:
+                self.lettering_detector = MangaTextDetector(self.root.parent / "TextDetector" / MODEL_FILE)
+            return inspect_detected_lettering(image, self.recognize_lettering, self.lettering_detector)
         return inspect_lettering_regions(image, self.recognize_lettering, mode)
 
     def recognize_lettering(self, crop):

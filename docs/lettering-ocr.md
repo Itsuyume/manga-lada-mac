@@ -3,10 +3,10 @@
 앱에서 선택할 수 있는 로컬 OCR과, 전체 번역을 실행하지 않고 일본어 글자만 확인하는 인식 전용 경로입니다. 두 경로는 같은 인식·대조 모듈을 사용합니다. 최초 기본값은 기존 만화 OCR이며 다른 모델로 조용히 대체하지 않습니다.
 
 - 후보 탐색: 닫힌 윤곽·짧게 끊긴 윤곽·우세 배경색과 내부 획을 이용합니다. 큰 연결 글자 하나도 후보로 허용합니다. 기존 엄격한 자동 삭제 경로는 그대로입니다.
-- 글자 인식: Hayai OCR v2.5 Nova, 512 패치, 원본 비율 유지. 원본/색 여백 두 크롭을 읽고 불일치할 때만 극성을 정리한 세 번째 크롭을 읽습니다.
+- 글자 인식: Hayai OCR v2.5 Nova, 512 패치, 원본 비율 유지. 원본/색 여백 두 크롭을 읽고 불일치하거나 짧은 가나 단위가 3회 이상 반복될 때 극성을 정리한 세 번째 크롭을 읽습니다. 반복 글자는 세 결과가 모두 같아야 확정합니다.
 - 결과: `consistent`는 두 전처리의 결과 일치, `needsReview`는 불일치 또는 유효한 일본어 결과 없음, `blank`는 단색 크롭입니다. 일치는 의미 정확도의 보증이나 확률이 아닙니다.
 - 가림표·반복·작은 가나를 임의로 치환하지 않습니다. 모든 인식 후보가 보고서에 남습니다.
-- 원본·번역 캐시·완성 이미지에 쓰지 않습니다. 호출당 후보 최대 8개, 긴 축 최대 1280으로 후보 탐색, OCR 크롭 긴 축 최대 1600, 크롭당 모델 호출 최대 3회입니다.
+- 원본·번역 캐시·완성 이미지에 쓰지 않습니다. `scan`은 호출당 후보 최대 8개, 긴 축 최대 1280으로 후보를 탐색합니다. 모든 모드의 OCR 크롭 긴 축은 최대 1600, 크롭당 OCR 호출은 최대 3회입니다.
 
 위 마지막 항목의 읽기 전용 보장은 아래의 `inspect_lettering.py`와 `letteringOnly` 요청에 적용됩니다. 앱의 일반 페이지 처리는 원래대로 번역·완성본을 저장합니다.
 
@@ -37,6 +37,24 @@ HF_HUB_OFFLINE=1 "$PYTHON" -B scripts/inspect_lettering.py page.png --mode scan 
 
 기존 JSON-lines Python worker에도 `{"source":"crop.png","letteringOnly":"crop"}` 또는 `"scan"`을 전달할 수 있습니다. 응답의 `lettering` 배열은 `bounds`(원본 픽셀 x1/y1/x2/y2), `status`, `text`, `readings`를 가집니다. `text: null`을 번역문이나 삭제 승인으로 해석하면 안 됩니다.
 
+## 자유형 글자 자동 검출 실험
+
+기존 CTD가 영역을 찾지 못하면 Hayai에도 크롭을 전달하지 못했습니다. `detect`는 이 단계에서 독립적인 YOLO11s ONNX 검출기를 사용합니다. **OCR 전용 명령과 worker 요청에서만 선택할 수 있으며 현재 앱의 자동 번역 경로에는 적용하지 않았습니다.** 모델의 `text/effect` 값은 참고 분류이고 효과음 여부를 확정하지 않습니다.
+
+```sh
+"$PYTHON" -B scripts/setup_text_detector.py
+HF_HUB_OFFLINE=1 "$PYTHON" -B scripts/inspect_lettering.py page.png --mode detect --output detected-ocr.json
+"$PYTHON" -B scripts/check_text_detection.py
+```
+
+추가 모델은 38MB이며 앱 외부 `Manga Lada/TextDetector`에 설치합니다. OpenCV CPU 검출과 기존 Hayai MPS OCR을 사용하며 추가 API나 Ollama는 필요하지 않습니다. 모델은 **CC-BY-NC-SA-4.0**이므로 비상업적 이용 조건을 확인해야 합니다. 원본 weights·README와 고정 해시를 사용하고 추론 중 다운로드나 다른 모델로 대체하지 않습니다.
+
+검출은 종횡비를 유지한 전체/문맥 여백 두 뷰를 사용하며 큰 이미지는 겹치는 4개 타일을 추가합니다. 모든 뷰는 1024 정사각형으로 메모리와 호출 수를 제한합니다. 타일 내부 경계에서 잘린 단어는 제외하고 중복만 제거하며 이웃 말풍선은 합치지 않습니다. 크롭은 짧은 변의 30%까지 넓히되 이웃 검출 영역까지 거리의 절반에서 멈춥니다. 기본 OCR 예산은 24개, `--limit 0..40`으로 조정하며 초과한 후보도 `deferred`와 좌표로 반환합니다.
+
+worker의 `letteringOnly: "detect"`도 같은 모듈을 사용합니다. 결과에는 실제 읽은 `bounds` 외에 `detectedBounds`, `detectionScore`, `detectionHint`가 있습니다. 점수는 OCR 정확도 확률이 아니며 `consistent`도 전체 페이지의 글자 누락이 없다는 의미가 아닙니다.
+
+2026-10-06 공개 실제 크롭에서 기존 자동 검출 0개였던 `バビュン`을 1개로 찾아 읽었습니다. 손글씨 문장과 일반 연결 말풍선의 두 영역도 읽었습니다. **반복 효과음은 횟수/철자가 불일치해 검수 상태이고, 흰색 가로 문장에서는 일부만 검출했습니다.** 낮은 점수의 배경/문장부호 후보도 남습니다. 이 실패를 이유로 자동 지우기·번역에 바로 연결하지 않았습니다. 선택 예시의 실행 결과이며 전체 효과음 인식 완료나 일반 정확도 수치가 아닙니다.
+
 ## 검증과 한계
 
 ```sh
@@ -62,3 +80,4 @@ swift run MangaLadaBallonsChecks --ocr-session hayai reread page.png cache-rerea
 - [Hayai OCR v2.5 Nova 모델](https://huggingface.co/JustANormalTinkerer/hayai-ocr-v2.5-nova), Apache-2.0, revision `e34d7755ed11e626c5ba39544af5d66f20ee57cc`
 - [SigLIP2 NaFlex 설정](https://huggingface.co/google/siglip2-base-patch16-naflex), Apache-2.0, revision `b53b807d3a2d5e2b3911292f2d69e5341cdc064c`
 - [Hayai 공개 글자 크롭](https://github.com/NopeNopeGuy/hayai-ocr/tree/master/assets/examples), 비교에만 사용. 만화 이미지 원본은 이 저장소에 포함하지 않습니다.
+- [Manga text detector v0](https://huggingface.co/lordtrilink/manga-text-detector-v0), CC-BY-NC-SA-4.0, revision `ba686d01c556d4e7c6f382e5d685c7fe75f5dd49`. 제작자는 효과음 클래스가 별도로 평가되지 않았다고 밝히고 있습니다.

@@ -5,6 +5,7 @@ from typing import Callable, Literal
 import unicodedata
 import cv2
 import numpy as np
+from text_region_geometry import validate_bgr_image
 
 
 @dataclass(frozen=True)
@@ -24,12 +25,18 @@ def japanese_reading(text: str) -> bool:
                              or "\u3400" <= char <= "\u9fff" for char in text)
 
 
+def repeated_lettering(text: str) -> bool:
+    """A repeated short kana unit needs the contrast view too; repetition counts are fragile."""
+    value = text.strip("!?！？。、…~〜")
+    if not all("\u3041" <= char <= "\u3096" or "\u30a1" <= char <= "\u30fa" or char == "ー" for char in value):
+        return False
+    return any(len(value) >= length*3 and len(value) % length == 0 and value == value[:length]*(len(value)//length)
+               for length in range(1, 5))
+
+
 def crop_variants(crop: np.ndarray) -> list[np.ndarray]:
     """Keep aspect ratio; add edge-colour padding and a separate polarity-normalized view."""
-    if not isinstance(crop, np.ndarray) or crop.dtype != np.uint8 or crop.ndim != 3 or crop.shape[2] != 3:
-        raise ValueError("Expected a uint8 BGR lettering crop")
-    if min(crop.shape[:2]) < 2:
-        raise ValueError("Lettering crop must have at least two pixels on each axis")
+    validate_bgr_image(crop)
     height, width = crop.shape[:2]
     scale = min(1., 1600/max(height, width))
     source = cv2.resize(crop, None, fx=scale, fy=scale, interpolation=cv2.INTER_AREA) if scale < 1 else crop.copy()
@@ -50,7 +57,7 @@ def crop_variants(crop: np.ndarray) -> list[np.ndarray]:
 def read_lettering(crop: np.ndarray, recognize: Callable[[np.ndarray], str]) -> LetteringReading:
     """Two matching views are evidence, not a calibrated accuracy probability.
 
-    A third view is read only when the first two disagree. Never majority-vote
+    A third view is read when the first two disagree or contain repeated short kana. Never majority-vote
     empty/non-Japanese results or collapse repeated letters to manufacture agreement.
     Model failures propagate to the caller; a disagreement preserves all readings.
     """
@@ -60,9 +67,9 @@ def read_lettering(crop: np.ndarray, recognize: Callable[[np.ndarray], str]) -> 
         return LetteringReading("blank", None, ())
     readings = [recognize(view).strip() for view in variants[:2]]
     first, second = map(normalized_reading, readings)
-    if first == second and japanese_reading(first):
+    if first == second and japanese_reading(first) and not repeated_lettering(first):
         return LetteringReading("consistent", first, tuple(readings))
     readings.append(recognize(variants[2]).strip())
     counts = Counter(normalized_reading(text) for text in readings)
-    agreed = [text for text, count in counts.items() if count >= 2 and japanese_reading(text)]
+    agreed = [text for text, count in counts.items() if count >= (3 if repeated_lettering(text) else 2) and japanese_reading(text)]
     return LetteringReading("consistent" if agreed else "needsReview", agreed[0] if agreed else None, tuple(readings))

@@ -1,5 +1,13 @@
 """Normalized rectangle validation and overlap at the image-model boundary."""
 import math
+import numpy as np
+
+
+def validate_bgr_image(image: np.ndarray) -> None:
+    if not isinstance(image, np.ndarray) or image.ndim != 3 or image.shape[2] != 3 or image.dtype != np.uint8:
+        raise ValueError("Expected a uint8 BGR image")
+    if min(image.shape[:2]) < 2:
+        raise ValueError("Image must have at least two pixels on each axis")
 
 
 def validate_box(box: dict) -> None:

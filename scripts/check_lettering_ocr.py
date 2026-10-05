@@ -103,6 +103,12 @@ stable = ModelBoundary(["パチパチ", "ﾊﾟﾁﾊﾟﾁ"])
 result = read_lettering(crop, stable)
 assert result.text == "パチパチ" and result.status == "consistent"
 assert len(stable.calls) == 2
+repeat_mismatch = ModelBoundary(["パチパチパチパチパチ", "パチパチパチパチパチ", "パチパチパチパチ"])
+result = read_lettering(crop, repeat_mismatch)
+assert result.status == "needsReview" and result.text is None and len(repeat_mismatch.calls) == 3
+assert len(result.readings) == 3, "Repeated syllables lost their count-disagreement evidence"
+assert read_lettering(crop, ModelBoundary(["コンコンコン"]*3)).text == "コンコンコン"
+assert read_lettering(crop, ModelBoundary(["ハハハ", "ハハハハ", "ハハハ"])).status == "needsReview"
 recovered = read_lettering(crop, ModelBoundary(["バビュン", "バシュッ", "バビュン"]))
 assert recovered.text == "バビュン" and len(recovered.readings) == 3
 masked = read_lettering(crop, ModelBoundary(["ピ○チュウ", "ピ○チュウ"]))

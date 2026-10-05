@@ -88,6 +88,8 @@ OCR 이전의 누락 후보 탐색은 Ballons의 `balloon_candidates.py`, 크롭
 
 `TextBlock.recognitionAlternatives`가 non-nil이면 인식 검수 대기이며 빈 배열은 읽을 후보가 없는 영역입니다. 사용자의 삭제 선택인 `keepsOriginal`과 구분하고, 공용 `preservesOriginalArtwork`로 모델 요청·배치·원본 픽셀 복원을 일관되게 제어합니다. 후보 확정이나 직접 원문 수정 전에는 제목 보정·가로 OCR 대조·중복 병합으로 이 상태를 해제하지 않습니다. 저장된 검수의 필드별 병합도 이 상태를 보존합니다. UI 후보 선택은 기존 검수 임시 저장을 사용하며 모델 호출·이미지 저장을 암묵적으로 실행하지 않습니다. 수동 영역 OCR이 불일치하면 원본 제거 전에 오류를 표시합니다. 번들에 복사한 실제 리소스로 인식 경계 검사를 실행하고, `MangaLadaBallonsChecks --ocr-session`은 실제 설치 모델·번들 worker 경로와 원본 보존을 따로 검증합니다.
 
+선택형 읽기 전용 `letteringOnly: detect`는 `manga_text_detector` → `text_detection`의 학습 검출 경계를 사용합니다. ONNX 버전·해시를 고정하고 모델 다운로드는 설치기에만 둡니다. 모델의 효과음/대사 클래스는 `detectionHint`이며 의미 분류로 승격하지 않습니다. 원본 비율을 보존한 최대 6개 뷰에서 원본 좌표를 복원하고 내부 타일 경계에서 잘린 후보를 제외합니다. `contact_crop_bounds`가 이웃 검출 영역까지 거리의 절반에서 여백을 제한하며 닿은 말풍선을 합치지 않습니다. OCR 예산 밖 후보는 `deferred`로 반환하며 누락을 숨기지 않습니다. 기존 `scan/crop`과 같은 `read_lettering`을 사용하고, 짧은 가나가 3회 이상 반복되면 세 번째 전처리까지 일치해야 확정합니다. 이 경로는 CTD 마스크를 만들거나 자동 번역·지우기에 연결하지 않습니다. 실제 자동 검출·인식과 전체 페이지의 누락 없는 인식을 별도로 평가합니다.
+
 번역 응답의 일본어 잔존 판단은 `TextLanguageDetector.containsJapanese`를 공유합니다. 유니코드 script 확장이 일본어로 분류하는 공용 물결표·가운뎃점은 문장부호로 처리하고, 호환 정규화 뒤 반각 가나·확장 한자는 여전히 거부합니다. 숫자 〇를 일본어 단어로 오인하지 않습니다. 문장부호 허용 검사는 번역 의미의 정확성을 보증하지 않습니다.
 
 다중 해상도 검출의 제안 대조·마스크 병합은 Ballons의 `detection_refinement.py`가 소유합니다. 기존 CPU 검출을 기준으로 세밀한 검출의 별도 글자만 보완하며, 원본·입력 마스크·기존 검수 문구를 수정하지 않습니다. 외부 CTD의 중첩 설정 객체는 인스턴스 간 공유되므로 엔진 경계에서 분리합니다. 윤곽 탐지는 `balloon_geometry.py`, 모든 문구의 최종 배치 공간 예약은 Rendering의 `BalloonPlacement`가 맡고 Core의 `TextBoxGeometry`를 재사용합니다. 검수창의 사전 적용은 AppState의 임시 검수 경계를 거치며 저장본을 즉시 갱신하지 않습니다.

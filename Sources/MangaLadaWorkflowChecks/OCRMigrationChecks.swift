@@ -46,6 +46,12 @@ enum OCRMigrationChecks {
         let old = try JapanesePageKeys(imageURL: url, configuration: .init(), context: "", title: "")
         let new = try JapanesePageKeys(imageURL: url, configuration: .init(japaneseOCR: .hayai), context: "", title: "")
         try require(old.translation != new.translation && old.recognition != new.recognition, "OCR backends shared stale cache keys")
+        try require(new.previousRecognition.first == old.recognition + "-hayai-v1",
+                    "Previous Hayai OCR is unavailable for preserving manual source edits")
+        try require(new.previous.first == old.translation + "-hayai-v1",
+                    "Previous Hayai review is unavailable for migration")
+        try require(!new.previousRecognition.contains(new.recognition) && !new.previous.contains(new.translation),
+                    "Current OCR accidentally reuses a prior policy key")
     }
     private static func require(_ condition: Bool, _ message: String) throws {
         if !condition { throw Failure.failed(message) }
