@@ -1,6 +1,7 @@
 """Behaviour checks for the detector/OCR boundary, including erase side effects."""
 from pathlib import Path
 import sys
+sys.dont_write_bytecode = True
 import cv2
 import numpy as np
 
