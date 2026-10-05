@@ -62,8 +62,23 @@ The caller must supply a previously corroborated source reading. Isolated-stroke
 OCR is additional evidence, never a replacement for that source reading.
 """
     image = stroke_contrast(image)
-    if not source_text or len(masks) > 3:
-        raise ValueError("Stroke confirmation needs a source reading and at most three masks")
+    if not source_text:
+        raise ValueError("Stroke confirmation needs a source reading")
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    for mask in eligible_strokes(image, masks):
+        isolated = np.full_like(image, 255)
+        isolated[mask > 0] = image[mask > 0]
+        if normalized_reading(recognize(isolated)) != normalized_reading(source_text):
+            continue  # Missing accents or complete characters can still look plausible.
+        return complete_stroke_edges(gray, mask)
+    return None
+
+
+def eligible_strokes(image: np.ndarray, masks: list[np.ndarray]) -> list[np.ndarray]:
+    """Validate masks against a dark-ink-normalized image before OCR-based approval."""
+    validate_bgr_image(image)
+    if len(masks) > 3:
+        raise ValueError("Stroke confirmation accepts at most three masks")
     for mask in masks:
         if mask.dtype != np.uint8 or mask.shape != image.shape[:2] or not np.isin(mask, (0, 255)).all():
             raise ValueError("Stroke segmentation returned an invalid binary mask")
@@ -77,13 +92,7 @@ OCR is additional evidence, never a replacement for that source reading.
         if np.count_nonzero(selected & (gray < 100)) < amount * .95:
             continue  # A balloon/illustration silhouette is not a glyph mask.
         eligible.append(mask)
-    for mask in sorted(eligible, key=np.count_nonzero, reverse=True):
-        isolated = np.full_like(image, 255)
-        isolated[mask > 0] = image[mask > 0]
-        if normalized_reading(recognize(isolated)) != normalized_reading(source_text):
-            continue  # Missing accents or complete characters can still look plausible.
-        return complete_stroke_edges(gray, mask)
-    return None
+    return sorted(eligible, key=np.count_nonzero, reverse=True)
 
 
 def complete_stroke_edges(gray: np.ndarray, mask: np.ndarray) -> np.ndarray:

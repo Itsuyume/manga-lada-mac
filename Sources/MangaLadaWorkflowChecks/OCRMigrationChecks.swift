@@ -64,7 +64,8 @@ enum OCRMigrationChecks {
                     "Previous Hayai review is unavailable for migration")
         for (keys, suffix) in [(new, "-hayai-v2"), (detected, "-hayai-detected-v1"),
                               (detected, "-hayai-detected-v2"), (detected, "-hayai-detected-v3"),
-                              (precise, "-hayai-text-strokes-v1")] {
+                              (detected, "-hayai-detected-v4"),
+                              (precise, "-hayai-text-strokes-v1"), (precise, "-hayai-text-strokes-v2")] {
             let priorRecognition = old.recognitionBeforeCleanupUpdate + suffix + "-ink-v2"
             let priorTranslation = old.translation + suffix
             try require(keys.recognition != priorRecognition && keys.translation != priorTranslation,

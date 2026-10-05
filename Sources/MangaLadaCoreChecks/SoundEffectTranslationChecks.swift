@@ -58,6 +58,18 @@ enum SoundEffectTranslationChecks {
         try check(lexicon.reviewOptions(for: "ｺﾞﾛｺﾞﾛ。") == options && lexicon.reviewOptions(for: "ごろごろ") == options,
                   "Script or width variants lost the same review choices.")
         try check(lexicon.translation(for: "ゴロゴロ") == nil, "Review choices became an automatic fixed translation.")
+        let repeated = lexicon.reviewOptions(for: "パチパチパチパチ")
+        try check(repeated.contains { $0.context == "박수" && $0.korean == "짝짝짝짝" },
+                  "Repeated effect lost its dictionary-backed Korean count.")
+        try check(repeated.contains { $0.context == "불 타는 소리" && $0.korean == "타닥타닥타닥타닥" },
+                  "Repeated effect was assigned one unconditional meaning.")
+        try check(lexicon.reviewOptions(for: "パチパチパチパチと言った").isEmpty
+                  && lexicon.reviewOptions(for: "パチパチパチパチさん").isEmpty,
+                  "Repeated-effect choices matched a sentence or name.")
+        try check(lexicon.translation(for: "パチパチパチパチ") == nil,
+                  "Context-dependent repeated choices became a fixed automatic translation.")
+        try check(lexicon.meaning(for: "ぱちぱちぱちぱち")?.contains("clapping") == true,
+                  "Repeated known reading lost its dictionary meaning.")
         let minimal = #"{"version":1,"entries":[{"sources":["ゴロゴロ"]}]}"#
         try check(try JapaneseSoundEffectLexicon(data: Data(minimal.utf8)).reviewOptions(for: "ゴロゴロ").isEmpty,
                   "An older catalog without review choices was rejected.")

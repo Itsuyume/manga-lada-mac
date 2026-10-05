@@ -20,6 +20,7 @@ jobs:
       - run: python3 scripts/check_lettering_ocr.py
       - run: python3 scripts/check_lettering_recovery.py
       - run: python3 scripts/check_lettering_strokes.py
+      - run: python3 scripts/check_lettering_repetition.py
       - run: python3 scripts/check_text_strokes.py
       - run: python3 scripts/check_text_detection.py
       - run: python3 scripts/check_text_region_kind.py
@@ -48,6 +49,7 @@ jobs:
           subprocess.run(["python3", "scripts/check_lettering_ocr.py", str(workers[0].parent)], check=True)
           subprocess.run(["python3", "scripts/check_lettering_recovery.py", str(workers[0].parent)], check=True)
           subprocess.run(["python3", "scripts/check_lettering_strokes.py", str(workers[0].parent)], check=True)
+          subprocess.run(["python3", "scripts/check_lettering_repetition.py", str(workers[0].parent)], check=True)
           subprocess.run(["python3", "scripts/check_text_strokes.py", str(workers[0].parent)], check=True)
           subprocess.run(["python3", "scripts/check_text_detection.py", str(workers[0].parent)], check=True)
           subprocess.run(["python3", "scripts/check_outline_erasure.py", str(workers[0].parent)], check=True)

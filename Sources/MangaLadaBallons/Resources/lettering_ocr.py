@@ -27,10 +27,16 @@ def japanese_reading(text: str) -> bool:
 def repeated_lettering(text: str) -> bool:
     """A repeated short kana unit needs the contrast view too; repetition counts are fragile."""
     value = text.strip("!?！？。、…~〜")
+    return repeated_unit(value) is not None
+
+
+def repeated_unit(value: str) -> str | None:
+    """Return the shortest repeated kana unit without discarding any content."""
     if not all("\u3041" <= char <= "\u3096" or "\u30a1" <= char <= "\u30fa" or char == "ー" for char in value):
-        return False
-    return any(len(value) >= length*3 and len(value) % length == 0 and value == value[:length]*(len(value)//length)
-               for length in range(1, 5))
+        return None
+    return next((value[:length] for length in range(1, 5)
+                 if len(value) >= length*3 and len(value) % length == 0
+                 and value == value[:length]*(len(value)//length)), None)
 
 
 def crop_variants(crop: np.ndarray) -> list[np.ndarray]:

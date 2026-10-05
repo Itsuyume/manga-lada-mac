@@ -6,6 +6,8 @@ import numpy as np
 from balloon_candidates import BalloonCandidate, balloon_candidates
 from lettering_regions import candidate_crop
 from lettering_ocr import normalized_reading
+from lettering_repetition import disputed_repetition, recover_repeated_strokes
+from lettering_strokes import confirmed_strokes, stroke_contrast
 from region_ocr import recognize_region
 from text_detection import TextDetection, contact_crop_bounds, distinct_detections
 from text_region_geometry import intersection_area, validate_bgr_image, validate_box
@@ -87,19 +89,37 @@ def read_candidate_ink(image, candidates, proposal, bounds, recognize, segment) 
     if confirmed is not None:
         candidate, ink = confirmed
         crop = candidate_crop(image, candidate, bounds)
-        return recognize_region(crop, recognize, 'hayai'), ink
+        reading = recognize_region(crop, recognize, 'hayai')
+        alternatives = reading.get('recognitionAlternatives')
+        if alternatives is not None and disputed_repetition(alternatives) is not None:
+            gray = cv2.cvtColor(stroke_contrast(crop), cv2.COLOR_BGR2GRAY)
+            core = ((ink > 0) & (gray < 100)).astype(np.uint8) * 255
+            recovered = repeated_candidate(crop, alternatives, [core], recognize)
+            if recovered is not None:
+                return recovered[0], recovered[1] & ink
+        return reading, ink
     if segment is None:
         return None
     left, top, right, bottom = bounds
     crop = image[top:bottom, left:right].copy()
     reading = recognize_region(crop, recognize, 'hayai')
-    if reading.get('recognitionAlternatives') is not None:
+    alternatives = reading.get('recognitionAlternatives')
+    if alternatives is not None and disputed_repetition(alternatives) is None:
         return None
-    from lettering_strokes import confirmed_strokes
     px1, py1, px2, py2 = proposal.bounds
     masks = segment(crop.copy(), (px1-left, py1-top, px2-left, py2-top))
+    if alternatives is not None:
+        return repeated_candidate(crop, alternatives, masks, recognize)
     ink = confirmed_strokes(crop, reading['originalText'], masks, recognize)
     return None if ink is None else (reading, ink)
+
+
+def repeated_candidate(crop, alternatives, masks, recognize) -> tuple[dict, np.ndarray] | None:
+    recovered = recover_repeated_strokes(crop, alternatives, masks, recognize)
+    if recovered is None:
+        return None
+    text, ink = recovered
+    return dict(originalText=text, confidence=0), ink
 
 
 def enclosed_ink(candidates: list[BalloonCandidate], proposal: TextDetection,

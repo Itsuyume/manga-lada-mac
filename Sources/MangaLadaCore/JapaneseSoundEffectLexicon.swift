@@ -69,9 +69,31 @@ public struct JapaneseSoundEffectLexicon: Sendable {
         return try Self(data: Data(contentsOf: url))
     }
     public func translation(for source: String) -> String? { translations[Self.normalized(source)] }
-    public func meaning(for source: String) -> String? { meanings[Self.normalized(source)] }
-    /// Optional manual choices never alter automatic inference or model prompts.
-    public func reviewOptions(for source: String) -> [ReviewOption] { reviewChoices[Self.normalized(source)] ?? [] }
+    public func meaning(for source: String) -> String? {
+        let text = Self.normalized(source)
+        if let meaning = meanings[text] { return meaning }
+        guard let repetition = repeatedEntry(for: text), let meaning = meanings[repetition.source] else { return nil }
+        return "Repeat \(repetition.source) \(repetition.count) times: \(meaning)"
+    }
+    /// Contextual candidates never force a fixed translation or change classification.
+    public func reviewOptions(for source: String) -> [ReviewOption] {
+        let text = Self.normalized(source)
+        if let choices = reviewChoices[text] { return choices }
+        guard let repetition = repeatedEntry(for: text) else { return [] }
+        return (reviewChoices[repetition.source] ?? []).map {
+            ReviewOption(context: $0.context, korean: String(repeating: $0.korean, count: repetition.count))
+        }
+    }
+    private func repeatedEntry(for text: String) -> (source: String, count: Int)? {
+        let characters = Array(text)
+        for count in 2...4 where !characters.isEmpty && characters.count.isMultiple(of: count) {
+            let unit = String(characters.prefix(characters.count / count))
+            if recognizedSources.contains(unit), String(repeating: unit, count: count) == text {
+                return (unit, count)
+            }
+        }
+        return nil
+    }
     public func inferKinds(_ blocks: [TextBlock], selectedIDs: Set<UUID>? = nil) -> [TextBlock] {
         blocks.map { block in
             guard selectedIDs?.contains(block.id) != false, block.balloonShape == nil,

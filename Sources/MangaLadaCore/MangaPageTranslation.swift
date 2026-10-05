@@ -125,10 +125,13 @@ enum MangaTranslationPrompt {
         let lexicon = try JapaneseSoundEffectLexicon.bundled()
         let hints = blocks.enumerated().compactMap { index, block -> String? in
             guard block.textKind == .soundEffect else { return nil }
-            return "R\(index): sound effect. " + (lexicon.meaning(for: block.originalText) ?? "Infer its sound or motion from context.")
+            let options = lexicon.reviewOptions(for: block.originalText)
+                .map { "\($0.context): \($0.korean)" }.joined(separator: "; ")
+            let choices = options.isEmpty ? "" : " Context-dependent Korean candidates (preserve their repetition): \(options)."
+            return "R\(index): sound effect. " + (lexicon.meaning(for: block.originalText) ?? "Infer its sound or motion from context.") + choices
         }
         return "Sound-effect guide (context only, never copy into output):\n" + hints.joined(separator: "\n")
-            + "\nRender effects as concise natural Korean onomatopoeia. Do not turn them into spoken sentences or transliterate Japanese sounds."
+            + "\nRender effects as concise natural Korean onomatopoeia. Preserve the number of repeated sound units. Do not turn them into spoken sentences or transliterate Japanese sounds."
     }
 
     private struct Region: Encodable {
