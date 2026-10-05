@@ -4,6 +4,7 @@ import MangaLadaWorkflow
 
 enum CacheMigrationChecks {
     static func run() throws {
+        try OCRMigrationChecks.run()
         let box = TextBox(x: 0.4, y: 0.2, width: 0.1, height: 0.3)
         let saved = TextBlock(box: box, originalText: "にちっ", translatedText: "주물럭", textKind: .soundEffect,
                               effectStyleID: "soft", textDirection: .vertical, fontScale: 0.8, textOffset: .init(x: 0.01, y: 0.02),

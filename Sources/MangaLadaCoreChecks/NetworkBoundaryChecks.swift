@@ -7,6 +7,7 @@ enum NetworkBoundaryChecks {
         let session = URLSession(configuration: configuration)
         defer { session.invalidateAndCancel() }
         try await checkOriginalRegions(session: session)
+        try await checkOCRReview(session: session)
         try await checkPunctuationPreservation(session: session)
         try await checkEffectRouting(session: session)
         try await checkSelections(session: session)

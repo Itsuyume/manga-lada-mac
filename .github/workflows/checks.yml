@@ -40,6 +40,7 @@ jobs:
           subprocess.run(["python3", "scripts/check_sentence_punctuation.py", "--resources", str(workers[0].parent)], check=True)
           subprocess.run(["python3", "scripts/check_dotted_balloons.py", str(workers[0].parent)], check=True)
           subprocess.run(["python3", "scripts/check_balloon_candidates.py", str(workers[0].parent)], check=True)
+          subprocess.run(["python3", "scripts/check_lettering_ocr.py", str(workers[0].parent)], check=True)
           subprocess.run([str(binary_directory / "MangaLadaBallonsChecks"), "--resource-integrity", sys.executable, str(workers[0].parent)], check=True)
           PY
       - run: swift run MangaLadaCoreChecks

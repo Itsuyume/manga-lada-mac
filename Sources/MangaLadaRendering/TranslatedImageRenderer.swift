@@ -68,14 +68,14 @@ public struct TranslatedImageRenderer {
         }
 
         let drawableBlocks = translation.blocks.filter { block in
-            block.keepsOriginal == true || !displayText(for: block).isEmpty
+            block.preservesOriginalArtwork || !displayText(for: block).isEmpty
         }
         guard !drawableBlocks.isEmpty else {
             throw TranslatedImageRenderError.noTranslationBlocks
         }
 
         var original: NSImage?
-        let activeBlocks = drawableBlocks.filter { $0.keepsOriginal != true }
+        let activeBlocks = drawableBlocks.filter { !$0.preservesOriginalArtwork }
         let keepsOriginal = activeBlocks.count != drawableBlocks.count
         let needsLettering = activeBlocks.contains {
             ($0.effectStyleID ?? ($0.textKind == .soundEffect ? typography.effectStyleID : nil)) == "automatic"
@@ -115,7 +115,7 @@ public struct TranslatedImageRenderer {
         backgroundStyle: TranslationTextBackgroundStyle = .redactionBubble,
         originalImage: NSImage? = nil
     ) throws -> NSImage {
-        try blocks.filter { $0.keepsOriginal != true }.forEach { try LetteringPreferences.validate($0) }
+        try blocks.filter { !$0.preservesOriginalArtwork }.forEach { try LetteringPreferences.validate($0) }
         let size = pixelBackedSize(for: image)
         guard let bitmap = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: Int(size.width), pixelsHigh: Int(size.height),
                                             bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
@@ -144,7 +144,7 @@ public struct TranslatedImageRenderer {
         let sourceLettering = originalImage.flatMap { SourceLettering(image: $0) }
         let containers = backgroundStyle == .none
             ? try balloonContainers(blocks: blocks, imageSize: size, detector: lightRegionDetector) : [:]
-        for (index, block) in blocks.enumerated() where block.keepsOriginal != true && !preserved.contains(index) {
+        for (index, block) in blocks.enumerated() where !block.preservesOriginalArtwork && !preserved.contains(index) {
             try draw(
                 block: block,
                 imageSize: size,

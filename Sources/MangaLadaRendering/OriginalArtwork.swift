@@ -18,7 +18,7 @@ extension TranslatedImageRenderer {
     }
 
     func restoreOriginalSelections(_ original: NSImage?, blocks: [TextBlock], imageSize: NSSize) throws {
-        let kept = blocks.filter { $0.keepsOriginal == true }
+        let kept = blocks.filter { $0.preservesOriginalArtwork }
         guard !kept.isEmpty else { return }
         guard let original else { throw TranslatedImageRenderError.originalImageRequired }
         let canvas = NSRect(origin: .zero, size: imageSize)
@@ -27,7 +27,7 @@ extension TranslatedImageRenderer {
             return
         }
         // Keep neighbors' erased source text erased. Their Korean is drawn afterwards.
-        let protected = blocks.filter { $0.keepsOriginal != true }.map {
+        let protected = blocks.filter { !$0.preservesOriginalArtwork }.map {
             pixelRect(for: $0.userDefinedBounds ?? $0.box, imageSize: imageSize).integral.insetBy(dx: -2, dy: -2)
         }
         var regions: [NSRect] = []

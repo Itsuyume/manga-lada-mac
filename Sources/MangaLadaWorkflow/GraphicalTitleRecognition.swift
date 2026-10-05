@@ -14,7 +14,7 @@ enum GraphicalTitleRecognition {
             let block = blocks[index]
             let rect = CGRect(x: block.box.x * Double(image.width), y: block.box.y * Double(image.height),
                               width: block.box.width * Double(image.width), height: block.box.height * Double(image.height))
-            guard block.sourceIsVertical == true, rect.height > rect.width * 4 else { continue }
+            guard !block.preservesOriginalArtwork, block.sourceIsVertical == true, rect.height > rect.width * 4 else { continue }
             let cropRect = rect.insetBy(dx: -6, dy: -CGFloat(block.detectedFontSize ?? 16))
                 .intersection(CGRect(x: 0, y: 0, width: image.width, height: image.height)).integral
             guard let crop = image.cropping(to: cropRect) else { throw CocoaError(.fileReadCorruptFile) }

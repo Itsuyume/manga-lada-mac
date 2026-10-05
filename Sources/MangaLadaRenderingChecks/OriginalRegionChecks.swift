@@ -17,6 +17,9 @@ extension MangaLadaRenderingChecks {
             let source = try imagePixels(renderer.render(image: original, blocks: []))
             let baseline = try imagePixels(renderer.render(image: clean, blocks: [first, second], backgroundStyle: .none))
             let result = try imagePixels(renderer.render(image: clean, blocks: [kept, second], backgroundStyle: .none, originalImage: original))
+            var uncertain = first; uncertain.recognitionAlternatives = ["また明日", "また来週"]
+            try require(try imagePixels(renderer.render(image: clean, blocks: [uncertain, second], backgroundStyle: .none,
+                                                        originalImage: original)) == result, "Uncertain OCR erased artwork or hid its neighboring translation.")
             try require(result.count == 160_000 && source.count == result.count, "Original restoration changed pixel dimensions.")
             for y in 0..<400 {
                 for x in 0..<400 {

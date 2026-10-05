@@ -13,7 +13,7 @@ enum SupplementalJapaneseOCR {
         let configuration = OllamaConfiguration(model: OllamaConfiguration.visionModel, retention: retention)
         let effects = try await OllamaSoundEffectDetector(configuration: configuration).recognize(imageData: imageData)
         let cropped = try await verifyProposals(effects)
-        candidates += cropped.filter { recognized in effects.contains { effect in
+        candidates += cropped.filter { recognized in recognized.recognitionAlternatives == nil && effects.contains { effect in
             effect.id == recognized.id && effect.originalText.filter { !$0.isWhitespace } == recognized.originalText.filter { !$0.isWhitespace }
         } }
         return JapaneseRegionMerger.merge(existing: blocks, effects: effects, opticalCandidates: candidates)

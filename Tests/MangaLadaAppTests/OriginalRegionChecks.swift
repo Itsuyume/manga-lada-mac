@@ -55,6 +55,7 @@ extension TranslationStateTests {
               "Forced retry called an unconfigured model or lost original-only decisions.")
         try fixture.checkSources(); try fixture.checkManifest(completed: [0], failures: [])
         try await checkFailedOriginalRegion()
+        try await checkOCRReviewHold()
         print("PASS original-region controls: preview/apply/cancel/undo/reopen/forced retry, no model requests, busy/stale ID, pending failure recovery")
     }
 
@@ -70,5 +71,36 @@ extension TranslationStateTests {
         try state.updateCurrentTranslation(draft)
         check(state.completed == [0] && state.failures.isEmpty && state.pendingPages.isEmpty, "Preserving failed region did not recover the page.")
         try fixture.checkSources(); try fixture.checkManifest(completed: [0], failures: [])
+    }
+
+    private static func checkOCRReviewHold() async throws {
+        let block = TextBlock(box: .init(x: 0.1, y: 0.1, width: 0.7, height: 0.2), originalText: "パチパチ",
+                              recognitionAlternatives: ["パチパチ", "パチパチパチ"], textKind: .soundEffect)
+        let fixture = try Fixture(blocks: [block]), state = fixture.state
+        defer { state.clearLetteringPreview(); try? FileManager.default.removeItem(at: fixture.root) }
+        state.startTranslation(onlyCurrent: true); await state.job?.value
+        let baseline = try unwrap(state.currentResult), pixels = try Data(contentsOf: baseline.renderedImageURL)
+        check(state.failures.isEmpty && baseline.reviewWarnings.count == 1, "OCR hold called a model or hid its review warning.")
+        state.moveLettering(block.id, by: .init(width: 0.1, height: 0.1)); state.beginLetteringPlacement(block.id)
+        state.retranslateBlock(in: baseline.translation, at: 0)
+        check(state.currentReview == baseline.translation && state.job == nil && state.placementBlockID == nil,
+              "Unconfirmed OCR could be moved or sent to translation.")
+        state.editReviewBlock(block.id) {
+            $0.recognitionAlternatives = nil; $0.userDefinedOriginalText = true; $0.translatedText = "짝짝"
+        }
+        let draft = try unwrap(state.currentReview)
+        check(draft.blocks[0].recognitionAlternatives == nil && state.hasCurrentReview,
+              "Confirming the first OCR candidate did not release the hold.")
+        check(try Data(contentsOf: baseline.renderedImageURL) == pixels && state.reviewStore.load(for: baseline.translation) == draft,
+              "Candidate confirmation changed saved pixels or failed to persist the draft.")
+        try state.updateCurrentTranslation(draft)
+        let saved = try unwrap(state.currentResult)
+        check(saved.reviewWarnings.isEmpty && saved.translation.blocks[0].translatedText == "짝짝", "Confirmed OCR retained a stale warning.")
+        let reopened = try await state.processor.process(imageURL: fixture.sources[0].0, destinationURL: saved.renderedImageURL,
+            configuration: state.configuration, typography: state.typography, bookTitle: state.title)
+        check(reopened.translation.blocks == saved.translation.blocks && reopened.translation.imageFingerprint == saved.translation.imageFingerprint
+              && reopened.reviewWarnings.isEmpty, "Reopen reinstated the OCR hold.")
+        try fixture.checkSources()
+        print("PASS OCR review hold: no model requests, visible warning, edit/apply/reopen, immutable saved pixels before apply")
     }
 }

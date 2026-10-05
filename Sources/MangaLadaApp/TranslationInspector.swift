@@ -16,7 +16,7 @@ struct TranslationInspector: View {
                      : "번호로 위치를 확인하세요. 틀린 번역은 ‘번역 삭제 · 원본 유지’로 되돌린 뒤 ‘수정 적용’을 누르세요.")
                     .font(.system(size: 10)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             }
-            ForEach(state.currentResult?.warnings ?? [], id: \.self) { warning in
+            ForEach(state.currentResult?.reviewWarnings ?? [], id: \.self) { warning in
                 Label(warning, systemImage: "exclamationmark.triangle").font(.system(size: 11)).foregroundStyle(.orange)
                     .fixedSize(horizontal: false, vertical: true).textSelection(.enabled)
             }
@@ -141,11 +141,29 @@ struct TranslationInspector: View {
             if block.keepsOriginal == true {
                 Label("원본 유지 · 재번역 제외", systemImage: "photo")
                     .font(.system(size: 11)).foregroundStyle(.secondary)
+            } else if let candidates = block.recognitionAlternatives {
+                recognitionReview(block, candidates: candidates)
             } else {
                 translationControls(block, number: number)
             }
         }.padding(7).background(active ? Color.accentColor.opacity(0.08) : Color.clear, in: RoundedRectangle(cornerRadius: 7))
             .overlay { RoundedRectangle(cornerRadius: 7).stroke(active ? Color.accentColor : Color.clear, lineWidth: 1) }
+    }
+    private func recognitionReview(_ block: TextBlock, candidates: [String]) -> some View {
+        VStack(alignment: .leading, spacing: 5) {
+            Label("글자 인식 확인 필요 · 원본 유지", systemImage: "exclamationmark.triangle")
+                .foregroundStyle(.orange)
+            Text("아래 후보를 선택하거나 위의 일본어 원문을 직접 수정한 뒤 다시 번역하세요.")
+                .foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            ForEach(candidates, id: \.self) { candidate in
+                Button(candidate) {
+                    state.editReviewBlock(block.id) {
+                        $0.originalText = candidate; $0.recognitionAlternatives = nil
+                        $0.userDefinedOriginalText = true
+                    }
+                }.disabled(editingDisabled)
+            }
+        }.font(.system(size: 11))
     }
     @ViewBuilder private func translationControls(_ block: TextBlock, number: Int) -> some View {
             if let message = MaskedTextTranslation.reviewMessage(for: block) {

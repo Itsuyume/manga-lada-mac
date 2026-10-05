@@ -6,16 +6,16 @@ public enum JapaneseSpeechGrouping {
     public static func resolve(_ blocks: [TextBlock]) -> [TextBlock] {
         let unique = blocks.enumerated().filter { index, block in
             !blocks.enumerated().contains { otherIndex, other in
-                guard index != otherIndex, normalized(other.originalText).contains(normalized(block.originalText)),
+                guard !block.preservesOriginalArtwork, !other.preservesOriginalArtwork, index != otherIndex, normalized(other.originalText).contains(normalized(block.originalText)),
                       block.box.intersectionArea(with: other.box) / max(0.000001, block.box.area) > 0.8 else { return false }
                 return other.box.area > block.box.area * 1.25 || (other.originalText == block.originalText && otherIndex < index)
             }
         }.map(\.element)
         var resolved: [TextBlock] = []
         for block in MangaReadingOrder.sorted(unique) {
-            guard let shape = block.balloonShape, block.textKind != .title, block.textKind != .soundEffect,
+            guard !block.preservesOriginalArtwork, let shape = block.balloonShape, block.textKind != .title, block.textKind != .soundEffect,
                   let index = resolved.firstIndex(where: { existing in
-                      guard let prior = existing.balloonShape else { return false }
+                      guard !existing.preservesOriginalArtwork, let prior = existing.balloonShape else { return false }
                       return prior.bounds.intersectionArea(with: shape.bounds) / max(prior.bounds.area, shape.bounds.area) > 0.85
                   }) else { resolved.append(block); continue }
             resolved[index].originalText += " " + block.originalText

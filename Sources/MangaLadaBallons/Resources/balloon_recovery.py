@@ -12,7 +12,7 @@ if TYPE_CHECKING:
 
 
 def recover_balloons(image: np.ndarray, mask: np.ndarray, blocks: list["TextBlock"],
-                     detect: Callable, prior: list[dict] | None = None) -> tuple:
+                     detect: Callable, prior: list[dict] | None = None, *, connected_lettering: bool = False) -> tuple:
     height, width = image.shape[:2]
     if mask.shape != (height, width):
         raise ValueError("Text mask dimensions do not match the page")
@@ -23,7 +23,7 @@ def recover_balloons(image: np.ndarray, mask: np.ndarray, blocks: list["TextBloc
         existing_boxes.append(box)
         occupied.append((int(box["x"] * width), int(box["y"] * height),
                          round((box["x"] + box["width"]) * width), round((box["y"] + box["height"]) * height)))
-    candidates = balloon_candidates(image, occupied)
+    candidates = balloon_candidates(image, occupied, connected_lettering=connected_lettering)
     result, combined = list(blocks), mask.copy()
     for candidate in candidates:
         x1, y1, x2, y2 = candidate.bounds

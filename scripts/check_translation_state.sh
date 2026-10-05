@@ -16,11 +16,12 @@ for module in MangaLadaCore MangaLadaImport MangaLadaRendering MangaLadaWorkflow
     objects+=("$binary_directory/$module.build/"*.o)
   fi
 done
-compiler_flags=()
+compiler_flags=(-parse-as-library -swift-version 6 -package-name MangaLadaMac)
 while (($#)); do
   case "$1" in
     --sdk) compiler_flags+=(-sdk "$2"); shift 2 ;;
     --scratch-path) shift 2 ;;
+    --build-system) shift 2 ;;
     *) echo "Unsupported check option: $1" >&2; exit 2 ;;
   esac
 done
@@ -30,7 +31,7 @@ for source in Sources/MangaLadaApp/*.swift; do
 done
 # Compile the real app state and views. Only cache/review storage is relocated;
 # no processor, pipeline, UI-state or model implementation is replaced.
-swiftc -parse-as-library -swift-version 6 -package-name MangaLadaMac "${compiler_flags[@]}" \
+swiftc "${compiler_flags[@]}" \
   -I "$binary_directory" -I "$binary_directory/Modules" \
   "${sources[@]}" Sources/MangaLadaWorkflow/JapanesePageKeys.swift \
   Tests/MangaLadaAppTests/*.swift \

@@ -19,12 +19,17 @@ public struct TextBlock: Codable, Equatable, Identifiable, Sendable {
     public var id: UUID
     public var box: TextBox
     public var originalText: String {
-        didSet { if originalText != oldValue { maskedTextInterpretation = nil } }
+        didSet {
+            if originalText != oldValue { maskedTextInterpretation = nil; recognitionAlternatives = nil }
+        }
     }
     public var translatedText: String
     /// Explicit user choice: restore source artwork and exclude this region from translation.
     /// Nil in older caches means normal translation. Previous text is retained for undo.
     public var keepsOriginal: Bool?
+    /// Non-nil means OCR disagreed. Keep artwork until the source is corrected/confirmed.
+    /// An empty array is a detected region with no readable candidate, not a confirmed blank.
+    public var recognitionAlternatives: [String]?
     public var confidence: Float
     public var sourceIsVertical: Bool?
     public var detectedFontSize: Double?
@@ -52,6 +57,7 @@ public struct TextBlock: Codable, Equatable, Identifiable, Sendable {
         originalText: String,
         translatedText: String = "",
         keepsOriginal: Bool? = nil,
+        recognitionAlternatives: [String]? = nil,
         confidence: Float = 0,
         sourceIsVertical: Bool? = nil,
         detectedFontSize: Double? = nil,
@@ -74,6 +80,7 @@ public struct TextBlock: Codable, Equatable, Identifiable, Sendable {
         self.originalText = originalText
         self.translatedText = translatedText
         self.keepsOriginal = keepsOriginal
+        self.recognitionAlternatives = recognitionAlternatives
         self.confidence = confidence
         self.sourceIsVertical = sourceIsVertical
         self.detectedFontSize = detectedFontSize
@@ -101,10 +108,10 @@ public struct PageTranslation: Codable, Equatable, Sendable {
     public var createdAt: Date
     public var blocks: [TextBlock]
     public var untranslatedBlockIDs: Set<UUID> {
-        Set(blocks.filter { $0.keepsOriginal != true && $0.translatedText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }.map(\.id))
+        Set(blocks.filter { !$0.preservesOriginalArtwork && $0.translatedText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }.map(\.id))
     }
     public var maskedTextReviewIDs: Set<UUID> {
-        Set(blocks.filter { $0.keepsOriginal != true && MaskedTextTranslation.reviewMessage(for: $0) != nil }.map(\.id))
+        Set(blocks.filter { !$0.preservesOriginalArtwork && MaskedTextTranslation.reviewMessage(for: $0) != nil }.map(\.id))
     }
 
     public init(

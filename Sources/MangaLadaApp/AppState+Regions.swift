@@ -37,7 +37,7 @@ extension AppState {
         retranslateBlocks(translation.untranslatedBlockIDs, in: translation)
     }
     private func retranslateBlocks(_ selectedIDs: Set<UUID>, in translation: PageTranslation, interpretMasks: Bool = false) {
-        let selectedIDs = selectedIDs.subtracting(translation.blocks.filter { $0.keepsOriginal == true }.map(\.id))
+        let selectedIDs = selectedIDs.subtracting(translation.blocks.filter { $0.preservesOriginalArtwork }.map(\.id))
         guard !isBusy, !isLoading, !selectedIDs.isEmpty, let baseline = currentReviewBaseline else { return }
         guard reviewErrors[currentIndex] == nil else { _ = requireAppliedReviews(at: [currentIndex]); return }
         let page = currentIndex, id = sessionID

@@ -44,9 +44,9 @@ public struct TranslationPipeline: Sendable {
         let ids = Set(blocks.map(\.id))
         guard ids.count == blocks.count else { throw TranslationSelectionError.duplicateRegions }
         guard selectedIDs.isSubset(of: ids) else { throw TranslationSelectionError.missingRegion }
-        let selectedIDs = selectedIDs.subtracting(blocks.filter { $0.keepsOriginal == true }.map(\.id))
+        let selectedIDs = selectedIDs.subtracting(blocks.filter { $0.preservesOriginalArtwork }.map(\.id))
         guard !selectedIDs.isEmpty else { return blocks }
-        let translated = try await translateRequest(blocks.filter { $0.keepsOriginal != true }, selectedIDs: selectedIDs, configuration: configuration,
+        let translated = try await translateRequest(blocks.filter { !$0.preservesOriginalArtwork }, selectedIDs: selectedIDs, configuration: configuration,
             translator: nil, previousContext: previousContext, refreshMaskedContext: refreshMaskedContext)
         try Task.checkCancellation()
         var result = blocks
@@ -72,7 +72,7 @@ public struct TranslationPipeline: Sendable {
         try Task.checkCancellation()
         guard !blocks.isEmpty else { return [] }
         guard Set(blocks.map(\.id)).count == blocks.count else { throw TranslationSelectionError.duplicateRegions }
-        let active = blocks.filter { $0.keepsOriginal != true }
+        let active = blocks.filter { !$0.preservesOriginalArtwork }
         guard !active.isEmpty else { return blocks }
         let translated = try await translateRequest(active, selectedIDs: nil, configuration: configuration,
             translator: injectedTranslator, previousContext: previousContext, refreshMaskedContext: refreshMaskedContext)
@@ -81,7 +81,7 @@ public struct TranslationPipeline: Sendable {
         let byID = Dictionary(uniqueKeysWithValues: restored.map { ($0.id, $0) })
         let ordered = injectedTranslator == nil && configuration.provider != .googleWeb ? MangaReadingOrder.sorted(blocks) : blocks
         return try ordered.map { block in
-            if block.keepsOriginal == true { return block }
+            if block.preservesOriginalArtwork { return block }
             guard let updated = byID[block.id] else { throw TranslationSelectionError.missingRegion }
             return updated
         }

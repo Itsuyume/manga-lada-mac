@@ -29,7 +29,7 @@ extension AppState {
                 let retrySavedPage = results[index] != nil && failures[index] != nil
                 try await translatePage(at: index, force: force || retrySavedPage, session: session)
             }
-            let warnings = results.values.filter { !$0.warnings.isEmpty || $0.translation.blocks.contains { $0.maskedTextInterpretation != nil } }.count
+            let warnings = results.values.filter { !$0.reviewWarnings.isEmpty || $0.translation.blocks.contains { $0.maskedTextInterpretation != nil } }.count
             statusMessage = failures.isEmpty ? "번역 저장 완료 · \(completed.count)/\(pages.count)페이지" : "처리 완료 · 성공 \(completed.count) · 실패 \(failures.count)"
             if warnings > 0 { statusMessage += " · 검수 안내 \(warnings)페이지" }
         } catch is CancellationError { if sessionID == session { statusMessage = "중단됨 · 완성한 \(results.count)페이지는 저장되어 있습니다." } }

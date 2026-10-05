@@ -7,16 +7,19 @@ public struct LocalTranslatorConfiguration: Equatable, Sendable {
     public var gemini: GeminiConfiguration
     public var enhanceSoundEffects: Bool
     public var interpretMaskedText: Bool
+    public var japaneseOCR: JapaneseOCRBackend
 
     public init(provider: TranslationProvider = .ollama, maxConcurrentRequests: Int = 1,
                 ollama: OllamaConfiguration = OllamaConfiguration(), gemini: GeminiConfiguration = GeminiConfiguration(),
-                enhanceSoundEffects: Bool = false, interpretMaskedText: Bool = false) {
+                enhanceSoundEffects: Bool = false, interpretMaskedText: Bool = false,
+                japaneseOCR: JapaneseOCRBackend = .manga) {
         self.provider = provider
         self.maxConcurrentRequests = min(max(maxConcurrentRequests, 1), 8)
         self.ollama = ollama
         self.gemini = gemini
         self.enhanceSoundEffects = enhanceSoundEffects
         self.interpretMaskedText = interpretMaskedText
+        self.japaneseOCR = japaneseOCR
     }
 
     public static func load(configURL: URL, environment: [String: String] = ProcessInfo.processInfo.environment) throws -> Self {
@@ -31,14 +34,15 @@ public struct LocalTranslatorConfiguration: Equatable, Sendable {
                                        retention: file?.ollamaKeepAlive ?? .balanced),
             gemini: GeminiConfiguration(model: file?.geminiModel ?? GeminiConfiguration.defaultModel, apiKey: environment["GEMINI_API_KEY"] ?? ""),
             enhanceSoundEffects: file?.enhanceSoundEffects ?? false,
-            interpretMaskedText: file?.interpretMaskedText ?? true
+            interpretMaskedText: file?.interpretMaskedText ?? true,
+            japaneseOCR: file?.japaneseOCR ?? .manga
         )
     }
 
     public func save(to url: URL) throws {
         let file = ConfigurationFile(provider: provider, maxConcurrentRequests: maxConcurrentRequests,
                                      ollamaModel: ollama.model, geminiModel: gemini.model, enhanceSoundEffects: enhanceSoundEffects,
-                                     ollamaKeepAlive: ollama.retention, interpretMaskedText: interpretMaskedText)
+                                     ollamaKeepAlive: ollama.retention, interpretMaskedText: interpretMaskedText, japaneseOCR: japaneseOCR)
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
@@ -59,6 +63,7 @@ public struct LocalTranslatorConfiguration: Equatable, Sendable {
         // These request policies apply next time; changing them must not discard saved reviews.
         comparable.ollama.retention = previous.ollama.retention
         comparable.interpretMaskedText = previous.interpretMaskedText
+        comparable.japaneseOCR = previous.japaneseOCR
         return comparable != previous
     }
 
@@ -70,6 +75,7 @@ public struct LocalTranslatorConfiguration: Equatable, Sendable {
         let enhanceSoundEffects: Bool?
         let ollamaKeepAlive: OllamaConfiguration.Retention?
         let interpretMaskedText: Bool?
+        let japaneseOCR: JapaneseOCRBackend?
     }
 }
 

@@ -45,6 +45,7 @@ struct SupplementalPageTranslation {
         let augmented = try await SupplementalJapaneseOCR.recognize(in: base.translation.imageURL, existing: base.translation.blocks + keptExtras,
                                                                     retention: configuration.ollama.retention) { proposals in
             try await recognitionSession.verifyProposedRegions(source: base.translation.imageURL, regions: proposals,
+                                                                ocrBackend: configuration.japaneseOCR,
                                                                 idleTimeout: configuration.ollama.retention.duration)
         }
         try Task.checkCancellation()

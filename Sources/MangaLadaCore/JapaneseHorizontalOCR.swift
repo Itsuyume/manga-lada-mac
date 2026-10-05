@@ -4,7 +4,7 @@ import Foundation
 public enum JapaneseHorizontalOCR {
     public static func canRefine(_ block: TextBlock) -> Bool {
         let angle = block.rotationDegrees ?? 0
-        return block.sourceIsVertical == false && block.translatedText.isEmpty
+        return !block.preservesOriginalArtwork && block.sourceIsVertical == false && block.translatedText.isEmpty
             && block.userDefinedBounds == nil && block.userDefinedTextKind != true
             && block.userDefinedOriginalText != true
             && block.textKind != .soundEffect && block.textKind != .title

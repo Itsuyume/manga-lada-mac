@@ -17,6 +17,7 @@ package struct ManualRegionTranslation {
         let replaced = draft.translation.blocks.filter { ImageRegionSelection.containsCenter(box, of: $0.box) }
         let proposals = try proposedRegions(box: box, kind: kind, existing: replaced)
         var recognized = try await session.verifyProposedRegions(source: draft.translation.imageURL, regions: proposals,
+                                                                  ocrBackend: configuration.japaneseOCR,
                                                                   idleTimeout: configuration.ollama.retention.duration)
         try Self.validateRecognition(recognized, for: proposals)
         for index in recognized.indices {
@@ -58,6 +59,7 @@ package struct ManualRegionTranslation {
         let identifiers = Set(recognized.map(\.id))
         guard identifiers.count == recognized.count, identifiers == Set(proposals.map(\.id)) else { throw ManualRegionError.invalidRecognition }
         guard recognized.allSatisfy({ block in proposals.contains { $0.id == block.id && $0.box == block.box } }) else { throw ManualRegionError.invalidRecognition }
+        guard recognized.allSatisfy({ $0.recognitionAlternatives == nil }) else { throw ManualRegionError.uncertainRecognition }
         guard recognized.allSatisfy({ TextLanguageDetector.containsJapanese($0.originalText)
             || TextLanguageDetector.isPunctuationOnly($0.originalText) }) else { throw ManualRegionError.noJapanese }
     }
@@ -75,12 +77,13 @@ package struct ManualRegionTranslation {
 }
 
 public enum ManualRegionError: LocalizedError {
-    case invalidBounds, noJapanese, invalidRecognition
+    case invalidBounds, noJapanese, invalidRecognition, uncertainRecognition
     public var errorDescription: String? {
         switch self {
         case .invalidBounds: "이미지 안에서 글자와 배치 공간을 포함하도록 영역을 다시 드래그해주세요."
         case .noJapanese: "지정한 영역에서 일본어 또는 기호를 읽지 못했습니다. 글자가 선명하게 들어오도록 영역을 조절해주세요."
         case .invalidRecognition: "지정한 영역과 인식 결과가 맞지 않습니다. 영역을 다시 지정해주세요."
+        case .uncertainRecognition: "여러 방식으로 읽은 글자가 서로 달라 원본을 유지했습니다. 영역을 좁히거나 검수창에서 원문을 입력해주세요."
         }
     }
 }

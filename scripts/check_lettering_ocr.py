@@ -4,13 +4,17 @@ import json
 import tempfile
 import sys
 sys.dont_write_bytecode = True
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "Sources/MangaLadaBallons/Resources"))
+if len(sys.argv) > 2:
+    raise ValueError("Usage: check_lettering_ocr.py [packaged-resource-directory]")
+resources = Path(sys.argv[1]) if len(sys.argv) == 2 else Path(__file__).resolve().parents[1] / "Sources/MangaLadaBallons/Resources"
+sys.path.insert(0, str(resources))
 import cv2
 import numpy as np
 from lettering_ocr import read_lettering, crop_variants
 from balloon_candidates import balloon_candidates
 from lettering_regions import inspect_lettering_regions, lettering_crops
 from hayai_lettering import verify_installation, MODEL_ID, MODEL_REVISION, VISION_REVISION
+from region_ocr import recognize_region, validate_backend
 
 
 class ModelBoundary:
@@ -55,6 +59,24 @@ for invalid in [None, np.zeros((0, 2, 3), np.uint8), np.zeros((20, 20)), np.zero
 crop = np.full((150, 80, 3), (220, 235, 250), np.uint8)
 cv2.putText(crop, "E", (10, 130), cv2.FONT_HERSHEY_SIMPLEX, 3.5, (20, 20, 20), 9)
 before = crop.copy()
+for backend in ("", "automatic", None):
+    try:
+        validate_backend(backend)
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("Invalid backend silently selected a model")
+pending = recognize_region(crop, ModelBoundary(["パチパチ", "パチパチパチ", "ポチ"]), "hayai")
+assert pending["originalText"] == "パチパチ"
+assert pending["recognitionAlternatives"] == ["パチパチ", "パチパチパチ", "ポチ"]
+assert pending["confidence"] == 0  # Agreement is not a calibrated probability.
+accepted = recognize_region(crop, ModelBoundary(["バビュン", "バビュン"]), "hayai")
+assert accepted["originalText"] == "バビュン" and "recognitionAlternatives" not in accepted
+empty = recognize_region(np.full((30, 40, 3), 255, np.uint8), ModelBoundary([]), "hayai")
+assert empty["recognitionAlternatives"] == [] and empty["originalText"] == ""
+legacy = recognize_region(crop, ModelBoundary(["原文"]), "manga")
+assert legacy["originalText"] == "原文" and "recognitionAlternatives" not in legacy
+assert np.array_equal(crop, before)
 failed = ModelBoundary([RuntimeError("OCR unavailable")])
 try:
     read_lettering(crop, failed)

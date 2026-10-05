@@ -51,13 +51,15 @@ class JapaneseEngine:
 
     def process(self, request: dict) -> dict:
         began = time.monotonic()
+        from region_ocr import validate_backend
+        backend = validate_backend(request.get("ocrBackend", "manga"))
         image = self.cv2.imread(request["source"], self.cv2.IMREAD_COLOR)
         if image is None:
             raise ValueError("Cannot decode source image")
         if "letteringOnly" in request:
             return {"lettering": self.read_lettering_only(image, request["letteringOnly"])}
         if request.get("regions") is not None:
-            return {"blocks": self.read_proposed_regions(image, request["regions"])}
+            return {"blocks": self.read_proposed_regions(image, request["regions"], backend)}
         height, width = image.shape[:2]
         mask, detected = self.detector.detect(image)
         if self.detail_detector is not None:
@@ -65,23 +67,24 @@ class JapaneseEngine:
             detail_mask, details = self.detail_detector.detect(image)
             mask, detected = refine_detection(image, mask, detected, detail_mask, details)
         from balloon_recovery import recover_balloons
-        mask, detected = recover_balloons(image, mask, detected, self.detector.detect, request.get("blocks"))
+        mask, detected = recover_balloons(image, mask, detected, self.detector.detect, request.get("blocks"),
+                                         connected_lettering=backend == "hayai")
         from balloon_lobes import detect_lobes, retain_cached_regions, source_rectangle
         lobes = detect_lobes(image, mask, detected)
         detected = lobes.blocks
         self.prepare_title_mask(image, mask, detected)
         blocks = request.get("blocks")
         if blocks is None:
-            self.ocr.load_model()
-            blocks = self.read_blocks(image, mask, detected)
+            blocks = self.read_blocks(image, detected, backend)
         else:
             from detection_refinement import missing_detections
             blocks = retain_cached_regions(blocks, lobes.replaced, width, height)
+            if request.get("rereadExisting") is True:
+                blocks = self.reread_existing(image, blocks, backend)
             additions = missing_detections(detected, blocks, width, height)
             if additions:
-                self.ocr.load_model()
-                blocks = blocks + self.read_blocks(image, mask, additions)
-        optical_mask, optical_boxes = self.add_optical_effects(image, blocks, request)
+                blocks = blocks + self.read_blocks(image, additions, backend)
+        optical_mask, optical_boxes = self.add_optical_effects(image, blocks, request, backend)
         mask = self.cv2.bitwise_or(mask, optical_mask)
         from balloon_geometry import BalloonGeometry
         from balloon_partition import separate_shared_balloons
@@ -114,22 +117,31 @@ class JapaneseEngine:
 
     def read_lettering_only(self, image, mode: str) -> list[dict]:
         from lettering_regions import inspect_lettering_regions
-        from hayai_lettering import HayaiLetteringOCR
-        def recognize(crop):
-            if self.lettering is None:
-                import torch
-                device = "mps" if torch.backends.mps.is_available() else "cpu"
-                self.lettering = HayaiLetteringOCR(self.root.parent / "LetteringOCR", device)
-            return self.lettering(crop)
-        return inspect_lettering_regions(image, recognize, mode)
+        return inspect_lettering_regions(image, self.recognize_lettering, mode)
 
-    def add_optical_effects(self, image, blocks: list[dict], request: dict) -> tuple:
+    def recognize_lettering(self, crop):
+        from hayai_lettering import HayaiLetteringOCR
+        if self.lettering is None:
+            import torch
+            device = "mps" if torch.backends.mps.is_available() else "cpu"
+            self.lettering = HayaiLetteringOCR(self.root.parent / "LetteringOCR", device)
+        return self.lettering(crop)
+
+    def read_region(self, crop, backend: str) -> dict:
+        from region_ocr import recognize_region
+        if backend == "hayai":
+            return recognize_region(crop, self.recognize_lettering, backend)
+        self.ocr.load_model()
+        return recognize_region(crop, self.ocr.ocr_img, backend)
+
+    def add_optical_effects(self, image, blocks: list[dict], request: dict, backend: str) -> tuple:
         from optical_effects import plan_effects, confirmed_effects, effect_mask
         proposals, matched = plan_effects(blocks, request["opticalCandidates"],
                                           set(request["soundEffectSources"]), request["soundEffectPatterns"])
         verified = []
         for start in range(0, len(proposals), 40):
-            verified.extend(self.read_proposed_regions(image, proposals[start:start + 40]))
+            readings = self.read_proposed_regions(image, proposals[start:start + 40], backend)
+            verified.extend(block for block in readings if block.get("recognitionAlternatives") is None)
         extras = confirmed_effects(proposals, verified)
         height, width = image.shape[:2]
         for extra in extras:
@@ -181,10 +193,9 @@ class JapaneseEngine:
             boxes.append([x1, y1, x2, y2])
         return JapaneseEngine.inpainting_regions(boxes)
 
-    def read_proposed_regions(self, image, regions: list[dict]) -> list[dict]:
+    def read_proposed_regions(self, image, regions: list[dict], backend: str = "manga") -> list[dict]:
         if len(regions) > 40:
             raise ValueError("Too many proposed regions")
-        self.ocr.load_model()
         height, width = image.shape[:2]
         recognized = []
         for region in regions:
@@ -195,15 +206,16 @@ class JapaneseEngine:
             pad = max(4, int(min(w * width, h * height) * .05))
             x1, y1 = max(0, int(x * width) - pad), max(0, int(y * height) - pad)
             x2, y2 = min(width, int((x + w) * width) + pad), min(height, int((y + h) * height) + pad)
-            text = self.ocr.ocr_img(image[y1:y2, x1:x2]).strip()
-            if text:
-                verified = dict(region)
-                verified["originalText"] = text
-                verified["confidence"] = .65
-                recognized.append(verified)
+            reading = self.read_region(image[y1:y2, x1:x2], backend)
+            verified = dict(region)
+            verified.pop("recognitionAlternatives", None)
+            verified.update(reading)
+            # Retain the proposal's detector score, not an invented OCR probability.
+            verified["confidence"] = region["confidence"]
+            recognized.append(verified)
         return recognized
 
-    def read_blocks(self, image, mask, detected) -> list[dict]:
+    def read_blocks(self, image, detected, backend: str) -> list[dict]:
         height, width = image.shape[:2]
         blocks = []
         for block in detected:
@@ -211,16 +223,32 @@ class JapaneseEngine:
             x1, y1, x2, y2 = max(0, x1), max(0, y1), min(width, x2), min(height, y2)
             if x2 <= x1 or y2 <= y1:
                 raise ValueError("Detector returned an invalid text rectangle")
-            text = self.ocr.ocr_img(image[y1:y2, x1:x2]).strip()
-            if not text:
-                raise ValueError("Manga OCR returned empty text for a detected region")
+            reading = self.read_region(image[y1:y2, x1:x2], backend)
             blocks.append({"id": str(uuid.uuid4()), "box": {"x": x1 / width, "y": y1 / height,
                            "width": (x2 - x1) / width, "height": (y2 - y1) / height},
-                           "originalText": text, "translatedText": "", "confidence": 1,
+                           **reading, "translatedText": "",
                            "sourceIsVertical": bool(block.src_is_vertical),
                            "detectedFontSize": float(block._detected_font_size),
                            "rotationDegrees": float(block.angle)})
         return blocks
+
+    def reread_existing(self, image, blocks: list[dict], backend: str) -> list[dict]:
+        """An OCR upgrade rereads automatic source text, retaining stable IDs and user choices."""
+        from balloon_lobes import source_rectangle
+        from text_region_geometry import validate_box
+        height, width = image.shape[:2]
+        result = []
+        for block in blocks:
+            if block.get("keepsOriginal") is True or block.get("userDefinedOriginalText") is True or block.get("userDefinedBounds") is not None:
+                result.append(block)
+                continue
+            validate_box(block["box"])
+            left, top, right, bottom = source_rectangle(block["box"], width, height)
+            updated = dict(block)
+            updated.pop("recognitionAlternatives", None)
+            updated.update(self.read_region(image[top:bottom, left:right], backend), translatedText="")
+            result.append(updated)
+        return result
 
     def prepare_title_mask(self, image, mask, detected) -> None:
         height, width = image.shape[:2]
