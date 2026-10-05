@@ -36,7 +36,7 @@ struct TranslatorSettingsView: View {
                     Picker("일본어 글자 인식", selection: $configuration.japaneseOCR) {
                         ForEach(JapaneseOCRBackend.allCases, id: \.self) { Text($0.displayName).tag($0) }
                     }
-                    Text("Hayai는 약 629MB, 말풍선 추가 검출은 38MB 모델이 더 필요합니다. 새 인식부터 적용하며, 서로 다르게 읽힌 글자는 원본을 유지합니다.")
+                    Text("Hayai는 약 629MB이며, 추가 검출에는 38MB 검출 모델과 48MB 획 분할 모델이 더 필요합니다. 새 인식부터 적용하며, 서로 다르게 읽힌 글자는 원본을 유지합니다.")
                         .font(.system(size: 11)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                     Toggle("가린 단어 문맥 해석 · 로컬 Qwen", isOn: $configuration.interpretMaskedText)
                     Text("뜻이 불분명한 가림말만 Qwen 3.5 9B로 해석합니다. 같은 문구와 문맥은 작은 캐시에 저장합니다. 추정 결과는 검수창에 표시하며 기존 번역은 자동으로 바꾸지 않습니다.")
