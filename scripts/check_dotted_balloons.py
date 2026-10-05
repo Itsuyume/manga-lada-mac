@@ -22,10 +22,25 @@ class Detection:
     src_is_vertical: bool = True
 
 
-def dotted_ellipse(page, center, axes, scale, missing_arc=0):
-    for angle in range(missing_arc, 360, 10):
+def dotted_ellipse(page, center, axes, scale, missing_arc=0, step=10, dash=3, tilt=0):
+    for angle in range(missing_arc, 360, step):
         cv2.ellipse(page, tuple(round(v*scale) for v in center), tuple(round(v*scale) for v in axes),
-                    0, angle, angle+3, (25,)*3, max(1, round(2*scale)))
+                    tilt, angle, angle+dash, (25,)*3, max(1, round(2*scale)))
+
+
+def check_dotted_variations():
+    for axes, step, dash, tilt in [((55, 115),7,2,0), ((100,80),13,4,0), ((75,120),10,4,20), ((75,120),10,4,-20)]:
+        source = np.full((700,800,3),245,np.uint8)
+        dotted_ellipse(source,(400,320),axes,1,step=step,dash=dash,tilt=tilt)
+        before = source.copy()
+        shape = BalloonGeometry(source).shape(dict(x=391/800,y=285/700,width=18/800,height=70/700),22)
+        assert shape is not None, f"Broken-border variation lost: {axes,step,dash,tilt}"
+        pixels = shape_pixels(shape,800,700)
+        reference = np.zeros((700,800),np.uint8)
+        cv2.ellipse(reference,(400,320),axes,tilt,0,360,1,-1)
+        assert np.count_nonzero(pixels & reference) >= np.count_nonzero(reference)*.75, "Variation discarded most of the balloon"
+        assert np.count_nonzero(pixels & (1-reference)) < np.count_nonzero(pixels)*.02, "Variation entered unobserved outside space"
+        assert np.array_equal(source,before), "Variation test changed source pixels"
 
 
 def shape_pixels(shape, width, height):
@@ -157,4 +172,5 @@ check_similar_color_outside_border()
 check_dotted_scales()
 check_existing_detector_columns()
 check_column_padding_and_crossing()
+check_dotted_variations()
 print('Dotted balloon checks passed: bounded gap closure, scale/area containment, open/edge/art rejection, separate lobes and source preservation')

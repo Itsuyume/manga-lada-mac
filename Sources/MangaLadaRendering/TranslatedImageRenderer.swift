@@ -106,6 +106,7 @@ public struct TranslatedImageRenderer {
         backgroundStyle: TranslationTextBackgroundStyle = .redactionBubble,
         originalImage: NSImage? = nil
     ) throws -> NSImage {
+        try blocks.forEach { try LetteringPreferences.validate($0) }
         let size = pixelBackedSize(for: image)
         guard let bitmap = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: Int(size.width), pixelsHigh: Int(size.height),
                                             bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
@@ -166,7 +167,15 @@ public struct TranslatedImageRenderer {
             return
         }
 
-        let originalTextRect = pixelRect(for: block.textKind == .soundEffect ? block.userDefinedBounds ?? block.box : block.box, imageSize: imageSize)
+        NSGraphicsContext.saveGraphicsState()
+        defer { NSGraphicsContext.restoreGraphicsState() }
+        if let offset = block.textOffset {
+            let transform = NSAffineTransform()
+            transform.translateX(by: offset.x * imageSize.width, yBy: -offset.y * imageSize.height)
+            transform.concat()
+        }
+
+        let originalTextRect = pixelRect(for: block.textKind == .soundEffect ? LetteringPreferences.layoutBounds(for: block) : block.box, imageSize: imageSize)
         if block.textKind == .soundEffect {
             try SoundEffectRenderer.draw(block, in: originalTextRect, typography: typography, scale: fontScale, source: sourceLettering)
             return
@@ -202,7 +211,7 @@ public struct TranslatedImageRenderer {
         let layout = fittedTextLayout(
             for: text,
             in: textRect,
-            scale: fontScale,
+            scale: fontScale * (block.fontScale ?? 1),
             flow: flow,
             detectedFontSize: block.detectedFontSize,
             backgroundStyle: backgroundStyle

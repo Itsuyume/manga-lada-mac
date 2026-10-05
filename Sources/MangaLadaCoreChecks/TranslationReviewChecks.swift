@@ -28,7 +28,42 @@ enum TranslationReviewChecks {
         try emptyAndIndependentPages(store: store, page: page)
         try fileFailures(root: root, directory: directory, page: page, draft: draft)
         try interpretationReview(root: root, page: page)
+        try letteringReview(root: root, page: page)
         print("TranslationReviewChecks passed")
+    }
+
+    private static func letteringReview(root: URL, page: PageTranslation) throws {
+        let store = TranslationReviewStore(directory: root.appendingPathComponent("lettering"))
+        var draft = page
+        draft.blocks[1].textDirection = .vertical
+        draft.blocks[1].fontScale = 0.8
+        draft.blocks[1].textLayoutBounds = .init(x: 0.35, y: 0.5, width: 0.25, height: 0.3)
+        draft.blocks[1] = try LetteringPreferences.moved(draft.blocks[1], by: .init(x: 0.05, y: -0.1))
+        try store.save(draft, comparedTo: page)
+        try check(store.load(for: page) == draft, "Direction, size, drag bounds or displacement lost on restart.")
+        try check(JSONDecoder().decode(PageTranslation.self, from: JSONEncoder().encode(draft)) == draft, "Lettering cache roundtrip changed values.")
+        for invalid in [Double.nan, .infinity, -1, 0.1, 3] {
+            var bad = draft; bad.blocks[1].fontScale = invalid
+            try expectFailure { try store.save(bad, comparedTo: page) }
+            try check(store.load(for: page) == draft, "Invalid size destroyed a recoverable review.")
+        }
+        for delta in [TextOffset(x: 2, y: 0), .init(x: 0, y: -2), .init(x: Double.nan, y: 0)] {
+            try expectFailure { _ = try LetteringPreferences.moved(draft.blocks[1], by: delta) }
+        }
+        var restored = draft
+        restored.blocks[1].fontScale = nil; restored.blocks[1].textDirection = nil
+        restored.blocks[1].textLayoutBounds = nil; restored.blocks[1].textOffset = nil
+        try store.save(restored, comparedTo: draft)
+        try check(store.load(for: draft) == restored, "Reset to automatic did not survive restart.")
+        var latest = page; latest.blocks[1].box.y = 0.4
+        try store.save(draft, comparedTo: page)
+        var expected = draft; expected.blocks[1].box = latest.blocks[1].box
+        try check(store.load(for: latest) == expected, "Review overwrote new OCR bounds.")
+        let legacy = Data(#"{"id":"75E87718-392D-424F-86DA-29343125354C","box":{"x":0.1,"y":0.1,"width":0.3,"height":0.3},"originalText":"ドン","translatedText":"쿵","confidence":1}"#.utf8)
+        let decoded = try JSONDecoder().decode(TextBlock.self, from: legacy)
+        try check(decoded.textDirection == nil && decoded.fontScale == nil && decoded.textOffset == nil && decoded.textLayoutBounds == nil,
+                  "Legacy region gained a manual override.")
+        print("Lettering review checks passed: old caches, replay/reset, range/NaN/page-edge failures, no geometry mutation")
     }
 
     private static func interpretationReview(root: URL, page: PageTranslation) throws {

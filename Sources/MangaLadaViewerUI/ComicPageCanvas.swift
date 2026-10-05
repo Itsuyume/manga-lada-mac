@@ -11,12 +11,17 @@ public struct ComicPageCanvas: View {
     let selection: Binding<TextBox?>?
     let regions: [TextBlock]
     let selectedRegionID: Binding<UUID?>?
+    let onMoveRegion: ((UUID, CGSize) -> Void)?
+    let useLetteringCoordinates: Bool
     @State private var scrollPage: Int?
     @GestureState private var isMagnifying = false
     public init(pages: [URL], index: Int, settings: ReadingSettings, revision: Int = 0, selection: Binding<TextBox?>? = nil,
-                regions: [TextBlock] = [], selectedRegionID: Binding<UUID?>? = nil, onSelect: @escaping (Int) -> Void) {
+                regions: [TextBlock] = [], selectedRegionID: Binding<UUID?>? = nil,
+                onMoveRegion: ((UUID, CGSize) -> Void)? = nil, useLetteringCoordinates: Bool = false, onSelect: @escaping (Int) -> Void) {
         self.pages = pages; self.index = index; self.settings = settings; self.revision = revision; self.selection = selection; self.onSelect = onSelect
         self.regions = regions; self.selectedRegionID = selectedRegionID
+        self.onMoveRegion = onMoveRegion
+        self.useLetteringCoordinates = useLetteringCoordinates
     }
     public var body: some View {
         GeometryReader { geometry in
@@ -29,7 +34,8 @@ public struct ComicPageCanvas: View {
                         ForEach(indices, id: \.self) { number in
                             ComicPageImage(url: pages[number], maximumSize: pageSize(geometry.size, count: indices.count),
                                            fitWidth: settings.fit == .width, zoom: settings.zoom, revision: revision, selection: selection,
-                                           regions: number == index ? regions : [], selectedRegionID: selectedRegionID)
+                                           regions: number == index ? regions : [], selectedRegionID: selectedRegionID,
+                                           onMoveRegion: onMoveRegion, useLetteringCoordinates: useLetteringCoordinates)
                         }
                     }.padding(20).frame(minWidth: geometry.size.width, minHeight: geometry.size.height)
                 }.id("\(index)-\(settings.layout.rawValue)")
@@ -55,7 +61,8 @@ public struct ComicPageCanvas: View {
                 ForEach(pages.indices, id: \.self) { number in
                     ComicPageImage(url: pages[number], maximumSize: pageSize(size, count: 1),
                                    fitWidth: true, zoom: settings.zoom, revision: revision,
-                                   regions: number == index ? regions : [], selectedRegionID: selectedRegionID)
+                                   regions: number == index ? regions : [], selectedRegionID: selectedRegionID,
+                                   onMoveRegion: onMoveRegion, useLetteringCoordinates: useLetteringCoordinates)
                         .id(number).onTapGesture { onSelect(number) }
                 }
             }.frame(width: pageSize(size, count: 1).width * max(1, settings.zoom))

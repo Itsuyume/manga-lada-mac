@@ -26,6 +26,10 @@ package struct ManualRegionTranslation {
             if let original = replaced.first(where: { $0.id == recognized[index].id }) {
                 recognized[index].box = original.box; recognized[index].balloonShape = original.balloonShape
                 recognized[index].effectStyleID = original.effectStyleID; recognized[index].rotationDegrees = original.rotationDegrees
+                recognized[index].textDirection = original.textDirection
+                recognized[index].fontScale = original.fontScale
+                recognized[index].textOffset = original.textOffset
+                recognized[index].textLayoutBounds = original.textLayoutBounds
             }
         }
         await status("지정 영역 · 페이지 문맥을 참고해 번역 중")
@@ -63,7 +67,9 @@ package struct ManualRegionTranslation {
         }
         let cells = try ImageRegionSelection.partitions(box, blocks: existing)
         return existing.map { block in
-            TextBlock(id: block.id, box: block.box, originalText: "", textKind: kind, effectStyleID: block.effectStyleID, userDefinedBounds: cells[block.id])
+            TextBlock(id: block.id, box: block.box, originalText: "", textKind: kind, effectStyleID: block.effectStyleID,
+                      textDirection: block.textDirection, fontScale: block.fontScale, textOffset: block.textOffset,
+                      textLayoutBounds: block.textLayoutBounds, userDefinedBounds: cells[block.id])
         }
     }
 }

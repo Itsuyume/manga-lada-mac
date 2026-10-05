@@ -29,6 +29,12 @@ public struct TextBlock: Codable, Equatable, Identifiable, Sendable {
     public var rotationDegrees: Double?
     public var balloonShape: BalloonShape?
     public var effectStyleID: String?
+    public var textDirection: TextDirection?
+    public var fontScale: Double?
+    /// Manual displacement in normalized page coordinates, positive y downward.
+    public var textOffset: TextOffset?
+    /// Typesetting space only; never changes recognition or source erasure.
+    public var textLayoutBounds: TextBox?
     public var userDefinedBounds: TextBox?
     public var userDefinedTextKind: Bool?
     /// True: applied source edit. False: source matches OCR. Nil: provenance is unverified.
@@ -49,6 +55,10 @@ public struct TextBlock: Codable, Equatable, Identifiable, Sendable {
         rotationDegrees: Double? = nil,
         balloonShape: BalloonShape? = nil,
         effectStyleID: String? = nil,
+        textDirection: TextDirection? = nil,
+        fontScale: Double? = nil,
+        textOffset: TextOffset? = nil,
+        textLayoutBounds: TextBox? = nil,
         userDefinedBounds: TextBox? = nil,
         userDefinedTextKind: Bool? = nil,
         userDefinedOriginalText: Bool? = nil,
@@ -66,6 +76,10 @@ public struct TextBlock: Codable, Equatable, Identifiable, Sendable {
         self.rotationDegrees = rotationDegrees
         self.balloonShape = balloonShape
         self.effectStyleID = effectStyleID
+        self.textDirection = textDirection
+        self.fontScale = fontScale
+        self.textOffset = textOffset
+        self.textLayoutBounds = textLayoutBounds
         self.userDefinedBounds = userDefinedBounds
         self.userDefinedTextKind = userDefinedTextKind
         self.userDefinedOriginalText = userDefinedOriginalText

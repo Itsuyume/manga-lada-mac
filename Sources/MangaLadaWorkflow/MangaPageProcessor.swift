@@ -176,6 +176,8 @@ public final class MangaPageProcessor {
             if original.originalText != block.originalText { updated.userDefinedOriginalText = true }
             if original.originalText != block.originalText || original.translatedText != block.translatedText
                 || original.textKind != block.textKind || original.effectStyleID != block.effectStyleID
+                || original.textDirection != block.textDirection || original.fontScale != block.fontScale || original.textOffset != block.textOffset
+                || original.textLayoutBounds != block.textLayoutBounds
                 || original.box != block.box || original.userDefinedBounds != block.userDefinedBounds {
                 updated.verifiedPunctuationBounds = nil
             }

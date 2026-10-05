@@ -28,7 +28,7 @@ extension TranslatedImageRenderer {
     }
 
     private func balloonContainer(block: TextBlock, imageSize: NSSize, detector: LightRegionDetector?) throws -> BalloonShape {
-        if let selected = block.userDefinedBounds {
+        if let selected = block.textLayoutBounds ?? block.userDefinedBounds {
             guard let contour = block.balloonShape else { return DialogueTypesettingRules.rectangularShape(box: selected) }
             guard let clipped = contour.clipped(to: selected) else {
                 throw TranslatedImageRenderError.textDoesNotFit(block.id, displayText(for: block))

@@ -18,10 +18,8 @@ extension TranslatedImageRenderer {
         }
         let renderer = TranslatedImageRenderer(typography: selectedTypography)
         let desiredSize = expressive ? max(pageFontSize, (block.detectedFontSize ?? pageFontSize) * 0.75) : pageFontSize
-        guard let layout = renderer.fittedBalloonLayout(text: text, shape: shape, imageSize: imageSize, fontSize: desiredSize,
-                                               scale: fontScale, hasContour: block.balloonShape != nil || block.userDefinedBounds != nil) else {
-            throw TranslatedImageRenderError.textDoesNotFit(block.id, text)
-        }
+        let layout = try renderer.balloonLayout(block: block, text: text, shape: shape, imageSize: imageSize,
+                                                desiredSize: desiredSize, scale: fontScale)
         var attributes = renderer.textAttributes(size: layout.fontSize, backgroundStyle: .none)
         let dark = (lightRegionDetector?.medianLuminance(in: pixelRect(for: shape.bounds, imageSize: imageSize)) ?? 1) < 0.5
         attributes[.foregroundColor] = dark ? NSColor.white : NSColor.black
@@ -30,15 +28,37 @@ extension TranslatedImageRenderer {
         draw(layout: layout, attributes: attributes, in: pixelRect(for: shape.bounds, imageSize: imageSize))
     }
 
+    private func balloonLayout(block: TextBlock, text: String, shape: BalloonShape, imageSize: NSSize,
+                               desiredSize: Double, scale: Double) throws -> TextLayout {
+        let hasContour = block.balloonShape != nil || block.textLayoutBounds != nil || block.userDefinedBounds != nil
+        func fit(_ size: Double, fixed: Bool) throws -> TextLayout? {
+            if block.textDirection == .vertical {
+                return try fittedVerticalBalloonLayout(text: text, shape: shape, imageSize: imageSize,
+                                                        fontSize: size, scale: 1, fixedSize: fixed)
+            }
+            return fittedBalloonLayout(text: text, shape: shape, imageSize: imageSize,
+                                       fontSize: size, scale: 1, hasContour: hasContour, fixedSize: fixed)
+        }
+        guard let automatic = try fit(desiredSize * scale, fixed: false) else {
+            throw TranslatedImageRenderError.textDoesNotFit(block.id, text)
+        }
+        guard let multiplier = block.fontScale else { return automatic }
+        guard let manual = try fit(automatic.fontSize * multiplier, fixed: true) else {
+            throw TranslatedImageRenderError.textDoesNotFit(block.id, text)
+        }
+        return manual
+    }
+
     func fittedBalloonLayout(text: String, shape: BalloonShape, imageSize: NSSize, fontSize: Double,
-                            scale: Double, hasContour: Bool) -> TextLayout? {
+                            scale: Double, hasContour: Bool, fixedSize: Bool = false) -> TextLayout? {
         let bounds = pixelRect(for: shape.bounds, imageSize: imageSize)
-        let preferred = min(96, max(16, fontSize * scale))
+        let preferred = fixedSize ? max(4, fontSize * scale) : min(96, max(16, fontSize * scale))
         let minimum = max(8, min(preferred * 0.6, DialogueTypesettingRules.referenceWidth(imageSize) * 0.0105))
         let minimumFont = preferredTextFont(ofSize: minimum, backgroundStyle: .none)
         let capacity = bounds.width * CGFloat(min(50, Int(floor(bounds.height / ceil(minimum * DialogueTypesettingRules.lineSpacing)))))
         guard measuredWidth(text.filter { !$0.isWhitespace }, font: minimumFont) <= capacity else { return nil }
-        let candidates = Array(Set(DialogueTypesettingRules.sizeSteps.map { max(minimum, preferred * $0) } + [minimum])).sorted(by: >)
+        let candidates = fixedSize ? [preferred]
+            : Array(Set(DialogueTypesettingRules.sizeSteps.map { max(minimum, preferred * $0) } + [minimum])).sorted(by: >)
         // Fit whole Korean words at every readable size before breaking a word.
         for allowWordBreaks in [false, true] {
             for size in candidates {

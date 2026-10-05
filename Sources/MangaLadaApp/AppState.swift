@@ -31,6 +31,11 @@ final class AppState: ObservableObject {
     private(set) var effectLexicon: JapaneseSoundEffectLexicon?
     @Published var isSelectingRegion = false
     @Published var selectedRegion: TextBox?
+    @Published var placementBlockID: UUID?
+    @Published var letteringPreviewURL: URL?
+    @Published var letteringPreviewError: String?
+    var letteringPreviewTask: Task<Void, Never>?
+    let letteringPreviewFile = LetteringPreviewFile()
     @Published var selectedBlockID: UUID?
     @Published var blockFocusRevision = 0
     @Published var selectedRegionKind: MangaTextKind = .dialogue
@@ -62,12 +67,19 @@ final class AppState: ObservableObject {
         catch { errorMessage = error.localizedDescription; statusMessage = "앱 준비 중 문제가 발생했습니다. 오류 안내를 확인해주세요." }
     }
     var currentResult: ProcessedMangaPage? { results[currentIndex] }
-    var displayPages: [URL] { pages.enumerated().map { index, page in !isSelectingRegion && mode == .translated ? results[index]?.renderedImageURL ?? page.url : page.url } }
+    deinit { letteringPreviewTask?.cancel() }
+    var displayPages: [URL] {
+        pages.enumerated().map { index, page in
+            guard !isSelectingRegion, mode == .translated else { return page.url }
+            return (index == currentIndex ? letteringPreviewURL : nil) ?? results[index]?.renderedImageURL ?? page.url
+        }
+    }
     var completed: Set<Int> { Set(results.keys).subtracting(failures.keys) }
     var progress: Double { pages.isEmpty ? 0 : Double(Set(results.keys).union(failures.keys).count) / Double(pages.count) }
     func select(_ index: Int) {
         guard pages.indices.contains(index), index != currentIndex else { return }
-        currentIndex = index; selectedRegion = nil; selectedBlockID = nil
+        clearLetteringPreview()
+        currentIndex = index; selectedRegion = nil; selectedBlockID = nil; placementBlockID = nil
     }
     func next() { select(reading.navigation(count: pages.count).next(from: currentIndex)) }
     func previous() { select(reading.navigation(count: pages.count).previous(from: currentIndex)) }

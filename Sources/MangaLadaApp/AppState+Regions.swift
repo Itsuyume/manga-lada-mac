@@ -5,6 +5,7 @@ import MangaLadaWorkflow
 extension AppState {
     var selectedRegionNumbers: [Int] {
         guard let selectedRegion, let blocks = currentReview?.blocks else { return [] }
+        if let placementBlockID { return blocks.indices.filter { blocks[$0].id == placementBlockID }.map { $0 + 1 } }
         return blocks.indices.filter { ImageRegionSelection.containsCenter(selectedRegion, of: blocks[$0].box) }.map { $0 + 1 }
     }
     func isBlockSelected(_ id: UUID) -> Bool {
@@ -17,6 +18,7 @@ extension AppState {
     }
     func selectRegion(_ box: TextBox?) {
         selectedRegion = box
+        if let placementBlockID { focusBlock(placementBlockID); return }
         guard let box else { focusBlock(nil); return }
         let match = currentReview?.blocks.first { ImageRegionSelection.containsCenter(box, of: $0.box) }
         if selectedBlockID != match?.id { focusBlock(match?.id) }
@@ -67,7 +69,7 @@ extension AppState {
         }
     }
     func translateSelectedRegion() {
-        guard !isBusy, !isLoading, let box = selectedRegion, pages.indices.contains(currentIndex),
+        guard placementBlockID == nil, !isBusy, !isLoading, let box = selectedRegion, pages.indices.contains(currentIndex),
               requireAppliedReviews(at: [currentIndex]) else { return }
         if outputRoot == nil { chooseOutputFolder { [weak self] in self?.translateSelectedRegion() }; return }
         guard let outputRoot, let sourceURL else { return }

@@ -41,6 +41,10 @@ package enum RecognitionCacheMigration {
             updated.originalText = prior.originalText
             updated.translatedText = prior.translatedText
             updated.effectStyleID = prior.effectStyleID
+            updated.textDirection = prior.textDirection
+            updated.fontScale = prior.fontScale
+            updated.textOffset = prior.textOffset
+            updated.textLayoutBounds = prior.textLayoutBounds
             updated.textKind = prior.userDefinedTextKind == true ? prior.textKind : block.textKind ?? prior.textKind
             updated.userDefinedBounds = prior.userDefinedBounds
             updated.userDefinedTextKind = prior.userDefinedTextKind

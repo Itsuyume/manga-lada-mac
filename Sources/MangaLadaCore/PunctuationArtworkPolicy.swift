@@ -10,7 +10,8 @@ public enum PunctuationArtworkPolicy {
         let source = block.originalText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard TextLanguageDetector.isPunctuationOnly(source),
               source == block.translatedText.trimmingCharacters(in: .whitespacesAndNewlines),
-              block.effectStyleID == nil, block.userDefinedOriginalText != true else { return nil }
+              block.effectStyleID == nil, block.textDirection == nil, block.fontScale == nil, block.textOffset == nil, block.textLayoutBounds == nil,
+              block.userDefinedOriginalText != true else { return nil }
         if let verified = block.verifiedPunctuationBounds {
             guard block.userDefinedOriginalText == false, let selection = block.userDefinedBounds,
                   ImageRegionSelection.validates(verified), ImageRegionSelection.validates(selection),

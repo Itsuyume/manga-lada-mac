@@ -27,7 +27,7 @@ struct TranslatorActions: View {
                 .buttonStyle(.borderedProminent).disabled(state.pages.isEmpty || state.isBusy || state.isLoading || allPagesComplete)
             if state.isBusy { Button("중단", systemImage: "stop.fill") { state.stop() } }
             Button(state.isSelectingRegion ? "영역 지정 끝내기" : "영역 지정", systemImage: "viewfinder") {
-                state.isSelectingRegion.toggle(); state.selectedRegion = nil
+                state.isSelectingRegion.toggle(); state.selectedRegion = nil; state.placementBlockID = nil
             }.disabled(state.pages.isEmpty || state.isBusy || state.isLoading)
             Spacer(minLength: 6)
             Picker("원문 / 번역", selection: $state.mode) {

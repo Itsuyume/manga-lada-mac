@@ -47,13 +47,20 @@ private struct TranslatorBody: View {
                 ComicPageCanvas(pages: state.displayPages, index: state.currentIndex, settings: reading, revision: state.imageRevision,
                                    selection: state.isSelectingRegion ? Binding(get: { state.selectedRegion }, set: { state.selectRegion($0) }) : nil,
                                    regions: state.showInspector || state.isSelectingRegion ? state.currentReview?.blocks ?? [] : [],
-                                   selectedRegionID: Binding(get: { state.selectedBlockID }, set: { state.focusBlock($0) }), onSelect: state.select)
+                                   selectedRegionID: Binding(get: { state.selectedBlockID }, set: { state.focusBlock($0) }),
+                                   onMoveRegion: moveRegion,
+                                   useLetteringCoordinates: state.mode == .translated && !state.isSelectingRegion,
+                                   onSelect: state.select)
                 .allowsHitTesting(!state.isSelectingRegion || !state.isBusy)
             } }
-            if state.showInspector && !state.pages.isEmpty { Divider(); TranslationInspector(state: state).frame(width: 260) }
+            if state.showInspector && !state.pages.isEmpty { Divider(); TranslationInspector(state: state).frame(width: 290) }
         }.overlay {
             if state.isLoading { ProgressView("페이지를 여는 중…").padding(22).background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12)) }
         }
+    }
+    private var moveRegion: ((UUID, CGSize) -> Void)? {
+        guard !state.isBusy, !state.isLoading, state.mode == .translated else { return nil }
+        return { id, delta in state.moveLettering(id, by: delta) }
     }
     @ViewBuilder private var pageNotice: some View {
         if state.pendingPages[state.currentIndex] != nil {

@@ -21,6 +21,9 @@ struct TranslationInspector: View {
                     .fixedSize(horizontal: false, vertical: true).textSelection(.enabled)
             }
             reviewNotice
+            if let failure = state.letteringPreviewError {
+                Text("미리보기: \(failure)").font(.system(size: 10)).foregroundStyle(.orange).fixedSize(horizontal: false, vertical: true)
+            }
             if let draft, !draft.blocks.isEmpty {
                 if !draft.maskedTextReviewIDs.isEmpty {
                     Button("가림표 \(draft.maskedTextReviewIDs.count)개 Qwen 재번역", systemImage: "arrow.clockwise") {
@@ -144,6 +147,7 @@ struct TranslationInspector: View {
                     ForEach(state.effectStyles) { Text($0.name).tag($0.id) }
                 }.controlSize(.small).disabled(editingDisabled)
             }
+            LetteringControls(state: state, block: block).disabled(editingDisabled)
             TextEditor(text: textBinding(block, \.translatedText)).font(.system(size: 13)).frame(minHeight: 54, maxHeight: 100)
                 .padding(4).background(.background, in: RoundedRectangle(cornerRadius: 5))
                 .overlay { RoundedRectangle(cornerRadius: 5).stroke(.quaternary) }

@@ -29,7 +29,8 @@ extension AppState {
             let book = try await loader.load(input)
             guard sessionID == id else { return }
             pages = book.pages; currentIndex = book.initialIndex; title = book.title; sourceURL = book.sourceURL
-            isSelectingRegion = false; selectedRegion = nil; selectedBlockID = nil
+            isSelectingRegion = false; selectedRegion = nil; selectedBlockID = nil; placementBlockID = nil
+            clearLetteringPreview()
             results = [:]; pendingPages = [:]; reviewDrafts = [:]; reviewErrors = [:]; failures = [:]; outputBook = nil; imageRevision += 1; isLoading = false
             statusMessage = "\(pages.count)페이지를 열었습니다."
             if autoTranslate { startTranslation() }

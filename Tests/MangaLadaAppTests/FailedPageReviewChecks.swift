@@ -71,6 +71,9 @@ extension TranslationStateTests {
         let filled = try unwrap(state.currentReview)
         check(filled.blocks[0] == partial.blocks[0] && filled.blocks[1].translatedText == "…", "Missing-only translation changed an existing review or failed punctuation.")
         check(filled.untranslatedBlockIDs.isEmpty && state.completed.isEmpty, "Filling a draft prematurely completed the page.")
+        state.scheduleLetteringPreview(); await state.letteringPreviewTask?.value
+        check(state.letteringPreviewURL != nil && state.letteringPreviewError == nil && state.completed.isEmpty,
+              "An unfinished page could not preview repaired lettering or was prematurely completed.")
         try checkReviewBoundaries(fixture, translation: filled)
         let cleanURL = fixture.cleanURL(at: 0), cleanBackup = cleanURL.appendingPathExtension("saved")
         try FileManager.default.moveItem(at: cleanURL, to: cleanBackup)

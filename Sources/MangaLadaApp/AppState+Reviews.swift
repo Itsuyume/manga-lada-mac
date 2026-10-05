@@ -39,6 +39,7 @@ extension AppState {
         do {
             try reviewStore.discard(fingerprint: saved.imageFingerprint)
             reviewDrafts.removeValue(forKey: currentIndex); reviewErrors.removeValue(forKey: currentIndex)
+            clearLetteringPreview()
             statusMessage = "이 페이지의 임시 수정을 취소했습니다. 저장된 이미지와 번역은 유지됩니다."
         } catch { errorMessage = error.localizedDescription }
     }
@@ -77,6 +78,7 @@ extension AppState {
         pendingPages.removeValue(forKey: index)
         try reviewStore.discard(fingerprint: result.translation.imageFingerprint)
         reviewDrafts.removeValue(forKey: index); reviewErrors.removeValue(forKey: index)
+        if index == currentIndex { clearLetteringPreview() }
     }
 
     func requireAppliedReviews(at indices: [Int]? = nil) -> Bool {

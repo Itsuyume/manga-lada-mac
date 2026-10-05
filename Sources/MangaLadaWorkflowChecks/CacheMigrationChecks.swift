@@ -6,7 +6,8 @@ enum CacheMigrationChecks {
     static func run() throws {
         let box = TextBox(x: 0.4, y: 0.2, width: 0.1, height: 0.3)
         let saved = TextBlock(box: box, originalText: "にちっ", translatedText: "주물럭", textKind: .soundEffect,
-                              effectStyleID: "soft", userDefinedBounds: box, userDefinedTextKind: true)
+                              effectStyleID: "soft", textDirection: .vertical, fontScale: 0.8, textOffset: .init(x: 0.01, y: 0.02),
+                              textLayoutBounds: box, userDefinedBounds: box, userDefinedTextKind: true)
         let page = PageTranslation(imageURL: URL(fileURLWithPath: "/fixture.png"), imageFingerprint: "fixture",
                                    sourceLanguage: .japanese, targetLanguage: .korean, blocks: [saved])
         try require(RecognitionCacheMigration.reuse(page, for: []) == nil, "Missing regions reused an unrelated translation.")
@@ -22,6 +23,8 @@ enum CacheMigrationChecks {
         rawOCR.translatedText = ""
         rawOCR.textKind = .dialogue
         rawOCR.effectStyleID = nil
+        rawOCR.textDirection = nil; rawOCR.fontScale = nil; rawOCR.textOffset = nil
+        rawOCR.textLayoutBounds = nil
         rawOCR.userDefinedBounds = nil
         rawOCR.userDefinedTextKind = nil
         rawOCR.balloonShape = BalloonShape(bounds: box, rows: [.init(y: 0.3, left: 0.41, right: 0.49)])
@@ -36,6 +39,9 @@ enum CacheMigrationChecks {
                     "New contours or manual placement were lost.")
         try require(migrated.textKind == saved.textKind && migrated.effectStyleID == saved.effectStyleID,
                     "Edited kind or effect style was lost.")
+        try require(migrated.textDirection == saved.textDirection && migrated.fontScale == saved.fontScale && migrated.textOffset == saved.textOffset,
+                    "Geometry refresh lost manual lettering controls.")
+        try require(migrated.textLayoutBounds == saved.textLayoutBounds, "Geometry refresh lost typesetting space.")
         try require(rawOCR == before && page.blocks == [saved], "Migration mutated its source data.")
         var interpreted = page
         interpreted.blocks[0].maskedTextInterpretation = MaskedTextInterpretation(japanese: "推定した日本語", message: "뜻 확인")

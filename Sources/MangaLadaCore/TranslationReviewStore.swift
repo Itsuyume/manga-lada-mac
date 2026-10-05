@@ -40,7 +40,7 @@ public struct TranslationReviewStore {
             let after = Dictionary(uniqueKeysWithValues: edited.blocks.map { ($0.id, $0) })
             let changedIDs = Set(edited.blocks.filter { block in
                 guard let original = before[block.id] else { return false }
-                return Self.hasChanges(from: original, to: block)
+                return original.applyingReviewChanges(from: original, to: block) != original
             }.map(\.id))
             guard changedIDs.isSubset(of: Set(current.blocks.map(\.id))) else { throw ReviewError.changedRegions }
             var result = current
@@ -59,12 +59,7 @@ public struct TranslationReviewStore {
             for page in [baseline, edited, current] {
                 guard Set(page.blocks.map(\.id)).count == page.blocks.count else { throw ReviewError.changedRegions }
             }
-        }
-
-        private static func hasChanges(from original: TextBlock, to draft: TextBlock) -> Bool {
-            original.originalText != draft.originalText || original.translatedText != draft.translatedText ||
-                original.textKind != draft.textKind || original.userDefinedTextKind != draft.userDefinedTextKind ||
-                original.effectStyleID != draft.effectStyleID || original.maskedTextInterpretation != draft.maskedTextInterpretation
+            try edited.blocks.forEach { try LetteringPreferences.validate($0) }
         }
 
     }

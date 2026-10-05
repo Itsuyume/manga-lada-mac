@@ -4,6 +4,7 @@ import MangaLadaCore
 
 extension TranslatedImageRenderer {
     func preferredTextFlow(for rect: NSRect, block: TextBlock, text: String) -> TextFlow {
+        if let direction = block.textDirection { return direction == .vertical ? .vertical : .horizontal }
         if block.textKind == .title, block.sourceIsVertical == true { return .vertical }
         return .horizontal
     }
@@ -104,7 +105,7 @@ extension TranslatedImageRenderer {
         detectedFontSize: Double?,
         backgroundStyle: TranslationTextBackgroundStyle
     ) -> TextLayout {
-        let units = verticalTextUnits(for: text)
+        let units = VerticalTextColumns.units(in: text)
         let width = max(1, rect.width - 4)
         let height = max(1, rect.height - 4)
         let geometryLimit = min(rect.width * 0.52, rect.height * 0.16)
@@ -118,7 +119,7 @@ extension TranslatedImageRenderer {
             let lineHeight = ceil(size * 1.08)
             let columnWidth = ceil(size * 1.18)
             let maxRows = max(1, Int(floor(height / lineHeight)))
-            let columns = verticalColumns(for: units, maxRows: maxRows)
+            let columns = VerticalTextColumns.split(units, maxRows: maxRows)
             if !columns.isEmpty,
                CGFloat(columns.count) * columnWidth <= width {
                 return .vertical(
@@ -135,7 +136,7 @@ extension TranslatedImageRenderer {
         let lineHeight = ceil(hardMinSize * 1.08)
         let columnWidth = ceil(hardMinSize * 1.18)
         return .vertical(
-            columns: verticalColumns(for: units, maxRows: max(1, Int(floor(height / lineHeight)))),
+            columns: VerticalTextColumns.split(units, maxRows: max(1, Int(floor(height / lineHeight)))),
             fontSize: hardMinSize,
             lineHeight: lineHeight,
             columnWidth: columnWidth
@@ -228,21 +229,6 @@ extension TranslatedImageRenderer {
     func wrappedLines(for text: String, maxWidth: CGFloat, font: NSFont) -> [String] {
         KoreanLineWrapper.wrap(text, widths: Array(repeating: maxWidth, count: max(1, text.count)),
                                measure: { measuredWidth($0, font: font) })
-    }
-
-    func verticalTextUnits(for text: String) -> [String] {
-        normalizedRenderableText(text)
-            .filter { !$0.isWhitespace }
-            .map { String($0) }
-    }
-
-    func verticalColumns(for units: [String], maxRows: Int) -> [[String]] {
-        guard maxRows > 0 else {
-            return []
-        }
-        return stride(from: 0, to: units.count, by: maxRows).map { start in
-            Array(units[start..<min(start + maxRows, units.count)])
-        }
     }
 
     func measuredWidth(_ text: String, font: NSFont) -> CGFloat {

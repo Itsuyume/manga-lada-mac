@@ -11,6 +11,8 @@ struct ComicPageImage: View {
     var selection: Binding<TextBox?>?
     var regions: [TextBlock] = []
     var selectedRegionID: Binding<UUID?>?
+    var onMoveRegion: ((UUID, CGSize) -> Void)?
+    var useLetteringCoordinates = false
     @StateObject private var resource = PageImageState()
 
     var body: some View {
@@ -23,10 +25,13 @@ struct ComicPageImage: View {
                     .accessibilityLabel(url.lastPathComponent)
                     .overlay { if let selection { ComicImageSelectionOverlay(selection: selection.wrappedValue, size: size) } }
                     .overlay { if !regions.isEmpty {
-                        ComicRegionMarkers(blocks: regions, size: size, selectedID: selectedRegionID, selection: selection?.wrappedValue)
+                        ComicRegionMarkers(blocks: regions, size: size, selectedID: selectedRegionID,
+                                           selection: selection?.wrappedValue, onMove: selection == nil ? onMoveRegion : nil,
+                                           useLetteringCoordinates: useLetteringCoordinates)
                     } }
                     .contentShape(Rectangle())
-                    .simultaneousGesture(selectionGesture(in: size), including: selection == nil ? .none : .all)
+                    // Keep the region markers interactive when rectangle selection is inactive.
+                    .simultaneousGesture(selectionGesture(in: size), including: selection == nil ? .subviews : .all)
             } else if let failure = resource.failure {
                 ContentUnavailableView("이미지를 읽을 수 없습니다", systemImage: "photo.badge.exclamationmark", description: Text(failure))
                     .frame(width: placeholderSize.width, height: placeholderSize.height)
