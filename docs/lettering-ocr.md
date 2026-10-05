@@ -75,6 +75,28 @@ worker의 `letteringOnly: "detect"`도 같은 모듈을 사용합니다. 결과�
 
 대안으로 PaddleOCR-VL-For-Manga 고정 버전을 공개 글자 크롭 7개에서 로컬 비교했습니다. 일부 흰 글자·긴 문장은 읽었지만 반복 글자와 위 붓글씨 사례를 오독해 앱에 추가하지 않았습니다. 새 모델의 용량이나 출시 시점만으로 교체하지 않으며, 이 소수의 비교를 모델 전체의 정확도 평가로 사용하지 않습니다.
 
+## 선택형 정밀 획 분리
+
+`hayai-text-strokes`는 같은 검출·OCR·번역·식자 경로에 만화용 Koharu SAM-TS-L 획 분리기를 선택하는 옵션입니다. 일반 분할기가 배경 기둥까지 선택하던 긴 세로 글자를 대조하기 위한 경로이며, 글자 판독 모델 자체를 바꾸지는 않습니다.
+
+```sh
+# Hayai 및 TextDetector 설치 뒤, 기존 Ballons Python 환경에서 실행합니다.
+"$PYTHON" -B scripts/setup_text_strokes.py
+"$PYTHON" -B scripts/check_text_strokes.py
+```
+
+설정의 **장식 글자 OCR · 정밀 획 분리 (+1.35GB)**를 선택합니다. 모델은 앱 밖 `Manga Lada/TextStrokes`에 저장하며 이 옵션에는 48MB EfficientSAM 설치가 필요하지 않습니다. 기본 OCR과 기존 추가 검출 옵션은 그대로 유지됩니다.
+
+원본 비율을 유지한 1024 입력과 원래 크기 입력을 최대 두 번 대조합니다. 마스크 안에 실제로 관측된 글자 획만 남기고, 기존 `confirmed_strokes`의 원문 일치·면적·배경 보호 검사를 거친 뒤 제거합니다. 모델은 작업 프로세스에서 최초 사용 시 한 번 로드하며 CPU 또는 사용 가능한 MPS를 사용합니다. 런타임 다운로드나 다른 모델로의 자동 재시도는 없습니다.
+
+모델과 추론 코드의 버전·해시는 `text_stroke_assets`가 관리합니다. 설치기는 고정된 Hi-SAM 코드의 추론에 불필요한 체크포인트 래퍼 두 곳만 제거하며, 실행 시 코드·가중치를 다시 검증합니다. 전역 PyTorch 함수는 변경하지 않습니다. 새 캐시 키는 이전 수동 검수를 이관하되 이전 제거 이미지를 재사용하지 않습니다.
+
+반복 글자는 정확한 마스크를 얻어도 OCR이 반복 횟수를 틀릴 수 있습니다. 원본 읽기의 불일치 검사를 완화하지 않으며, 획 검출 성공을 번역 성공으로 간주하지 않습니다. 실제 저장 이미지의 잔상·테두리·배경 검수는 별도로 필요합니다.
+
+제거 이미지를 갱신할 때 이전에 보완 검출된 글자도 다시 마스크를 계산합니다. 기존 자동 영역 하나와 90% 이상 맞고 원문 OCR이 다시 일치한 경우에만 허용하며, 문구·UUID·스타일은 그대로 둡니다. 원본 유지·수동 영역·수동 원문·수동 분류·불확실한 읽기·기존 말풍선 윤곽은 제외합니다. 신규 검출만 시험하면 이 캐시 이관 오류를 놓칠 수 있으므로, 이전 인식 기록이 있는 설치 앱의 저장 이미지도 대조합니다.
+
+2026-10-06 실제 페이지 처리기에서 공개 세로 글자 `ピンポーン`을 검출·제거하고 세로 `딩동`으로 저장했습니다. 첫 실행에서는 대사 분류 때문에 `땡!땡!`으로 번역되어 실패했으며, JMdict 2853600의 긴 표기를 기존 효과음 사전에 보완했습니다. 문장 안의 표기·짧은 동음어 `ピンポン`·수동 분류는 자동 변경하지 않습니다. 검수창의 대안은 초인종 `딩동`과 정답 소리 `딩동댕`입니다. 붓글씨·흰 글자·일반 연결 말풍선도 같은 처리기로 저장 확인했습니다. 세 장식 글자 모두 원본 파일·캐시 재실행 결과가 유지됐고 승인한 제거 마스크 밖의 변경 픽셀은 0개였습니다. 이 네 사례를 전체 만화의 정확도나 모든 말풍선 보존의 보증으로 해석하면 안 됩니다.
+
 ## 검증과 한계
 
 ```sh
@@ -105,4 +127,6 @@ swift run MangaLadaBallonsChecks --ocr-session hayai reread page.png cache-rerea
 - [Manga text detector v0](https://huggingface.co/lordtrilink/manga-text-detector-v0), CC-BY-NC-SA-4.0, revision `ba686d01c556d4e7c6f382e5d685c7fe75f5dd49`. 제작자는 효과음 클래스가 별도로 평가되지 않았다고 밝히고 있습니다.
 - [OpenCV EfficientSAM-Ti](https://huggingface.co/opencv/opencv_zoo/tree/d4938dfc9d4ec5d098bfa33e98b3f3345a236586/models/image_segmentation_efficientsam), Apache-2.0. 일반 분할 모델이므로 만화 글자 정확도를 보장하지 않습니다.
 - [PaddleOCR-VL-For-Manga](https://huggingface.co/jzhang533/PaddleOCR-VL-For-Manga), Apache-2.0, 비교 revision `1e8aa5f1dd90cc86fe9137c9c0b26ebde613cfe8`. 앱에는 포함하지 않습니다.
+- [Koharu SAM-TS-L](https://huggingface.co/mayocream/koharu-text-sam-ts-l), Apache-2.0, revision `5dd97423e0fbf2404264979136d47e8101144046`. 만화용 글자 픽셀 분리 모델이며 OCR·말풍선 인스턴스 분리 모델이 아닙니다.
+- [Hi-SAM 추론 코드](https://github.com/ymy-k/Hi-SAM), Apache-2.0, revision `69009434d4dba5541f228d8f5acb0754c333d417`. 선택형 설치에 필요한 모듈과 라이선스만 앱 밖에 보관합니다.
 - `バビュン`의 효과음 분류: [공식 음성 제품의 擬音 목록](https://www.ssw.co.jp/products/vocaloid6/tsuina/voice.html). 빠른 이동의 용례: [원작자 공개 소설](https://ncode.syosetu.com/n5000di/43/). 한국어 기본 표기는 이 용례를 바탕으로 정했으며 해당 출처의 한국어 번역을 인용한 것이 아닙니다.

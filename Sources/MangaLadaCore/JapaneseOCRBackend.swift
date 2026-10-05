@@ -4,6 +4,7 @@ import Foundation
 public enum JapaneseOCRBackend: String, Codable, CaseIterable, Sendable {
     case manga, hayai
     case hayaiDetected = "hayai-detected"
+    case hayaiTextStrokes = "hayai-text-strokes"
 
     public var usesLetteringOCR: Bool { self != .manga }
 
@@ -12,6 +13,7 @@ public enum JapaneseOCRBackend: String, Codable, CaseIterable, Sendable {
         case .manga: "기본 만화 OCR"
         case .hayai: "장식 글자 OCR · Hayai"
         case .hayaiDetected: "장식 글자 OCR · 추가 검출 시험 적용"
+        case .hayaiTextStrokes: "장식 글자 OCR · 정밀 획 분리 (+1.35GB)"
         }
     }
 }

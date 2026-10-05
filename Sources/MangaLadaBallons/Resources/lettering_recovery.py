@@ -5,6 +5,7 @@ import cv2
 import numpy as np
 from balloon_candidates import BalloonCandidate, balloon_candidates
 from lettering_regions import candidate_crop
+from lettering_ocr import normalized_reading
 from region_ocr import recognize_region
 from text_detection import TextDetection, contact_crop_bounds, distinct_detections
 from text_region_geometry import intersection_area, validate_bgr_image, validate_box
@@ -13,7 +14,8 @@ from text_region_geometry import intersection_area, validate_bgr_image, validate
 def recover_lettering(image: np.ndarray, blocks: list[dict],
                       detect: Callable[[np.ndarray], list[TextDetection]],
                       recognize: Callable[[np.ndarray], str], limit: int = 8,
-                      segment: Callable[[np.ndarray, tuple[int, int, int, int]], list[np.ndarray]] | None = None
+                      segment: Callable[[np.ndarray, tuple[int, int, int, int]], list[np.ndarray]] | None = None,
+                      *, refresh_existing: bool = False
                       ) -> tuple[np.ndarray, list[dict]]:
     validate_bgr_image(image)
     if type(limit) is not int or not 0 <= limit <= 8:
@@ -26,8 +28,8 @@ def recover_lettering(image: np.ndarray, blocks: list[dict],
     for block in blocks:
         for box in [block['box']] + ([block['userDefinedBounds']] if block.get('userDefinedBounds') else []):
             validate_box(box)
-            occupied.append(dict(x=box['x']*width, y=box['y']*height,
-                                 width=box['width']*width, height=box['height']*height))
+            occupied.append((block, dict(x=box['x']*width, y=box['y']*height,
+                                        width=box['width']*width, height=box['height']*height)))
     proposals = distinct_detections(detect(image.copy()))
     if not proposals:
         return mask, []
@@ -44,34 +46,60 @@ def recover_lettering(image: np.ndarray, blocks: list[dict],
             continue
         left, top, right, bottom = contact_crop_bounds(proposal, proposals, (width, height))
         crop_box = dict(x=left, y=top, width=right-left, height=bottom-top)
-        if any(intersection_area(crop_box, box) > 0 for box in occupied):
+        overlaps = [(block, box) for block, box in occupied if intersection_area(crop_box, box) > 0]
+        cached_source = restorable_source(crop_box, overlaps) if refresh_existing else None
+        if overlaps and cached_source is None:
             continue
         attempted += 1
-        confirmed = enclosed_ink(candidates, proposal, (left, top, right, bottom))
-        if confirmed is None:
-            if segment is None:
-                continue
-            crop = image[top:bottom, left:right].copy()
-            reading = recognize_region(crop, recognize, 'hayai')
-            if reading.get('recognitionAlternatives') is not None:
-                continue
-            from lettering_strokes import confirmed_strokes
-            px1, py1, px2, py2 = proposal.bounds
-            masks = segment(crop.copy(), (px1-left, py1-top, px2-left, py2-top))
-            ink = confirmed_strokes(crop, reading['originalText'], masks, recognize)
-            if ink is None:
+        result = read_candidate_ink(image, candidates, proposal, (left, top, right, bottom), recognize, segment)
+        if result is None:
+            continue
+        reading, ink = result
+        if cached_source is not None:
+            if reading.get('recognitionAlternatives') is not None or normalized_reading(reading['originalText']) != normalized_reading(cached_source):
                 continue
         else:
-            candidate, ink = confirmed
-            crop = candidate_crop(image, candidate, (left, top, right, bottom))
-            reading = recognize_region(crop, recognize, 'hayai')
-        extras.append(dict(id=str(uuid.uuid4()),
-            box=dict(x=left/width, y=top/height, width=(right-left)/width, height=(bottom-top)/height),
-            **reading, translatedText='', sourceIsVertical=bottom-top > right-left,
-            detectedFontSize=float(min(right-left, bottom-top)), rotationDegrees=0))
+            extras.append(dict(id=str(uuid.uuid4()),
+                box=dict(x=left/width, y=top/height, width=(right-left)/width, height=(bottom-top)/height),
+                **reading, translatedText='', sourceIsVertical=bottom-top > right-left,
+                detectedFontSize=float(min(right-left, bottom-top)), rotationDegrees=0))
+            occupied.append((extras[-1], crop_box))
         mask[top:bottom, left:right] |= ink
-        occupied.append(crop_box)
     return mask, extras
+
+
+def restorable_source(crop: dict, overlaps: list[tuple[dict, dict]]) -> str | None:
+    """Only one matching automatic region can supply ink for a rebuilt clean page."""
+    if len(overlaps) != 1:
+        return None
+    block, box = overlaps[0]
+    protected = ('keepsOriginal', 'userDefinedBounds', 'userDefinedOriginalText', 'userDefinedTextKind')
+    if any(block.get(key) for key in protected) or block.get('recognitionAlternatives') is not None or block.get('balloonShape') is not None:
+        return None
+    largest = max(crop['width']*crop['height'], box['width']*box['height'])
+    if intersection_area(crop, box) < largest * .9:
+        return None
+    return block.get('originalText') or None
+
+
+def read_candidate_ink(image, candidates, proposal, bounds, recognize, segment) -> tuple[dict, np.ndarray] | None:
+    confirmed = enclosed_ink(candidates, proposal, bounds)
+    if confirmed is not None:
+        candidate, ink = confirmed
+        crop = candidate_crop(image, candidate, bounds)
+        return recognize_region(crop, recognize, 'hayai'), ink
+    if segment is None:
+        return None
+    left, top, right, bottom = bounds
+    crop = image[top:bottom, left:right].copy()
+    reading = recognize_region(crop, recognize, 'hayai')
+    if reading.get('recognitionAlternatives') is not None:
+        return None
+    from lettering_strokes import confirmed_strokes
+    px1, py1, px2, py2 = proposal.bounds
+    masks = segment(crop.copy(), (px1-left, py1-top, px2-left, py2-top))
+    ink = confirmed_strokes(crop, reading['originalText'], masks, recognize)
+    return None if ink is None else (reading, ink)
 
 
 def enclosed_ink(candidates: list[BalloonCandidate], proposal: TextDetection,

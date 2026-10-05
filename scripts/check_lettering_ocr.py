@@ -100,7 +100,7 @@ for source in ("少し黙っていろ", "", "NOT TEXT"):
     assert result.status == "needsReview" and result.text is None, "Altered views overruled the source reading"
     assert result.readings == (source, "少し黙っている", "少し黙っている")
     assert len(changed.calls) == 3 and np.array_equal(crop, before)
-for backend in ("hayai", "hayai-detected"):
+for backend in ("hayai", "hayai-detected", "hayai-text-strokes"):
     changed = recognize_region(crop, ModelBoundary(["少し黙っていろ", "少し黙っている", "少し黙っている"]), backend)
     assert changed["originalText"] == "少し黙っていろ"
     assert changed["recognitionAlternatives"] == ["少し黙っていろ", "少し黙っている"]

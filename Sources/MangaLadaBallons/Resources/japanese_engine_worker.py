@@ -24,6 +24,7 @@ class JapaneseEngine:
         self.lettering = None
         self.lettering_detector = None
         self.lettering_segmenter = None
+        self.precise_segmenter = None
         sys.path.insert(0, str(root))
         os.chdir(root)
         import cv2
@@ -87,13 +88,16 @@ class JapaneseEngine:
             if additions:
                 blocks = blocks + self.read_blocks(image, additions, backend)
         lettering_boxes = []
-        if backend == "hayai-detected":
+        if backend in ("hayai-detected", "hayai-text-strokes"):
             from lettering_recovery import recover_lettering
+            segment = self.segment_precise_lettering if backend == "hayai-text-strokes" else self.segment_lettering
             lettering_mask, extras = recover_lettering(image, blocks, self.text_detector(), self.recognize_lettering,
-                                                       segment=self.segment_lettering)
+                                                       segment=segment, refresh_existing=True)
             mask = self.cv2.bitwise_or(mask, lettering_mask)
             blocks = blocks + extras
-            lettering_boxes = [source_rectangle(block["box"], width, height) for block in extras]
+            # Cached recovered regions need paint polygons too when their mask is rebuilt.
+            # These bound approved pixels; they never fill the rectangle with erase ink.
+            lettering_boxes = [source_rectangle(block["box"], width, height) for block in blocks]
         optical_mask, optical_boxes = self.add_optical_effects(image, blocks, request, backend)
         mask = self.cv2.bitwise_or(mask, optical_mask)
         from balloon_geometry import BalloonGeometry
@@ -152,6 +156,14 @@ class JapaneseEngine:
         if self.lettering_segmenter is None:
             self.lettering_segmenter = LetteringStrokeSegmenter(self.root.parent / "LetteringStrokes" / MODEL_FILE)
         return self.lettering_segmenter(crop, bounds)
+
+    def segment_precise_lettering(self, crop, bounds):
+        from text_strokes import TextStrokeSegmenter
+        if self.precise_segmenter is None:
+            import torch
+            device = "mps" if torch.backends.mps.is_available() else "cpu"
+            self.precise_segmenter = TextStrokeSegmenter(self.root.parent / "TextStrokes", device)
+        return self.precise_segmenter(crop, bounds)
 
     def read_region(self, crop, backend: str) -> dict:
         from region_ocr import recognize_region

@@ -15,7 +15,7 @@
 
 ## 사용 방법
 
-0.2.42는 **일본어 글자 인식 → 추가 검출 시험 적용**을 제공합니다. 기존 검출기가 놓친 글자를 별도 검출·획 분할 모델로 찾고, 원본 및 분리한 획의 읽기가 맞는 영역만 처리합니다. 흰 글자와 관측된 검은 그림자도 대조하며 말풍선 테두리 보호는 유지합니다. Hayai 외에 검출 약 38MB·획 분할 약 48MB를 앱 밖에 저장합니다. 기본 OCR은 바꾸지 않으며, 그림과 얽힌 효과음·반복 횟수 오독은 여전히 남아 있습니다. 설정에서 선택 후 **현재 페이지 다시 번역**으로 적용할 수 있습니다. [실제 저장 검증과 한계](docs/lettering-ocr.md)를 참고하세요.
+0.2.43은 **일본어 글자 인식 → 정밀 획 분리 (+1.35GB)** 선택을 추가합니다. 만화용 획 분리 모델로 긴 세로 글자도 대조하며, 원본과 분리한 획의 읽기가 맞는 영역만 제거합니다. 공개 실제 세로 글자·붓글씨·흰 글자의 저장 결과와 제거 범위 밖 픽셀 보존을 확인했습니다. 모델은 앱 밖에 저장하고 기존 기본 OCR·48MB 획 분할 옵션도 유지합니다. 그림과 얽힌 글자·반복 횟수 오독이 모두 해결된 것은 아닙니다. 설치와 [실제 저장 검증 범위](docs/lettering-ocr.md)를 확인하고, 옵션 선택 후 **현재 페이지 다시 번역**으로 적용할 수 있습니다.
 
 0.2.41은 색상 말풍선에서 글자 크기에 비례해 지우기 마스크를 확대하던 처리를 제거합니다. 검출된 획과 맞는 실제 흰 테두리만 보완하고, 원본에서 확인한 실선·점선·톱니형 외곽 획은 별도 단계에서 보호합니다. 원문 제거 이미지의 캐시만 갱신하며 같은 OCR 정책의 원문·기존 번역·검수 임시본은 재사용합니다. 같은 원본을 다시 열어 처리하면 새 제거 경로를 사용합니다. 원본에서 윤곽을 찾지 못한 영역까지 보호한다고 보장하지는 않습니다.
 
@@ -231,7 +231,7 @@ swift run MangaLadaWorkflowChecks --book /path/to/book.zip /path/to/output-folde
 swift run MangaLadaWorkflowChecks --real-regression /path/to/cases.json /path/to/new-results /path/to/engine-support
 ```
 
-추가 검출 경로를 같은 실제 파이프라인으로 확인하려면 위 명령에 `--ocr=hayai-detected`를 추가합니다. 기본 OCR은 `manga`, 일반 Hayai는 `hayai`이며 잘못된 선택값은 거부합니다. 선택형 모델은 [장식 글자 OCR](docs/lettering-ocr.md)의 설치 절차를 먼저 따릅니다.
+추가 검출 경로를 같은 실제 파이프라인으로 확인하려면 위 명령에 `--ocr=hayai-detected`, 정밀 획 분리는 `--ocr=hayai-text-strokes`를 추가합니다. 기본 OCR은 `manga`, 일반 Hayai는 `hayai`이며 잘못된 선택값은 거부합니다. 선택형 모델은 [장식 글자 OCR](docs/lettering-ocr.md)의 설치 절차를 먼저 따릅니다.
 
 `--real-regression`의 JSON 배열은 각 사례의 `id`, manifest 기준 상대 이미지 경로 `image`, `expected`를 받습니다. `expected`에는 원문 일부인 `original`과 선택 조건 `koreanContainsAny`, `forbiddenKorean`, `kind`, `requiresShape`를 넣습니다. 실제 `MangaPageProcessor`로 OCR·번역·식자·저장을 실행한 뒤 같은 캐시로 다시 처리해 문구와 PNG 바이트가 같은지 확인합니다. 원본 보존·실패 내용·전체 인식 문구는 `regression-results.json`에 남깁니다. 결과 폴더는 새 경로여야 하며 모델은 지정한 지원 폴더에서 준비되어 있어야 합니다. 자동 기대값 통과와 저장 이미지의 시각·의미 검수는 별도입니다. 개인 원본·검수 이미지·로컬 경로는 공개 저장소에 넣지 않습니다.
 

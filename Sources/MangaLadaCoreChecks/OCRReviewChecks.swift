@@ -49,6 +49,12 @@ extension NetworkBoundaryChecks {
         try check(detected.japaneseOCR.usesLetteringOCR && !JapaneseOCRBackend.manga.usesLetteringOCR,
                   "The detector option changed recognizers implicitly")
         try check(!detected.requiresRetranslation(comparedTo: configuration), "Detector selection discarded existing reviews")
+        var precise = configuration; precise.japaneseOCR = .hayaiTextStrokes
+        try precise.save(to: url)
+        try check(try LocalTranslatorConfiguration.load(configURL: url, environment: [:]).japaneseOCR == .hayaiTextStrokes,
+                  "Precise stroke OCR selection was not saved")
+        try check(precise.japaneseOCR.usesLetteringOCR && !precise.requiresRetranslation(comparedTo: detected),
+                  "Precise stroke selection discarded existing reviews")
         var changed = configuration; changed.japaneseOCR = .manga
         try check(!changed.requiresRetranslation(comparedTo: configuration), "OCR selection discarded saved reviews")
         try Data("{}".utf8).write(to: url)

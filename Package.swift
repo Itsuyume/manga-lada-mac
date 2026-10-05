@@ -43,7 +43,8 @@ let package = Package(
                         .copy("Resources/text_region_geometry.py"), .copy("Resources/lettering_ocr.py"),
                         .copy("Resources/lettering_regions.py"), .copy("Resources/hayai_lettering.py"), .copy("Resources/region_ocr.py"),
                         .copy("Resources/text_detection.py"), .copy("Resources/manga_text_detector.py"), .copy("Resources/lettering_recovery.py"),
-                        .copy("Resources/lettering_strokes.py")]
+                        .copy("Resources/lettering_strokes.py"), .copy("Resources/text_strokes.py"),
+                        .copy("Resources/text_stroke_assets.py")]
         ),
         .executableTarget(
             name: "MangaLadaApp",

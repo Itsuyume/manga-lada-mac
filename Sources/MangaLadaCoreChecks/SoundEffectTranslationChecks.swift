@@ -108,6 +108,11 @@ enum SoundEffectTranslationChecks {
     private static func checkKindRefinement() throws {
         let lexicon = try JapaneseSoundEffectLexicon.bundled()
         try check(lexicon.inferKinds([]).isEmpty, "Empty OCR produced an effect.")
+        for source in ["ピンポーンが鳴った", "ピンポン", "ピンポーンさん"] {
+            try check(!lexicon.recognizes(source), "Doorbell default consumed a sentence, ordinary word or name.")
+        }
+        try check(lexicon.reviewOptions(for: "ピンポーン").map(\.korean) == ["딩동", "딩동댕"],
+                  "Doorbell and correct-answer contexts lost their review choices.")
         for source in ["カチッ", "ｶﾁｯ。", "バタンバタン", "ザアァーッ", "ゴロゴロ", "にちっ", "ニチッ", "ﾆﾁｯ", "にちゃっ", "にちゃにちゃ", "ニチャニチャ"] {
             try check(lexicon.recognizes(source), "A catalog form or complete effect pattern was missed: \(source)")
         }

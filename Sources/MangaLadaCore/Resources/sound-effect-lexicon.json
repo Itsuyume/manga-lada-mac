@@ -15,6 +15,7 @@
     "changes": "Mimetic kana readings and glosses extracted with reading-specific sense restrictions; kana variants generated; curated spellings take precedence; ordinary timing adverb excluded from automatic sound-effect recognition."
   },
   "reviewGroups": [
+    {"sources":["ピンポーン","ぴんぽーん"],"options":[{"context":"초인종·인터폰","korean":"딩동"},{"context":"정답을 알리는 소리","korean":"딩동댕"}],"jmdictIDs":[2853600]},
     {"sources":["バビュン","ばびゅん"],"options":[{"context":"빠르게 날아가거나 지나감","korean":"슈웅"},{"context":"순간적으로 움직임","korean":"휙"}]},
     {"sources":["ごろん","ゴロン"],"options":[{"context":"몸을 뒹굴거나 돌아누움","korean":"뒹굴"},{"context":"몸을 눕힘","korean":"벌렁"},{"context":"물체가 구름","korean":"데굴"}]},
     {"sources":["もじ","モジ"],"options":[{"context":"손가락을 움직임","korean":"꼼지락"},{"context":"수줍게 망설임","korean":"머뭇"}]},
@@ -1354,7 +1355,7 @@
     {"sources":["ぴんと"],"meaning":"tightly; tautly; tensely; (springing, straightening) up; suddenly; with a jerk; intuitively; instinctively; immediately; with a burst; with a crack; with a snap","recognition":false,"jmdictIDs":[2679390]},
     {"sources":["ぴんぴん"],"meaning":"lively; energetic; full of life; vigorously (jumping, flopping, etc.); piercing (e.g. sound); penetrating; grating","recognition":true,"jmdictIDs":[1010960]},
     {"sources":["ぴんぽん"],"meaning":"ding-dong (of a doorbell, intercom, etc.); doorbell; intercom; ringing the doorbell; pressing the intercom button; ding ding ding!; correct!; right answer!","recognition":false,"jmdictIDs":[2853600]},
-    {"sources":["ぴんぽーん"],"meaning":"ding-dong (of a doorbell, intercom, etc.); doorbell; intercom; ringing the doorbell; pressing the intercom button; ding ding ding!; correct!; right answer!","recognition":false,"jmdictIDs":[2853600]},
+    {"sources":["ぴんぽーん"],"meaning":"ding-dong (of a doorbell, intercom, etc.); doorbell; intercom; ringing the doorbell; pressing the intercom button; ding ding ding!; correct!; right answer!","korean":"딩동","recognition":true,"curated":true,"jmdictIDs":[2853600]},
     {"sources":["ぴーちくぱーちく"],"meaning":"tweeting (of a bird); chirping; noisily (talking)","recognition":true,"jmdictIDs":[2869253]},
     {"sources":["ぴーぴー"],"meaning":"peep; chirp; beep; whistling, chirping, piping, etc. sound made by birds, insects, pipes, children, etc.","recognition":false,"jmdictIDs":[2097020]},
     {"sources":["ぴーぽー"],"meaning":"nee-naw (sound of an emergency vehicle siren); wee-woo","recognition":true,"jmdictIDs":[2841737]},
@@ -3044,7 +3045,7 @@
     {"sources":["ピント"],"meaning":"tightly; tautly; tensely; (springing, straightening) up; suddenly; with a jerk; intuitively; instinctively; immediately; with a burst; with a crack; with a snap","recognition":false,"jmdictIDs":[2679390]},
     {"sources":["ピンピン"],"meaning":"lively; energetic; full of life; vigorously (jumping, flopping, etc.); piercing (e.g. sound); penetrating; grating","recognition":true,"jmdictIDs":[1010960]},
     {"sources":["ピンポン"],"meaning":"ding-dong (of a doorbell, intercom, etc.); doorbell; intercom; ringing the doorbell; pressing the intercom button; ding ding ding!; correct!; right answer!","recognition":false,"jmdictIDs":[2853600]},
-    {"sources":["ピンポーン"],"meaning":"ding-dong (of a doorbell, intercom, etc.); doorbell; intercom; ringing the doorbell; pressing the intercom button; ding ding ding!; correct!; right answer!","recognition":false,"jmdictIDs":[2853600]},
+    {"sources":["ピンポーン"],"meaning":"ding-dong (of a doorbell, intercom, etc.); doorbell; intercom; ringing the doorbell; pressing the intercom button; ding ding ding!; correct!; right answer!","korean":"딩동","recognition":true,"curated":true,"jmdictIDs":[2853600]},
     {"sources":["ピーチクパーチク"],"meaning":"tweeting (of a bird); chirping; noisily (talking)","recognition":true,"jmdictIDs":[2869253]},
     {"sources":["ピーピー"],"meaning":"peep; chirp; beep; whistling, chirping, piping, etc. sound made by birds, insects, pipes, children, etc.","recognition":false,"jmdictIDs":[2097020]},
     {"sources":["ピーポー"],"meaning":"nee-naw (sound of an emergency vehicle siren); wee-woo","recognition":true,"jmdictIDs":[2841737]},

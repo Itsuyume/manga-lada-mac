@@ -46,6 +46,11 @@ enum OCRMigrationChecks {
         let old = try JapanesePageKeys(imageURL: url, configuration: .init(), context: "", title: "")
         let new = try JapanesePageKeys(imageURL: url, configuration: .init(japaneseOCR: .hayai), context: "", title: "")
         let detected = try JapanesePageKeys(imageURL: url, configuration: .init(japaneseOCR: .hayaiDetected), context: "", title: "")
+        let precise = try JapanesePageKeys(imageURL: url, configuration: .init(japaneseOCR: .hayaiTextStrokes), context: "", title: "")
+        try require(precise.translation != detected.translation && precise.recognition != detected.recognition,
+                    "Precise stroke OCR reused an obsolete erasure mask")
+        try require(precise.previousRecognition.contains(detected.recognition) && precise.previous.contains(detected.translation),
+                    "Precise stroke upgrade cannot preserve previous manual review edits")
         try require(detected.translation != new.translation && detected.recognition != new.recognition,
                     "Detector-assisted OCR reused a cache without the newly recovered regions")
         try require(detected.previousRecognition.contains(new.recognition) && detected.previous.contains(new.translation),
@@ -58,7 +63,8 @@ enum OCRMigrationChecks {
         try require(new.previous.contains(old.translation + "-hayai-v1"),
                     "Previous Hayai review is unavailable for migration")
         for (keys, suffix) in [(new, "-hayai-v2"), (detected, "-hayai-detected-v1"),
-                              (detected, "-hayai-detected-v2"), (detected, "-hayai-detected-v3")] {
+                              (detected, "-hayai-detected-v2"), (detected, "-hayai-detected-v3"),
+                              (precise, "-hayai-text-strokes-v1")] {
             let priorRecognition = old.recognitionBeforeCleanupUpdate + suffix + "-ink-v2"
             let priorTranslation = old.translation + suffix
             try require(keys.recognition != priorRecognition && keys.translation != priorTranslation,
@@ -66,7 +72,7 @@ enum OCRMigrationChecks {
             try require(keys.previousRecognition.contains(priorRecognition) && keys.previous.contains(priorTranslation),
                         "Source-disagreement policy lost previous manual reviews")
         }
-        for keys in [old, new, detected] {
+        for keys in [old, new, detected, precise] {
             try require(keys.recognition != keys.recognitionBeforeCleanupUpdate && keys.previousRecognition.first == keys.recognitionBeforeCleanupUpdate,
                         "Unsafe old cleanup image can bypass regeneration")
             try require(keys.previous.first != keys.translation && Set(keys.previous).count == keys.previous.count,

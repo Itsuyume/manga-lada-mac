@@ -1,5 +1,6 @@
 """Behaviour checks for the detector/OCR boundary, including erase side effects."""
 from pathlib import Path
+from copy import deepcopy
 import sys
 sys.dont_write_bytecode = True
 import cv2
@@ -63,6 +64,27 @@ for existing in [extras, [dict(extras[0], keepsOriginal=True)], [dict(extras[0],
     reader = ModelBoundary([proposal], ())
     empty, found = recover_lettering(page, existing, reader.detect, reader.read)
     assert not empty.any() and not found and reader.calls == 0, 'Existing review was reread or erased'
+
+# Rebuilding an obsolete clean image must also restore previously recovered ink.
+# It must not create duplicate regions or rewrite any stored review metadata.
+stored = [dict(extras[0], translatedText='보관한 번역', lettering={'fontScale': 1.1})]
+stored_before = deepcopy(stored)
+reader = ModelBoundary([proposal])
+refreshed, found = recover_lettering(page, stored, reader.detect, reader.read, refresh_existing=True)
+assert np.array_equal(refreshed, mask) and not found, 'Cached lettering lost its erase mask during regeneration'
+assert stored == stored_before and np.array_equal(page, original), 'Mask refresh rewrote source or review data'
+for changes in [dict(keepsOriginal=True), dict(userDefinedBounds=extras[0]['box']),
+                dict(userDefinedOriginalText=True), dict(userDefinedTextKind=True),
+                dict(recognitionAlternatives=['テスト', 'テステ']), dict(balloonShape={'bounds': extras[0]['box']})]:
+    reader = ModelBoundary([proposal], ())
+    empty, found = recover_lettering(page, [dict(stored[0], **changes)], reader.detect, reader.read, refresh_existing=True)
+    assert not empty.any() and not found and reader.calls == 0, 'Mask refresh touched protected or unresolved review'
+reader = ModelBoundary([proposal], ())
+empty, found = recover_lettering(page, stored + stored, reader.detect, reader.read, refresh_existing=True)
+assert not empty.any() and not found and reader.calls == 0, 'Ambiguous region ownership authorized erasure'
+reader = ModelBoundary([proposal])
+empty, found = recover_lettering(page, [dict(stored[0], originalText='別の文字')], reader.detect, reader.read, refresh_existing=True)
+assert not empty.any() and not found, 'New reading disagreed with cached source but still erased it'
 
 for proposals, limit in [([], 8), ([proposal], 0), ([TextDetection(proposal.bounds, .1, 'effect')], 8)]:
     reader = ModelBoundary(proposals, ())
