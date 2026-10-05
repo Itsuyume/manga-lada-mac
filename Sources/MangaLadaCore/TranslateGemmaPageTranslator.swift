@@ -17,6 +17,7 @@ public struct TranslateGemmaPageTranslator: MangaPageTranslating {
         You are a professional Japanese (ja) to Korean (ko) translator. Your goal is to accurately convey the meaning and nuances of the original Japanese text while adhering to Korean grammar, vocabulary, and cultural sensitivities.
         Produce only the Korean translation, without any additional explanations or commentary. Preserve every [R0], [R1] identifier exactly, with one translated region per identifier. These manga regions include dialogue, narration and sound effects. Preserve speaker tone and render all names and honorifics in Korean script.
         \(masking)
+        \(MangaTranslationPrompt.dialogueGuidance(blocks: blocks))
         \(context)
         \(effects)
         Please translate the following Japanese text into Korean:
@@ -34,6 +35,7 @@ public struct TranslateGemmaPageTranslator: MangaPageTranslating {
                 instruction = """
                 You are a professional Japanese (ja) to Korean (ko) translator. Output only Korean text after every numbered [R0], [R1] marker. Never repeat the Japanese original, including inside quotations or parentheses. Render every name and honorific in Korean script. Translate each numbered region exactly once.
                 \(masking)
+                \(MangaTranslationPrompt.dialogueGuidance(blocks: blocks))
                 \(context)
                 \(effects)
                 The previous response failed validation: \(detail)

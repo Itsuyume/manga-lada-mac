@@ -55,6 +55,12 @@ public enum MangaPageResponse {
                 throw TranslationError.invalidPageResponse("영역 \(index) 누락")
             }
             let text = try MaskedTextTranslation.validated(entry.text.trimmingCharacters(in: .whitespacesAndNewlines), source: block.originalText)
+            for (opening, closing): (Character, Character) in [("[", "]"), ("{", "}")]
+                where !block.originalText.contains(closing) {
+                guard text.filter({ $0 == closing }).count <= text.filter({ $0 == opening }).count else {
+                    throw TranslationError.invalidPageResponse("영역 \(index)에 짝이 없는 닫는 기호 \(closing)가 있습니다. 번역문만 반환해주세요.")
+                }
+            }
             let hasKorean = TextLanguageDetector.containsKorean(text)
             let sourceHasJapanese = TextLanguageDetector.containsJapanese(block.originalText)
             let nonverbal = TextLanguageDetector.isNonverbalTranslation(text, source: block.originalText)
@@ -78,6 +84,26 @@ public enum MangaPageResponse {
 }
 
 enum MangaTranslationPrompt {
+    private static let dialogueRules = """
+    Dialogue rules: preserve the register of EACH region. Japanese plain/casual speech (だ, だよ, してる, 〜てね, 〜なの?, うん) uses Korean 반말; explicit polite speech (です, ます, ください) uses 존댓말. Do not add -요 or -습니다 to every speaker. Do not infer politeness from age, gender, a name suffix, or a neighboring speaker's polite reply. A fragment inherits its connected sentence's register, not another speaker's.
+    An isolated exclamation あれ? / あれ〜 expresses surprise (어라?); demonstrative あれは / あれを means that thing, and 下 means below. Preserve these different meanings.
+    Stretched interjections keep their meaning: え〜も〜う is an exasperated "에이, 정말~", never "몰라" or "모르겠어". A wave or elongation inside も〜う does not turn もう into another word. Use ~ or … for stretched Korean speech; never Japanese ー in Korean output.
+    Read neighboring regions for context but keep each region's own words and punctuation under its own identifier. Do not move, repeat, omit or invent a sentence across identifiers. Short spoken fragments and timing adverbs such as そろそろ are dialogue, not sound effects.
+    A casual question offering food or drink (飲む？) is an invitation (마실래?), not a claim about somebody's plans. Sentence-ending とか can list the speaker's examples; do not invent "someone said" or "I heard". A noun caption stays a noun phrase; do not turn it into spoken dialogue or add a new subject.
+    """
+    static func dialogueGuidance(blocks: [TextBlock]) -> String {
+        let hints = blocks.enumerated().compactMap { index, block -> String? in
+            if block.textKind == .caption { return "R\(index): narration/caption; preserve fragments and noun phrases." }
+            guard block.textKind == nil || block.textKind == .dialogue else { return nil }
+            let text = block.originalText.filter { !$0.isWhitespace }
+            if text.range(of: "です|ます|ません|ました|でした|ください", options: .regularExpression) != nil {
+                return "R\(index): explicit polite speech. Use Korean 존댓말."
+            }
+            guard text.range(of: #"(?:[だたよねのるむくすつぬぶう]|いい|うん|ありがとう|何|いや|ごめん)[っッ。！？!?〜～ー…]*$"#, options: .regularExpression) != nil else { return nil }
+            return "R\(index): explicit casual speech. Use Korean 반말 (해/했어/있어/고마워); no -요, -세요, -습니다, -까요."
+        }
+        return dialogueRules + "\nPer-region register guide (not output text):\n" + hints.joined(separator: "\n")
+    }
     static let system = """
     You are a professional Japanese-to-Korean manga translator. Translate ALL numbered regions together using page context and Japanese right-to-left reading order. Preserve names, relationships, tense, speaker tone, honorifics, jokes and sentence meaning. Use fluent Korean and translate all written content while preserving intentional omissions. Never invent missing plot facts. Previous-page text is context only, not new regions to translate.
     Classify each region as dialogue, caption, or soundEffect. Render Japanese onomatopoeia by meaning as concise natural Korean sound effects (ドーン -> 쾅, ゴゴゴ -> 고오오, ドキドキ -> 두근두근, サラサラ -> 사락사락 or 찰랑찰랑 depending on the scene). Never just transliterate a Japanese sound into Hangul (e.g. サラサラ is not 살라살라). Short speech is still dialogue when it is spoken. Use Korean script, punctuation and needed numbers. Do not output Japanese, explanations, romaji or markdown. Keep dialogue compact without summarizing away meaning. Return JSON {"translations":[{"id":0,"text":"한국어","kind":"dialogue"}]} with each input id exactly once.
@@ -91,7 +117,7 @@ enum MangaTranslationPrompt {
         let data = try JSONEncoder().encode(regions)
         let masking = MaskedTextTranslation.instruction(for: blocks.map(\.originalText))
         let effects = try soundEffectGuidance(blocks: blocks)
-        return "Previous page (context only):\n\(previousContext.suffix(3_000))\n\(masking)\n\(effects)\nRegions in reading order:\n\(String(decoding: data, as: UTF8.self))"
+        return "Previous page (context only):\n\(previousContext.suffix(3_000))\n\(dialogueGuidance(blocks: blocks))\n\(masking)\n\(effects)\nRegions in reading order:\n\(String(decoding: data, as: UTF8.self))"
     }
 
     static func soundEffectGuidance(blocks: [TextBlock]) throws -> String {

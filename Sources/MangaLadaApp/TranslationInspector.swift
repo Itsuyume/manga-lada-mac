@@ -137,8 +137,8 @@ struct TranslationInspector: View {
                 }
             }.font(.system(size: 10)).disabled(editingDisabled)
                 .help("이 문구의 번역만 검수창에서 갱신합니다. ‘수정 적용’을 누르면 이미지에 저장됩니다.")
-            if block.textKind == .soundEffect {
-                Picker("효과음 스타일", selection: effectStyleBinding(block)) {
+            if block.textKind == .soundEffect || block.textKind == .dialogue {
+                Picker("글자 스타일", selection: effectStyleBinding(block)) {
                     Text("전체 설정 따르기").tag("")
                     Text("원문에 맞춰 추천").tag("automatic")
                     ForEach(state.effectStyles) { Text($0.name).tag($0.id) }
@@ -148,6 +148,14 @@ struct TranslationInspector: View {
                 .padding(4).background(.background, in: RoundedRectangle(cornerRadius: 5))
                 .overlay { RoundedRectangle(cornerRadius: 5).stroke(.quaternary) }
                 .disabled(editingDisabled)
+            if let korean = state.effectLexicon?.translation(for: block.originalText),
+               block.textKind != .soundEffect || block.translatedText != korean {
+                Button("효과음 사전 적용: \(korean)") {
+                    state.applyDictionaryEffect(block.id)
+                }.font(.system(size: 10)).disabled(editingDisabled)
+                    .accessibilityLabel("\(number)번 효과음 사전 적용: \(korean)")
+                    .help("저장된 문구를 사전 표기로 임시 수정합니다. ‘수정 적용’을 누르면 이미지에 저장됩니다.")
+            }
             if block.textKind == .soundEffect, let lexicon = state.effectLexicon {
                 SoundEffectReviewMenu(options: lexicon.reviewOptions(for: block.originalText),
                                      currentText: block.translatedText, number: number) { korean in

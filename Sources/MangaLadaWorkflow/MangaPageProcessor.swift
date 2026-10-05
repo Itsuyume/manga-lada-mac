@@ -72,7 +72,7 @@ public final class MangaPageProcessor {
         }
         var recognized = try await recognition(imageURL: imageURL, key: keys.recognition, previousKeys: keys.previousRecognition, cleanURL: cleanURL,
                                                retention: configuration.ollama.retention, status: status)
-        recognized.blocks = JapaneseRegionMerger.speechRegions(recognized.blocks)
+        recognized.blocks = JapaneseSpeechGrouping.resolve(recognized.blocks)
         let storedPrior = try storedCurrent ?? previousTranslation(keys.previous)
         let manualBlocks = storedPrior?.blocks.filter { $0.userDefinedBounds != nil } ?? []
         for manual in manualBlocks {

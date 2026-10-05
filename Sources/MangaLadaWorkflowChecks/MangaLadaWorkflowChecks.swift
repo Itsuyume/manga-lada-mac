@@ -14,6 +14,7 @@ struct MangaLadaWorkflowChecks {
             try CacheMigrationChecks.run()
             try PunctuationReviewChecks.run()
             try await LegacyPunctuationCacheChecks.run()
+            try await SupplementalCacheChecks.run()
             return
         }
         if arguments.count == 5, arguments[1] == "--review" {
@@ -24,6 +25,16 @@ struct MangaLadaWorkflowChecks {
         var settings = LocalTranslatorConfiguration(enhanceSoundEffects: arguments.contains("--effects"))
         settings.interpretMaskedText = arguments.contains("--masked-context")
         if let option = arguments.first(where: { $0.hasPrefix("--model=") }) { settings.ollama.model = String(option.dropFirst(8)) }
+        if arguments.count >= 5, arguments[1] == "--real-regression" {
+            do {
+                try await RealPageRegressionChecks.run(manifest: URL(fileURLWithPath: arguments[2]), output: URL(fileURLWithPath: arguments[3]),
+                    support: URL(fileURLWithPath: arguments[4]), configuration: settings)
+            } catch {
+                FileHandle.standardError.write(Data("Real-page regression failed: \(error.localizedDescription)\n".utf8))
+                exit(1)
+            }
+            return
+        }
         if arguments.count >= 4, arguments[1] == "--text-benchmark" {
             do {
                 try await TextTranslationBenchmark.run(input: URL(fileURLWithPath: arguments[2]), output: URL(fileURLWithPath: arguments[3]), configuration: settings)

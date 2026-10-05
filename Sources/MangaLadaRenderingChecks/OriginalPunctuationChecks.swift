@@ -112,6 +112,15 @@ extension MangaLadaRenderingChecks {
             var adjacent = caption
             if bounds { adjacent.userDefinedBounds = TextBox(x: 0.1, y: 0.1, width: 0.8, height: 0.8) }
             else { adjacent.box = punctuation.box }
+            if !bounds {
+                for source in [original, nil] {
+                    do {
+                        _ = try renderer.render(image: clean, blocks: [adjacent, punctuation], backgroundStyle: .none, originalImage: source)
+                        try require(false, "Two regions with the same source box were drawn over each other.")
+                    } catch TranslatedImageRenderError.overlappingRegions { }
+                }
+                continue
+            }
             let expected = try punctuationPixels(renderer.render(image: clean, blocks: [adjacent, punctuation], backgroundStyle: .none))
             let actual = try punctuationPixels(renderer.render(image: clean, blocks: [adjacent, punctuation], backgroundStyle: .none, originalImage: original))
             try require(actual == expected, "Punctuation restored Japanese pixels over another text region or manual placement.")

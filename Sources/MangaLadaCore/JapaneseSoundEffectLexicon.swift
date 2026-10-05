@@ -89,7 +89,8 @@ public struct JapaneseSoundEffectLexicon: Sendable {
         }
     }
     private static func normalized(_ text: String) -> String {
-        text.precomposedStringWithCompatibilityMapping.trimmingCharacters(in: CharacterSet(charactersIn: " \t\r\n.!?。…・"))
+        text.precomposedStringWithCompatibilityMapping.filter { !$0.isWhitespace }
+            .trimmingCharacters(in: CharacterSet(charactersIn: ".!?。…・"))
     }
     public struct ReviewOption: Decodable, Hashable, Sendable {
         public let context: String

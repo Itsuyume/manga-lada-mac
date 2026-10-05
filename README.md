@@ -41,6 +41,13 @@
 
 0.2.33은 긴 가로 원문이 설명 상자의 위·아래쪽에 있어 상자 전체를 놓치던 경우를 보완합니다. 직사각형 윤곽·가로 폭·글자 밖의 단색 공간을 함께 확인하며 중앙에 작은 그림이 있으면 확장하지 않습니다. 원본을 다시 열면 기존 문구·번호·수동 검수를 유지하면서 설명 상자와 식자를 갱신합니다. 이전 완성 PNG 파일만 Reader로 열 때는 재처리하지 않습니다.
 
+0.2.34는 큰 페이지에서 기존 CPU 검출과 세밀한 MPS 검출을 대조해 짧은 인접 문구를 보완하고, 본문에 섞인 작은 곁글을 분리합니다. 색으로 채운 점선 말풍선·반투명 색 말풍선을 찾고, 식자 전에 이웃 문구가 사용할 공간을 나눕니다. 영역이 크게 겹쳐 안전하게 배치할 수 없으면 기존 완성본을 보존하고 실패로 표시합니다. MPS가 없는 환경은 기존 CPU 검출을 사용합니다. 세밀한 검출은 인식 비용을 늘리므로 속도 향상으로 간주하지 않습니다.
+
+효과음 추가 인식은 모델의 JSON 객체·배열 응답을 검증해 읽습니다. 새로 효과음으로 분류한 문구도 다시 번역하며, 보완 전의 오래된 번역이 수정된 효과음 캐시를 덮어쓰지 않도록 기준 문구와 실제 검수 변경을 구분합니다. 직접 정한 종류·영역·말풍선 대사는 시각 모델이 재분류하지 않습니다. 추가 효과음과 누락 일반 문구를 따로 집계합니다. 흰 테두리·검은 속 획이 있는 효과음을 영역 지정으로 지울 때는 닫힌 테두리와 속 획을 함께 제거합니다. 실제 손글씨 효과음의 자동 위치 검출에는 여전히 누락이 있으며, 추가 인식 기능을 켜는 것만으로 전체 검출을 보장하지 않습니다.
+
+
+짧은 대사를 효과음으로 분류하던 일부 사전 항목을 정정했으며, 문구별 존댓말·반말과 질문·설명 상자 처리 지침을 보강했습니다. 이전 저장 번역은 사용자 수정 여부를 추측해 덮어쓰지 않습니다. 알려진 효과음의 오역은 검수창 **효과음 사전 적용 → 수정 적용**으로 바로잡을 수 있고, 전체 문구를 갱신하려면 **현재 페이지 다시 번역**을 사용합니다. 작은 손글씨·장식 글자 누락, 인명·문맥 오역이 모두 해결된 것은 아닙니다.
+
 ## 파일 형식
 
 폴더(하위 폴더 포함), ZIP/CBZ, 7z/CB7, RAR/CBR, TAR 및 gzip/bzip2/xz 압축 TAR, PDF, PNG/JPEG/WebP/GIF/TIFF/BMP/HEIC/HEIF/AVIF를 가져옵니다. 0.2.22부터 파일 열기 창에서 이미지를 고르면 기본적으로 그 한 장만 바로 가져옵니다. **이미지의 앞뒤 페이지도 함께 열기**를 선택한 경우에만 이미지가 있는 폴더를 한 번 더 선택합니다. **이 폴더 열기**를 누르면 같은 폴더의 이미지를 자연스러운 숫자 순서로 읽고 고른 페이지에서 시작합니다. 긴 파일명이나 사진 앱의 임시 폴더명이 추가 선택창을 화면 밖까지 늘리지 않도록 안내문에 경로를 붙이지 않습니다. 파일 한 장에 대한 접근만으로 상위 폴더를 암묵적으로 읽지 않습니다. 폴더 선택을 취소하면 현재 책을 유지하며, 다른 폴더를 고르거나 선택한 이미지가 사라졌으면 오류를 표시합니다. **폴더 열기**는 한 번의 선택으로 책 전체를 읽습니다.
@@ -98,13 +105,13 @@ ollama pull qwen3.5:9b
 
 말풍선 윤곽을 확정할 수 없는 문구는 검출된 원문 영역 안에서 배치합니다. 읽기 가능한 크기로도 들어가지 않으면 해당 문구를 포함한 오류를 표시하며 잘린 번역을 완료로 저장하지 않습니다. 번역 텍스트 캐시는 식자 실패와 별도로 보존하므로 배치를 수정할 때 모델을 다시 호출할 필요가 없습니다.
 
-전체 자동 처리와 편집을 함께 제공합니다. 그림 위에 겹친 손글씨 효과음, 낮은 해상도, 비정형 말풍선은 인식·원문 제거·위치가 틀릴 수 있습니다. 읽기 순서는 영역 위치를 기반으로 한 휴리스틱입니다. 효과음은 3개 공개 글꼴을 재사용하는 12가지 스타일(굵기·기울기·압축·자간·외곽선) 중 전체 또는 문구별 설정을 적용하며 원본의 모든 커스텀 레터링을 복제하지는 않습니다. 원문과 검수 창을 대조해 필요한 문구를 수정하세요.
+전체 자동 처리와 편집을 함께 제공합니다. 그림 위에 겹친 손글씨 효과음, 낮은 해상도, 비정형 말풍선은 인식·원문 제거·위치가 틀릴 수 있습니다. 읽기 순서는 영역 위치를 기반으로 한 휴리스틱입니다. 효과음은 5개 공개 글꼴을 재사용하는 14가지 스타일(굵기·기울기·압축·자간·외곽선) 중 전체 또는 문구별 설정을 적용하며 원본의 모든 커스텀 레터링을 복제하지는 않습니다. 원문과 검수 창을 대조해 필요한 문구를 수정하세요.
 
 글자 종류는 먼저 인식한 윤곽과 원문에서 보완합니다. 거의 직사각형인 설명 상자는 밝기와 관계없이 나레이션으로, 말풍선 밖의 일부 명확한 소리 표기(ザアア, カチッ, バタン 등)는 효과음으로 분류합니다. 짧은 가나라는 이유만으로 감탄사·대답·이름을 효과음으로 바꾸지는 않습니다. 이 규칙은 모든 표현을 아우르는 의미 분류기가 아니므로 애매한 문구는 모델 결과나 검수에서 정한 종류를 사용합니다. 직접 수정한 종류·표지 제목·검수 번역은 버전 갱신 때 보존합니다. 추가 모델 호출은 없습니다.
 
-효과음 번역에는 `MangaLadaCore/Resources/sound-effect-lexicon.json`을 사용합니다. 2026-10-04 [JMdict](https://www.edrdg.org/wiki/index.php/JMdict-EDICT_Dictionary_Project)의 효과음·의태어 1,341개 항목에서 읽기별 뜻을 대조한 표기와 앱의 보완 표기를 합쳐 3,494개를 저장합니다. 약 0.53MB이며, 이 중 독립 효과음 형태 1,816개만 자동 분류에 사용합니다. `きっと`, 짧은 일반 감탄사, 말풍선 안의 대사, 문장 일부는 목록과 비슷하다는 이유만으로 효과음으로 바꾸지 않습니다. 모든 만화 효과음을 망라하거나 모든 OCR 오독을 교정하는 목록은 아닙니다.
+효과음 번역에는 `MangaLadaCore/Resources/sound-effect-lexicon.json`을 사용합니다. 2026-10-04 [JMdict](https://www.edrdg.org/wiki/index.php/JMdict-EDICT_Dictionary_Project)의 효과음·의태어 1,341개 항목에서 읽기별 뜻을 대조한 표기와 앱의 보완 표기를 합쳐 3,498개를 저장합니다. 약 0.53MB이며, 이 중 독립 효과음 형태 1,816개만 자동 분류에 사용합니다. `きっと`, 짧은 일반 감탄사, 말풍선 안의 대사, 문장 일부는 목록과 비슷하다는 이유만으로 효과음으로 바꾸지 않습니다. 모든 만화 효과음을 망라하거나 모든 OCR 오독을 교정하는 목록은 아닙니다.
 
-21개 표현군·61개 표기는 한국어 기본형을 바로 적용합니다. 예: カチッ→딸깍, バタン→쾅, ドキドキ→두근두근, にちっ→질척, キラキラ→반짝반짝, バシャバシャ→첨벙첨벙, ポタポタ→똑똑, ガヤガヤ→웅성웅성. 이들은 앱이 정한 편집 가능한 기본 식자형이며 모든 그림에서 유일한 정답을 뜻하지 않습니다. `ゴロゴロ`, `パチパチ`, `にちゃにちゃ`처럼 문맥에 따라 달라지는 말은 뜻 후보를 제공하되 하나의 번역으로 고정하지 않습니다. 분류 사전은 좌표·OCR 철자를 변경하지 않고 이전 검수 캐시를 일괄 덮어쓰지 않습니다. `にちゃにちゃ` 계열의 의미는 [일본어 사전 설명](https://kotobank.jp/word/%E3%81%AB%E3%81%A1%E3%82%83%E3%81%AB%E3%81%A1%E3%82%83-3215446), シーン의 무음 의미는 [교토산업대의 설명](https://www.cc.kyoto-su.ac.jp/~hiratuka/essays/shiin.html)을 참고했습니다.
+23개 표현군·65개 표기는 한국어 기본형을 바로 적용합니다. 예: カチッ→딸깍, バタン→쾅, ドキドキ→두근두근, にちっ→질척, キラキラ→반짝반짝, バシャバシャ→첨벙첨벙, ポタポタ→똑똑, ガヤガヤ→웅성웅성. 이들은 앱이 정한 편집 가능한 기본 식자형이며 모든 그림에서 유일한 정답을 뜻하지 않습니다. `ゴロゴロ`, `パチパチ`, `にちゃにちゃ`처럼 문맥에 따라 달라지는 말은 뜻 후보를 제공하되 하나의 번역으로 고정하지 않습니다. 분류 사전은 좌표·OCR 철자를 변경하지 않고 이전 검수 캐시를 일괄 덮어쓰지 않습니다. `にちゃにちゃ` 계열의 의미는 [일본어 사전 설명](https://kotobank.jp/word/%E3%81%AB%E3%81%A1%E3%82%83%E3%81%AB%E3%81%A1%E3%82%83-3215446), シーン의 무음 의미는 [교토산업대의 설명](https://www.cc.kyoto-su.ac.jp/~hiratuka/essays/shiin.html)을 참고했습니다.
 
 JMdict 데이터의 저작권자는 James William Breen과 EDRDG입니다. 추출 사전과 보완 데이터는 [CC BY-SA 4.0](https://www.edrdg.org/edrdg/licence.html)으로 배포하며, 앱에 출처·변경 내역·라이선스 전문을 포함합니다. 사전은 릴리스 전에 공식 `JMdict_e.gz`를 임시 작업 폴더에 내려받아 `python3 scripts/update_effect_lexicon.py <download.gz> Sources/MangaLadaCore/Resources/sound-effect-lexicon.json`으로 갱신합니다. 원본 전체 사전은 앱에 넣지 않으며, 등록된 한국어 기본형과 사용자 검수는 보존합니다.
 
@@ -132,7 +139,7 @@ JMdict 데이터의 저작권자는 James William Breen과 EDRDG입니다. 추�
 
 ## 효과음 폰트집
 
-Rendering 리소스의 `sound-effect-styles.json`이 12가지 스타일의 단일 출처입니다. Black Han Sans, Nanum Brush Script, Nanum Myeongjo 3개 글꼴은 [Google Fonts](https://github.com/google/fonts)에서 제공하는 SIL Open Font License 글꼴이며 라이선스를 함께 포함합니다. 총 글꼴 용량은 약 7.6MB입니다. 새 커스텀 TTF 12개를 만든 것이 아니라 3개 글꼴의 조판을 12가지로 구성했습니다. 글꼴은 번역 앱 내부에만 포함하고 Reader에는 복제하지 않으며 Mac 전체에 설치하지 않습니다. 설정의 **폰트집 보기**는 iCloud에 별도로 저장한 오프라인 표본집을 엽니다.
+Rendering 리소스의 `sound-effect-styles.json`이 14가지 스타일의 단일 출처입니다. Black Han Sans, Nanum Brush Script, Nanum Myeongjo, Gaegu, Dokdo 5개 글꼴은 [Google Fonts](https://github.com/google/fonts)에서 제공하는 SIL Open Font License 글꼴이며 라이선스를 함께 포함합니다. 총 글꼴 용량은 약 12.9MB입니다. 새 커스텀 TTF 14개를 만든 것이 아니라 5개 글꼴의 조판을 14가지로 구성했습니다. Gaegu/Dokdo 원본은 Google Fonts 커밋 `9710da1eacb3be272583c3224dcb70f9da6eadbb`의 `ofl/gaegu`, `ofl/dokdo`에서 가져왔습니다. 글꼴은 번역 앱 내부에만 포함하고 Reader에는 복제하지 않으며 Mac 전체에 설치하지 않습니다. 설정의 **폰트집 보기**는 iCloud에 별도로 저장한 오프라인 표본집을 엽니다.
 
 효과음은 외곽선을 그린 뒤 원래 글자 획을 다시 채웁니다. 흰 외곽선이 명조체·붓글씨의 가는 획을 덮지 않도록 하며, 속이 흰 스타일도 같은 순서를 사용합니다. 글꼴·문구·좌표·줄바꿈은 유지합니다. 기존 결과에는 원본을 다시 열어 저장하거나 검수 창의 **수정 적용**을 누르면 반영됩니다. 저장된 번역 캐시가 있으면 식자만 갱신하므로 모델을 다시 호출하지 않습니다.
 
@@ -183,6 +190,7 @@ swift run MangaLadaWorkflowChecks --cache-migration
 swift run MangaLadaImportChecks --export /path/to/completed-folder /path/to/output.cbz
 # 외부 엔진의 Python 환경에서
 python scripts/check_balloon_geometry.py
+python scripts/check_detection_refinement.py
 python scripts/check_text_region_kind.py
 python scripts/check_optical_effects.py
 python scripts/check_sentence_punctuation.py
@@ -196,7 +204,11 @@ swift run MangaLadaWorkflowChecks /path/to/japanese-page.png /path/to/result.png
 swift run MangaLadaWorkflowChecks /path/to/page.png /path/to/manual.png BookTitle --region=0.1,0.2,0.2,0.3
 # 원본 보존, 모든 페이지 크기/저장, 실패 기록을 확인하는 책 전체 검사
 swift run MangaLadaWorkflowChecks --book /path/to/book.zip /path/to/output-folder
+# Annotated real inputs, isolated cache/model directory, rendered images + per-case report.
+swift run MangaLadaWorkflowChecks --real-regression /path/to/cases.json /path/to/new-results /path/to/engine-support
 ```
+
+`--real-regression`의 JSON 배열은 각 사례의 `id`, manifest 기준 상대 이미지 경로 `image`, `expected`를 받습니다. `expected`에는 원문 일부인 `original`과 선택 조건 `koreanContainsAny`, `forbiddenKorean`, `kind`, `requiresShape`를 넣습니다. 실제 `MangaPageProcessor`로 OCR·번역·식자·저장을 실행한 뒤 같은 캐시로 다시 처리해 문구와 PNG 바이트가 같은지 확인합니다. 원본 보존·실패 내용·전체 인식 문구는 `regression-results.json`에 남깁니다. 결과 폴더는 새 경로여야 하며 모델은 지정한 지원 폴더에서 준비되어 있어야 합니다. 자동 기대값 통과와 저장 이미지의 시각·의미 검수는 별도입니다. 개인 원본·검수 이미지·로컬 경로는 공개 저장소에 넣지 않습니다.
 
 모델의 번역 문장과 시간을 비교할 때는 아래 검수를 별도로 실행합니다. 로컬 모델이 준비되어 있어야 하며 OCR·식자·번역 캐시를 거치지 않고 앱의 실제 번역 경로를 호출합니다. 출력 JSON의 일본어·한국어·검토 항목을 직접 대조해야 합니다. 명령의 성공은 응답 형식과 영역 보존을 뜻하며 의미 정확도의 합격을 뜻하지 않습니다. 기존 보고서 파일은 덮어쓰지 않습니다.
 
@@ -245,3 +257,11 @@ swift run -c release MangaLadaWorkflowChecks --text-benchmark fixtures/translati
 ## 엔진과 참고 프로젝트
 
 [BallonsTranslator](https://github.com/dmMaze/BallonsTranslator)의 외부 검출·manga-ocr·LaMa 엔진을 호출합니다. GPL 엔진 소스와 모델을 이 저장소나 앱에 포함하지 않습니다. 보완 마스크·Swift 렌더러·두 앱의 UI는 이 프로젝트의 코드입니다. [manga-image-translator](https://github.com/zyddnys/manga-image-translator)와 [MTL Studio](https://github.com/yucarez/mtl-studio)의 페이지 단위 처리·검수 흐름을 참고했습니다.
+
+### 연결 말풍선과 글자 스타일
+
+붙어 있는 말풍선은 원본 테두리의 오목한 연결부와 일본어 글자 열을 함께 확인해 작은 말풍선과 큰 말풍선으로 나눕니다. 각 영역에 가로 문장을 위아래로 쌓으며, 읽을 수 있는 크기 안에서는 단어를 나누기 전에 글자 크기를 줄입니다. 원문 열을 가로지르거나 근거가 불충분한 분할은 적용하지 않습니다.
+
+자동 효과음 스타일은 원문의 가는 획과 기존 뜻별 스타일을 함께 사용합니다. 짧은 효과음은 한 줄을 유지하고, 강조된 짧은 외침은 대사 종류를 유지한 채 붓글씨를 사용할 수 있습니다. 검수창의 **글자 스타일**에서 대사와 효과음 모두 개별 선택이 가능합니다. 원본 레터링과 정확히 같은 서체를 재현하는 기능은 아닙니다.
+
+실제 일반 대사 조각 6건에서 분리·원본 보존·캐시 재실행을 확인했습니다. 별도 실제 페이지의 손글씨 효과음 2건은 **수동 영역 지정 후** OCR·번역·제거·폰트 적용을 확인했으며, 자동 위치 탐지의 누락은 여전히 남아 있습니다. 자동 검사 결과는 전체 대사의 의미 정확도나 모든 그림의 탐지 성공률을 뜻하지 않습니다.

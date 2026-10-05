@@ -166,5 +166,33 @@
     "widthScale": 1,
     "outline": 3,
     "hollow": false
+  },
+  {
+    "id": "handwritten",
+    "name": "손글씨 · 가는 둥근 획",
+    "usage": "작은 움직임·가벼운 소리·부드러운 손글씨",
+    "sample": "꼼지락",
+    "fontName": "Gaegu-Regular",
+    "figmaFamily": "Gaegu",
+    "figmaStyle": "Regular",
+    "tracking": 0,
+    "shear": 0,
+    "widthScale": 1,
+    "outline": 2,
+    "hollow": false
+  },
+  {
+    "id": "brush",
+    "name": "붓글씨 · 거친 큰 획",
+    "usage": "거친 효과음·힘을 준 외침",
+    "sample": "와아!",
+    "fontName": "Dokdo-Regular",
+    "figmaFamily": "Dokdo",
+    "figmaStyle": "Regular",
+    "tracking": 0,
+    "shear": 0,
+    "widthScale": 1,
+    "outline": 2,
+    "hollow": false
   }
 ]

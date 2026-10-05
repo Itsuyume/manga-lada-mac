@@ -7,6 +7,16 @@ extension AppState {
     var currentReview: PageTranslation? { reviewDrafts[currentIndex] ?? currentReviewBaseline }
     var hasCurrentReview: Bool { reviewDrafts[currentIndex] != nil || reviewErrors[currentIndex] != nil }
 
+    func applyDictionaryEffect(_ id: UUID) {
+        guard let block = currentReview?.blocks.first(where: { $0.id == id }),
+              let korean = effectLexicon?.translation(for: block.originalText) else {
+            errorMessage = "현재 문구에 적용할 효과음 사전 표기가 없습니다."; return
+        }
+        editReviewBlock(id) {
+            $0.translatedText = korean; $0.textKind = .soundEffect; $0.userDefinedTextKind = true
+        }
+    }
+
     func editReviewBlock(_ id: UUID, change: (inout TextBlock) -> Void) {
         guard !isBusy, !isLoading, reviewErrors[currentIndex] == nil,
               let saved = currentReviewBaseline, var edited = currentReview else { return }

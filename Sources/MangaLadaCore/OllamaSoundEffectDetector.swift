@@ -8,7 +8,7 @@ public struct OllamaSoundEffectDetector: Sendable {
     public func recognize(imageData: Data) async throws -> [TextBlock] {
         return try await client.validated(system: "You detect printed Japanese sound effects in manga. Return only the requested JSON object.",
             user: """
-            Read the Japanese SOUND EFFECT text outside speech balloons. Do not include dialogue, faces or objects.
+            Read Japanese SOUND EFFECTS on the page, including effects in colored decorative enclosures as well as outside balloons. Do not include spoken exclamations, ordinary dialogue, faces or objects. A frame or colored background alone does not make an effect dialogue.
             Return {"regions":[{"text":"Japanese original","x":0,"y":0,"width":0,"height":0}]}.
             Coordinates are 0 to 1000 relative to the full image, origin top left. Give tight rectangles around the characters, not entire panels.
             If no sound effect return {"regions":[]}.
@@ -16,11 +16,17 @@ public struct OllamaSoundEffectDetector: Sendable {
             """, schema: .soundEffects, images: [imageData], outputTokens: 2048, decode: Self.decode)
     }
     public static func decode(_ data: Data) throws -> [TextBlock] {
-        let result: Response
-        do { result = try JSONDecoder().decode(Response.self, from: data) }
+        let regions: [Region]
+        do {
+            // Locally observed Qwen replies use both the schema envelope and a bare region array.
+            // Normalize that boundary shape only; every item still requires valid text and geometry.
+            let isArray = String(decoding: data, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines).hasPrefix("[")
+            regions = isArray ? try JSONDecoder().decode([Region].self, from: data)
+                              : try JSONDecoder().decode(Response.self, from: data).regions
+        }
         catch { throw TranslationError.invalidPageResponse("효과음 좌표 응답을 읽지 못했습니다: \(String(decoding: data.prefix(1000), as: UTF8.self))") }
-        guard result.regions.count <= 40 else { throw TranslationError.invalidPageResponse("효과음 영역이 지나치게 많습니다.") }
-        return try result.regions.map { region in
+        guard regions.count <= 40 else { throw TranslationError.invalidPageResponse("효과음 영역이 지나치게 많습니다.") }
+        return try regions.map { region in
             let text = region.text.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !text.isEmpty, text.count <= 150, region.x.isFinite, region.y.isFinite,
                   region.width.isFinite, region.height.isFinite, (region.angle ?? 0).isFinite,

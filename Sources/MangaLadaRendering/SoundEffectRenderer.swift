@@ -10,10 +10,10 @@ enum SoundEffectRenderer {
         let shear: CGFloat
         let widthScale: CGFloat
     }
-    static func draw(_ block: TextBlock, in rect: NSRect, typography: MangaTypography, scale: Double) throws {
+    static func draw(_ block: TextBlock, in rect: NSRect, typography: MangaTypography, scale: Double, source: SourceLettering? = nil) throws {
         let text = block.translatedText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return }
-        let style = try selectedStyle(block, typography: typography)
+        let style = try LetteringStylePolicy.selected(block, typography: typography, source: source)
         let layout = try fit(text, block: block, rect: rect, style: style, typography: typography, scale: scale)
         NSGraphicsContext.saveGraphicsState()
         defer { NSGraphicsContext.restoreGraphicsState() }
@@ -33,12 +33,6 @@ enum SoundEffectRenderer {
         fill.removeAttribute(.strokeColor, range: range)
         fill.draw(in: drawingRect)
     }
-    private static func selectedStyle(_ block: TextBlock, typography: MangaTypography) throws -> SoundEffectStyle? {
-        guard let id = block.effectStyleID ?? typography.effectStyleID, id != "custom" else { return nil }
-        try SoundEffectFonts.registerBundledFonts()
-        let library = try SoundEffectLibrary.standard()
-        return try id == "automatic" ? library.automaticStyle(original: block.originalText, translated: block.translatedText) : library.style(id: id)
-    }
     private static func fit(_ text: String, block: TextBlock, rect: NSRect, style: SoundEffectStyle?,
                             typography: MangaTypography, scale: Double) throws -> Layout {
         let angle = CGFloat(block.rotationDegrees ?? 0) * .pi / 180
@@ -52,7 +46,8 @@ enum SoundEffectRenderer {
         }
         for size in stride(from: maximum, through: 10, by: -1) {
             let attributed = try attributedText(text, size: size, style: style, typography: typography)
-            let bounds = attributed.boundingRect(with: NSSize(width: width, height: .greatestFiniteMagnitude),
+            let measureWidth: CGFloat = text.count <= 6 && !text.contains("\n") ? .greatestFiniteMagnitude : width
+            let bounds = attributed.boundingRect(with: NSSize(width: measureWidth, height: .greatestFiniteMagnitude),
                                                  options: [.usesLineFragmentOrigin, .usesFontLeading]).integral
             let x = bounds.width * widthScale + bounds.height * abs(shear), y = bounds.height
             let rotatedWidth = abs(cos(angle)) * x + abs(sin(angle)) * y

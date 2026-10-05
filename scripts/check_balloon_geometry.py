@@ -9,7 +9,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "Sources/MangaLadaB
 import cv2
 import numpy as np
 from balloon_geometry import balloon_shape
-from balloon_geometry import BalloonGeometry, separate_shared_balloons
+from balloon_geometry import BalloonGeometry
+from balloon_partition import separate_shared_balloons
 
 
 def check_offset_caption():
@@ -41,7 +42,34 @@ def check_offset_caption():
     assert BalloonGeometry(clipped).shape(box, 27) is None, "Oversized edge artwork bypassed the page-area limit"
 
 
+def check_dotted_and_translucent():
+    """Regressions isolated from real dotted/color-filled balloon failures."""
+    for color in [(240, 218, 245), (70, 225, 250)]:
+        page = np.full((800, 800, 3), 180, np.uint8)
+        enclosure = np.zeros((800, 800), np.uint8)
+        cv2.ellipse(enclosure, (400, 400), (110, 175), 0, 0, 360, 255, -1)
+        page[enclosure > 0] = color
+        # A broken outline cannot alone define a closed interior.
+        for angle in range(0, 360, 24):
+            cv2.ellipse(page, (400, 400), (110, 175), 0, angle, angle + 10, (20,)*3, 2)
+        ink = np.zeros((800, 800), np.uint8)
+        for top in range(300, 490, 40):
+            cv2.rectangle(ink, (386, top), (414, top + 18), 255, -1)
+        page[ink > 0] = 0
+        original, mask = page.copy(), ink.copy()
+        box = dict(x=386/800, y=300/800, width=29/800, height=180/800)
+        shape = BalloonGeometry(page, text_mask=ink).shape(box, 30)
+        assert shape is not None, "A color-filled dotted balloon lost its enclosure"
+        assert shape["bounds"]["width"] > .25 and shape["bounds"]["height"] > .4
+        assert np.array_equal(page, original) and np.array_equal(ink, mask)
+        # A page-wide color alone does not authorize inventing a reading enclosure.
+        open_page = np.full_like(page, color)
+        open_page[ink > 0] = 0
+        assert BalloonGeometry(open_page, text_mask=ink).shape(box, 30) is None, "Unbounded colored paper became a balloon"
+
+
 check_offset_caption()
+check_dotted_and_translucent()
 
 image = np.full((640, 640, 3), 255, dtype=np.uint8)
 cv2.ellipse(image, (320, 320), (110, 140), 0, 0, 360, (0, 0, 0), 4)

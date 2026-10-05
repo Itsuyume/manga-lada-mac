@@ -163,6 +163,9 @@ enum SoundEffectTranslationChecks {
                   "Downloaded effect meanings or automatic forms were not bundled.")
         try check(lexicon.meaning(for: "きっと") != nil && !lexicon.recognizes("きっと"),
                   "An ambiguous ordinary adverb became an automatic effect.")
+        for source in ["そろそろ", "ソロソロ", "そろ\nそろ", "にちっと音がした", "にゃっ", ""] {
+            try check(!lexicon.recognizes(source), "An adverb, sentence or unrelated cat sound was automatically reclassified: \(source)")
+        }
         try check(lexicon.meaning(for: "ニャー")?.contains("meow") == true && lexicon.translation(for: "ニャー") == nil,
                   "Cat sound meaning was confused with the sticky effect family.")
         try check(lexicon.meaning(for: "バシャバシャ") == "splish-splash; with a splash"

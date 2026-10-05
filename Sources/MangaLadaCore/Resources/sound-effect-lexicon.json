@@ -11,10 +11,12 @@
     "license": "CC-BY-SA-4.0",
     "mimeticEntries": 1341,
     "importedForms": 3390,
-    "automaticForms": 1712,
-    "changes": "Mimetic kana readings and glosses extracted with reading-specific sense restrictions; kana variants generated; curated spellings take precedence."
+    "automaticForms": 1710,
+    "changes": "Mimetic kana readings and glosses extracted with reading-specific sense restrictions; kana variants generated; curated spellings take precedence; ordinary timing adverb excluded from automatic sound-effect recognition."
   },
   "reviewGroups": [
+    {"sources":["ごろん","ゴロン"],"options":[{"context":"몸을 뒹굴거나 돌아누움","korean":"뒹굴"},{"context":"몸을 눕힘","korean":"벌렁"},{"context":"물체가 구름","korean":"데굴"}]},
+    {"sources":["もじ","モジ"],"options":[{"context":"손가락을 움직임","korean":"꼼지락"},{"context":"수줍게 망설임","korean":"머뭇"}]},
     {"sources":["にちっ","ニチッ","にちゃっ","ニチャッ"],"options":[{"context":"끈적한 접촉","korean":"질척"},{"context":"떼어내는 소리","korean":"쩍"},{"context":"점성 있는 촉감","korean":"끈적"}]},
     {"sources":["にちゃにちゃ","ニチャニチャ"],"options":[{"context":"점성 있는 촉감","korean":"끈적끈적"},{"context":"끈적한 접촉","korean":"질척질척"},{"context":"반복해서 떼어냄","korean":"쩍쩍"}]},
     {"sources":["ゴロゴロ","ごろごろ","ゴロンゴロン","ごろんごろん"],"options":[{"context":"천둥","korean":"우르릉"},{"context":"고양이","korean":"가르랑"},{"context":"배에서 나는 소리","korean":"꾸르륵"},{"context":"무거운 물체가 구름","korean":"데굴데굴"},{"context":"빈둥거림","korean":"뒹굴뒹굴"}],"jmdictIDs":[1005020]},
@@ -25,6 +27,8 @@
     {"sources":["ドンドン","どんどん","ドンドンドン","ゴンゴン","ごんごん"],"options":[{"context":"문·발구르기","korean":"쿵쿵"},{"context":"북","korean":"둥둥"},{"context":"강한 충돌","korean":"쾅쾅"}],"jmdictIDs":[1009320,2517030]}
   ],
   "entries": [
+    {"sources":["ごろん","ゴロン"],"korean":"뒹굴","meaning":"Short manga form related to ごろんと: a body or object rolls or flops over. Not a stomach rumble. Select the scene-specific Korean variant when needed.","curated":true,"jmdictIDs":[2029185]},
+    {"sources":["もじ","モジ"],"korean":"꼼지락","meaning":"Short manga effect related to もじもじ: bashful fidgeting. Only use when explicitly classified as an effect; ordinary 文字 (text/letters) has the same reading.","recognition":false,"curated":true,"jmdictIDs":[1012570]},
     {"sources":["にちっ","ニチッ","にちゃっ","ニチャッ"],"korean":"질척","meaning":"A brief sticky or slimy contact sound; not a cat's meow. The Korean default is editable for the scene."},
     {"sources":["にちゃにちゃ","ニチャニチャ"],"meaning":"Sticky or slimy contact, such as glue or dough. Choose a concise Korean effect from context, e.g. 질척질척, 쩍쩍, 끈적끈적."},
     {"sources":["きらきら","キラキラ"],"korean":"반짝반짝"},
@@ -784,7 +788,7 @@
     {"sources":["そっと"],"meaning":"softly; gently; quietly; lightly; stealthily; secretly; in secret; to leave alone; to leave as it is","recognition":false,"jmdictIDs":[1006810]},
     {"sources":["そぼそぼ"],"meaning":"drizzling (rain)","recognition":true,"jmdictIDs":[2581160]},
     {"sources":["そよそよ"],"meaning":"gently (of the wind); softly","recognition":true,"jmdictIDs":[2121370]},
-    {"sources":["そろそろ"],"meaning":"soon; before long; any time now; momentarily; slowly; quietly; steadily; gradually; gingerly; already; about time","recognition":true,"jmdictIDs":[1345605]},
+    {"sources":["そろそろ"],"meaning":"soon; before long; any time now; momentarily; slowly; quietly; steadily; gradually; gingerly; already; about time","recognition":false,"jmdictIDs":[1345605],"curated":true},
     {"sources":["そろっと"],"meaning":"soon; momentarily; before long; any time now","recognition":false,"jmdictIDs":[2835291]},
     {"sources":["そろり"],"meaning":"slowly and quietly; smoothly","recognition":false,"jmdictIDs":[2454190]},
     {"sources":["そろりそろり"],"meaning":"slowly and quietly; stealthily","recognition":true,"jmdictIDs":[2863908]},
@@ -2479,7 +2483,7 @@
     {"sources":["ソット"],"meaning":"softly; gently; quietly; lightly; stealthily; secretly; in secret; to leave alone; to leave as it is","recognition":false,"jmdictIDs":[1006810]},
     {"sources":["ソボソボ"],"meaning":"drizzling (rain)","recognition":true,"jmdictIDs":[2581160]},
     {"sources":["ソヨソヨ"],"meaning":"gently (of the wind); softly","recognition":true,"jmdictIDs":[2121370]},
-    {"sources":["ソロソロ"],"meaning":"soon; before long; any time now; momentarily; slowly; quietly; steadily; gradually; gingerly; already; about time","recognition":true,"jmdictIDs":[1345605]},
+    {"sources":["ソロソロ"],"meaning":"soon; before long; any time now; momentarily; slowly; quietly; steadily; gradually; gingerly; already; about time","recognition":false,"jmdictIDs":[1345605],"curated":true},
     {"sources":["ソロット"],"meaning":"soon; momentarily; before long; any time now","recognition":false,"jmdictIDs":[2835291]},
     {"sources":["ソロリ"],"meaning":"slowly and quietly; smoothly","recognition":false,"jmdictIDs":[2454190]},
     {"sources":["ソロリソロリ"],"meaning":"slowly and quietly; stealthily","recognition":true,"jmdictIDs":[2863908]},

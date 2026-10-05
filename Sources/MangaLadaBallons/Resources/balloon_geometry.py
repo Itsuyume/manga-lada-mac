@@ -30,6 +30,15 @@ class BalloonGeometry:
         self.contours = {}
 
     def shape(self, box: dict, font_size: float) -> dict | None:
+        contour = self.enclosure(box, font_size)
+        if contour is None:
+            return None
+        mask, x, y = contour
+        center = (box["x"] + box["width"] / 2) * self.width - x
+        return sampled_shape(mask, x, y, self.width, self.height, center)
+
+    def enclosure(self, box: dict, font_size: float) -> tuple | None:
+        """Keep every lobe in a pixel mask until source columns have been separated."""
         x, y, w, h = (box[key] * scale for key, scale in (("x", self.width), ("y", self.height), ("width", self.width), ("height", self.height)))
         if w < 1 or h < 1:
             return None
@@ -38,8 +47,13 @@ class BalloonGeometry:
         patch = self.source[max(0, int(y)):min(self.height, int(y + h)), max(0, int(x)):min(self.width, int(x + w))]
         if patch.size == 0:
             return None
-        background = np.median(patch.reshape(-1, 3), axis=0)
-        different = (np.abs(patch.astype(np.float32) - background).max(axis=2) > 45).astype(np.uint8)
+        glyphs = self.glyphs(int(x), int(y), patch.shape[1], patch.shape[0])
+        colors = patch[glyphs == 0]
+        if len(colors) < patch.shape[0] * patch.shape[1] * .1:
+            return None
+        background = np.median(colors, axis=0)
+        different = ((~background_matches(patch, background)) & (glyphs == 0)
+                     & (np.abs(patch.astype(np.float32) - background).max(axis=2) > 45)).astype(np.uint8)
         _, _, sizes, _ = cv2.connectedComponentsWithStats(different, 8)
         if len(sizes) > 1 and sizes[1:, 4].max() > patch.shape[0] * patch.shape[1] * .25:
             return None
@@ -52,7 +66,7 @@ class BalloonGeometry:
                 contours, _ = cv2.findContours(barrier, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
                 self.contours[kernel].extend(contours)
         candidates = []
-        for contour in self.contours[kernel]:
+        for contour in self.contours[kernel] + self.colored_contours(background, font_size):
             area = cv2.contourArea(contour)
             bx, by, bw, bh = cv2.boundingRect(contour)
             minimum_area = .45 if text_points is not None else .9
@@ -69,8 +83,15 @@ class BalloonGeometry:
             cv2.drawContours(local, [contour - [bx, by]], -1, 255, -1)
             if not self.contains_text(local, bx, by, (x, y, w, h), text_points):
                 continue
-            colors = self.source[by:by + bh, bx:bx + bw][local > 0]
-            uniform = (np.abs(colors.astype(np.float32) - background).max(axis=1) <= 30).mean()
+            # Border ink describes geometry, not the interior's background color.
+            interior = cv2.erode(local, np.ones((3, 3), np.uint8))
+            patch = self.source[by:by + bh, bx:bx + bw]
+            excluded = (self.glyphs(bx, by, bw, bh) > 0) & ~background_matches(patch, background)
+            writable = (interior > 0) & ~excluded
+            if np.count_nonzero(writable) < np.count_nonzero(local) * .6:
+                continue  # A closed glyph outline is not a reading enclosure.
+            colors = self.source[by:by + bh, bx:bx + bw][writable]
+            uniform = background_matches(colors, background).mean() if len(colors) else 0
             if uniform < .75:
                 continue
             if not anchored:
@@ -81,7 +102,23 @@ class BalloonGeometry:
         if not candidates:
             return None
         _, bx, by, mask = min(candidates, key=lambda item: item[0])
-        return sampled_shape(mask, bx, by, self.width, self.height, center_x - bx)
+        return mask, bx, by
+
+    def glyphs(self, x: int, y: int, width: int, height: int) -> np.ndarray:
+        if self.text_mask is None:
+            return np.zeros((height, width), np.uint8)
+        return self.text_mask[y:y + height, x:x + width]
+
+    def colored_contours(self, background: np.ndarray, font_size: float) -> list:
+        # Color-filled dotted balloons need not have a continuous ink border.
+        # Gray/white paper is excluded so an open page cannot become an enclosure.
+        if np.ptp(background) < 15 or background.min() < 90:
+            return []
+        mask = (np.abs(self.source.astype(np.int16) - background).max(axis=2) <= 14).astype(np.uint8) * 255
+        kernel = max(3, min(17, int(font_size * .35) | 1))
+        closed = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (kernel, kernel)))
+        contours, _ = cv2.findContours(closed, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        return list(contours)
 
     def caption_space(self, shape: dict, bounds: tuple, text: tuple, font_size: float, background: np.ndarray) -> bool:
         """Only a wide, centered line in an otherwise empty rectangle may relax the center anchor."""
@@ -128,6 +165,18 @@ class BalloonGeometry:
         return full_area > 0 and np.count_nonzero(area) >= full_area * .90
 
 
+def background_matches(colors: np.ndarray, reference: np.ndarray) -> np.ndarray:
+    """Colored translucent balloons retain hue while their brightness and saturation vary."""
+    ordinary = np.abs(colors.astype(np.float32) - reference).max(axis=-1) <= 30
+    anchor = cv2.cvtColor(np.uint8([[reference]]), cv2.COLOR_BGR2HSV)[0, 0]
+    if anchor[1] < 55 or anchor[2] < 150:
+        return ordinary
+    hsv = cv2.cvtColor(colors.reshape(1, -1, 3), cv2.COLOR_BGR2HSV).reshape(colors.shape)
+    hue = np.abs(hsv[..., 0].astype(np.int16) - int(anchor[0]))
+    same_color = (np.minimum(hue, 180 - hue) <= 10) & (hsv[..., 1] >= 35) & (hsv[..., 2] >= max(130, int(anchor[2]) - 60))
+    return ordinary | same_color
+
+
 def sampled_shape(mask: np.ndarray, x: int, y: int, width: int, height: int, center_x: float) -> dict | None:
     rows = []
     for local_y in np.unique(np.linspace(0, mask.shape[0] - 1, min(192, mask.shape[0])).astype(int)):
@@ -144,52 +193,3 @@ def sampled_shape(mask: np.ndarray, x: int, y: int, width: int, height: int, cen
 
 def balloon_shape(image: np.ndarray, box: dict, font_size: float, original: np.ndarray | None = None) -> dict | None:
     return BalloonGeometry(image if original is None else original).shape(box, font_size)
-
-
-def horizontal_neck(shape: dict, x: float, other_x: float) -> bool:
-    def height_at(column):
-        return sum(row["left"] <= column <= row["right"] for row in shape["rows"])
-    return height_at((x + other_x) / 2) < height_at(x) * .85
-
-
-def shared_contour(first: dict, second: dict) -> bool:
-    a, b = first["bounds"], second["bounds"]
-    width = max(0, min(a["x"] + a["width"], b["x"] + b["width"]) - max(a["x"], b["x"]))
-    height = max(0, min(a["y"] + a["height"], b["y"] + b["height"]) - max(a["y"], b["y"]))
-    return width * height > max(a["width"] * a["height"], b["width"] * b["height"]) * .95
-
-
-def separate_shared_balloons(blocks: list[dict]) -> None:
-    original_shapes = {block["id"]: block.get("balloonShape") for block in blocks}
-    for block in blocks:
-        shape = original_shapes[block["id"]]
-        if shape is None:
-            continue
-        bounds = shape["bounds"]
-        x = block["box"]["x"] + block["box"]["width"] / 2
-        y = block["box"]["y"] + block["box"]["height"] / 2
-        left, top, right, bottom = bounds["x"], bounds["y"], bounds["x"] + bounds["width"], bounds["y"] + bounds["height"]
-        for other in blocks:
-            other_shape = original_shapes[other["id"]]
-            if other["id"] == block["id"] or other_shape is None or not shared_contour(shape, other_shape):
-                continue
-            ox = other["box"]["x"] + other["box"]["width"] / 2
-            oy = other["box"]["y"] + other["box"]["height"] / 2
-            a, b = block["box"], other["box"]
-            overlap_y = max(0, min(a["y"] + a["height"], b["y"] + b["height"]) - max(a["y"], b["y"]))
-            if overlap_y >= min(a["height"], b["height"]) * .65 and not horizontal_neck(shape, x, ox):
-                continue  # Parallel Japanese columns in one balloon are merged by the Core boundary.
-            if abs(x - ox) / bounds["width"] >= abs(y - oy) / bounds["height"]:
-                right = min(right, (x + ox) / 2) if x < ox else right
-                left = max(left, (x + ox) / 2) if x >= ox else left
-                continue
-            bottom = min(bottom, (y + oy) / 2) if y < oy else bottom
-            top = max(top, (y + oy) / 2) if y >= oy else top
-        rows = [{"y": row["y"], "left": max(left, row["left"]), "right": min(right, row["right"])}
-                for row in shape["rows"] if top <= row["y"] <= bottom and min(right, row["right"]) > max(left, row["left"])]
-        if not rows:
-            block["balloonShape"] = None
-            continue
-        left, right = min(row["left"] for row in rows), max(row["right"] for row in rows)
-        top, bottom = min(row["y"] for row in rows), max(row["y"] for row in rows)
-        block["balloonShape"] = {"bounds": {"x": left, "y": top, "width": right - left, "height": bottom - top}, "rows": rows}

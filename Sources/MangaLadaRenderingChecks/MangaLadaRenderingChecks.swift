@@ -175,6 +175,8 @@ struct MangaLadaRenderingChecks {
         try checkShapeAndConsistency(in: root)
         stage("Floating text")
         try checkFloatingText()
+        stage("Adjacent balloons")
+        try checkAdjacentBalloons(in: root)
         print("MangaLadaRenderingChecks passed: \(outputURL.path)")
     }
 

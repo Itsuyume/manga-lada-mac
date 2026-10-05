@@ -13,6 +13,8 @@ jobs:
           python-version: '3.12'
       - run: python3 -m pip install -r scripts/requirements-checks.txt
       - run: python3 scripts/check_balloon_geometry.py
+      - run: python3 scripts/check_balloon_lobes.py
+      - run: python3 scripts/check_detection_refinement.py
       - run: python3 scripts/check_text_region_kind.py
       - run: python3 scripts/check_effect_catalog.py
       - run: python3 scripts/check_optical_effects.py

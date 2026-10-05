@@ -8,24 +8,21 @@ struct PositionedTextLine {
 
 extension TranslatedImageRenderer {
     func drawBalloon(block: TextBlock, text: String, imageSize: NSSize, pageFontSize: Double, fontScale: Double,
-                     lightRegionDetector: LightRegionDetector?) throws {
-        let inkRect = pixelRect(for: block.box, imageSize: imageSize)
-        let container = textContainerRect(fallbackRect: inkRect, originalTextRect: inkRect, imageSize: imageSize,
-                                          flow: .horizontal, backgroundStyle: .none, lightRegionDetector: lightRegionDetector)
-        let containerBox = TextBox(x: container.minX / imageSize.width, y: 1 - container.maxY / imageSize.height,
-                                   width: container.width / imageSize.width, height: container.height / imageSize.height)
-        let shape: BalloonShape
-        if let selected = block.userDefinedBounds {
-            if let contour = block.balloonShape {
-                guard let clipped = contour.clipped(to: selected) else { throw TranslatedImageRenderError.textDoesNotFit(block.id, text) }
-                shape = clipped
-            } else { shape = DialogueTypesettingRules.rectangularShape(box: selected) }
-        } else { shape = block.balloonShape ?? DialogueTypesettingRules.rectangularShape(box: containerBox) }
-        guard let layout = fittedBalloonLayout(text: text, shape: shape, imageSize: imageSize, fontSize: pageFontSize,
+                     shape: BalloonShape, sourceLettering: SourceLettering?, lightRegionDetector: LightRegionDetector?) throws {
+        var styled = block
+        let expressive = LetteringStylePolicy.expressiveDialogue(block, pageFontSize: pageFontSize)
+        if expressive, styled.effectStyleID == nil { styled.effectStyleID = "brush" }
+        var selectedTypography = typography
+        if let style = try LetteringStylePolicy.selected(styled, typography: typography, source: sourceLettering) {
+            selectedTypography.dialogueFontName = style.fontName
+        }
+        let renderer = TranslatedImageRenderer(typography: selectedTypography)
+        let desiredSize = expressive ? max(pageFontSize, (block.detectedFontSize ?? pageFontSize) * 0.75) : pageFontSize
+        guard let layout = renderer.fittedBalloonLayout(text: text, shape: shape, imageSize: imageSize, fontSize: desiredSize,
                                                scale: fontScale, hasContour: block.balloonShape != nil || block.userDefinedBounds != nil) else {
             throw TranslatedImageRenderError.textDoesNotFit(block.id, text)
         }
-        var attributes = textAttributes(size: layout.fontSize, backgroundStyle: .none)
+        var attributes = renderer.textAttributes(size: layout.fontSize, backgroundStyle: .none)
         let dark = (lightRegionDetector?.medianLuminance(in: pixelRect(for: shape.bounds, imageSize: imageSize)) ?? 1) < 0.5
         attributes[.foregroundColor] = dark ? NSColor.white : NSColor.black
         attributes[.strokeColor] = dark ? NSColor.black : NSColor.white
@@ -37,22 +34,24 @@ extension TranslatedImageRenderer {
                             scale: Double, hasContour: Bool) -> TextLayout? {
         let bounds = pixelRect(for: shape.bounds, imageSize: imageSize)
         let preferred = min(96, max(16, fontSize * scale))
-        let minimum = max(10, min(DialogueTypesettingRules.referenceWidth(imageSize) * 0.0105, bounds.width * 0.22))
+        let minimum = max(8, min(preferred * 0.6, DialogueTypesettingRules.referenceWidth(imageSize) * 0.0105))
         let minimumFont = preferredTextFont(ofSize: minimum, backgroundStyle: .none)
         let capacity = bounds.width * CGFloat(min(50, Int(floor(bounds.height / ceil(minimum * DialogueTypesettingRules.lineSpacing)))))
         guard measuredWidth(text.filter { !$0.isWhitespace }, font: minimumFont) <= capacity else { return nil }
         let candidates = Array(Set(DialogueTypesettingRules.sizeSteps.map { max(minimum, preferred * $0) } + [minimum])).sorted(by: >)
-        for size in candidates {
-            let allowWordBreaks = size <= preferred * 0.8
-            if let layout = layoutAtSize(text: text, shape: shape, imageSize: imageSize, bounds: bounds, size: size,
-                                          hasContour: hasContour, allowWordBreaks: allowWordBreaks) { return layout }
+        // Fit whole Korean words at every readable size before breaking a word.
+        for allowWordBreaks in [false, true] {
+            for size in candidates {
+                if let layout = layoutAtSize(text: text, shape: shape, imageSize: imageSize, bounds: bounds, size: size,
+                                              hasContour: hasContour, allowWordBreaks: allowWordBreaks) { return layout }
+            }
         }
         return nil
     }
     private func layoutAtSize(text: String, shape: BalloonShape, imageSize: NSSize, bounds: NSRect,
                               size: CGFloat, hasContour: Bool, allowWordBreaks: Bool) -> TextLayout? {
         let font = preferredTextFont(ofSize: size, backgroundStyle: .none)
-        let lineHeight = ceil(size * DialogueTypesettingRules.lineSpacing)
+        let lineHeight = ceil(max(size * DialogueTypesettingRules.lineSpacing, font.ascender - font.descender + font.leading))
         let maximumRows = min(50, Int(floor((bounds.height - (hasContour ? size * 0.7 : 0)) / lineHeight)))
         guard maximumRows > 0 else { return nil }
         let centers = hasContour ? DialogueTypesettingRules.centerFractions : [0.5]

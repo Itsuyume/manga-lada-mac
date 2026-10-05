@@ -11,7 +11,7 @@ extension MangaLadaRenderingChecks {
         try checkEffectOutlineCoverage()
         stage("Creating sound effect source image")
         let library = try SoundEffectLibrary.standard()
-        try require(library.styles.count == 12, "The effect library is incomplete.")
+        try require(library.styles.count == 14, "The effect library is incomplete.")
         try require(try library.automaticStyle(original: "ドキドキ", translated: "두근두근").id == "heartbeat", "Heartbeat selection lost its semantic rule.")
         try require(try library.automaticStyle(original: "ドキドキ", translated: "두근두근") == library.automaticStyle(original: "ドキドキ", translated: "두근두근"), "Style selection is not deterministic.")
         let image = NSImage(size: NSSize(width: 500, height: 300))
@@ -43,7 +43,7 @@ extension MangaLadaRenderingChecks {
         } catch SoundEffectLibraryError.unknownStyle { }
         let legacy = Data(#"{"dialogueFontName":"AppleSDGothicNeo-Bold","effectFontName":"AppleSDGothicNeo-Heavy","fontScale":1}"#.utf8)
         try require(try JSONDecoder().decode(MangaTypography.self, from: legacy).effectStyleID == nil, "Old typography settings no longer decode.")
-        print("Sound effect checks passed: 12 presets, Korean glyphs, angle fit, deterministic selection, legacy settings, oversized/unknown errors, unchanged source")
+        print("Sound effect checks passed: 14 presets, Korean glyphs, angle fit, deterministic selection, legacy settings, oversized/unknown errors, unchanged source")
     }
 
     @MainActor
@@ -59,6 +59,6 @@ extension MangaLadaRenderingChecks {
                 if style.id == "impact" { try output.tiffRepresentation!.write(to: root.appendingPathComponent("punctuation-\(index).tiff")) }
             }
         }
-        print("Punctuation effects passed: response decode through 12 font styles, visible glyphs, source preservation")
+        print("Punctuation effects passed: response decode through 14 font styles, visible glyphs, source preservation")
     }
 }

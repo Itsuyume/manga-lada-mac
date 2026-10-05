@@ -61,6 +61,12 @@ def glyph_mask(image: np.ndarray, regions: list[dict], bounded: bool = False) ->
             crop = gray[top:bottom, left:right]
             if crop.size == 0:
                 raise ValueError("Text-mask rectangle is smaller than one pixel")
+            outlined = outlined_glyph_mask(image[top:bottom, left:right])
+            if outlined is not None:
+                local = cv2.dilate(outlined, np.ones((7, 7), np.uint8))
+                mask[top:bottom, left:right] = np.maximum(mask[top:bottom, left:right], local)
+                boxes.append([left, top, right, bottom])
+                continue
             border = np.concatenate((crop[0], crop[-1], crop[:, 0], crop[:, -1]))
             polarity = cv2.THRESH_BINARY if np.median(border) < 127 else cv2.THRESH_BINARY_INV
             _, binary = cv2.threshold(crop, 0, 255, polarity | cv2.THRESH_OTSU)
@@ -103,6 +109,38 @@ def glyph_mask(image: np.ndarray, regions: list[dict], bounded: bool = False) ->
         boxes.append([max(0, x1 + int(cluster[0])), max(0, y1 + int(cluster[1])),
                       min(width, x1 + int(cluster[2])), min(height, y1 + int(cluster[3]))])
     return mask, boxes
+
+
+def outlined_glyph_mask(crop: np.ndarray):
+    """Recognize closed white outlines and include their dark ink, on varied backgrounds.
+
+    Otsu alone can join the outline to a bright part of the artwork or erase only
+    the dark fill. Require multiple compact outlines enclosing dark strokes;
+    border-connected artwork and a mostly bright selected area do not qualify.
+    """
+    gray = cv2.cvtColor(crop, cv2.COLOR_BGR2GRAY)
+    neutral = crop.max(axis=2).astype(np.int16) - crop.min(axis=2) <= 65
+    bright = ((gray >= 200) & neutral).astype(np.uint8) * 255
+    contours, _ = cv2.findContours(bright, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    mask = np.zeros_like(bright)
+    outlined = 0
+    height, width = gray.shape
+    for contour in contours:
+        x, y, w, h = cv2.boundingRect(contour)
+        if x <= 1 or y <= 1 or x + w >= width - 1 or y + h >= height - 1:
+            continue
+        if w >= width * .85 or h >= height * .9 or cv2.contourArea(contour) < 4:
+            continue
+        filled = np.zeros_like(bright)
+        cv2.drawContours(filled, [contour], -1, 255, cv2.FILLED)
+        inside = (filled > 0) & (bright == 0)
+        dark = inside & (gray < 160)
+        if dark.sum() >= 4 and dark.sum() / max(1, inside.sum()) >= .7:
+            outlined += 1
+        mask |= filled
+    if outlined < 2 or np.count_nonzero(mask) > gray.size * .35:
+        return None
+    return mask
 
 
 def component_bounds(stats: np.ndarray, selected: list[int]) -> tuple[int, int, int, int]:

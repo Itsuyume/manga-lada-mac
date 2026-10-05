@@ -27,11 +27,25 @@ extension NetworkBoundaryChecks {
         try check(direct.count == 1 && direct[0].id == click.id && direct[0].textKind == .soundEffect
                   && direct[0].translatedText == "질척" && FixtureProtocol.state.count == 0,
                   "Known effect was not applied locally without a model call.")
+        for source in ["に\nちっ", "ニ\r\nチッ！", " に ちっ。 "] {
+            var wrapped = click; wrapped.originalText = source; wrapped.translatedText = "야옹"
+            let corrected = try await pipeline.translateSelected([wrapped.id], in: [wrapped, neighbor], configuration: LocalTranslatorConfiguration())
+            var expected = wrapped; expected.textKind = .soundEffect; expected.translatedText = "질척"
+            try check(corrected == [expected, neighbor] && FixtureProtocol.state.count == 0,
+                      "OCR whitespace missed the fixed effect or changed source/neighbor without a selection.")
+        }
         let simple = ["バシャバシャ", "ポタポタ", "ガヤガヤ"].map { TextBlock(box: box, originalText: $0, textKind: .dialogue) }
         let locallyTranslated = try await pipeline.translate(simple, configuration: LocalTranslatorConfiguration())
         try check(locallyTranslated.map(\.translatedText) == ["첨벙첨벙", "똑똑", "웅성웅성"]
                   && locallyTranslated.map(\.id) == simple.map(\.id) && FixtureProtocol.state.count == 0,
                   "Reading-specific defaults changed identities or called the model.")
+        let handwritten = ["ごろん", "もじ．．．"].map { TextBlock(box: box, originalText: $0, textKind: .soundEffect, userDefinedTextKind: true) }
+        let repaired = try await pipeline.translate(handwritten, configuration: LocalTranslatorConfiguration())
+        try check(repaired.map(\.translatedText) == ["뒹굴", "꼼지락"] && FixtureProtocol.state.count == 0,
+                  "Short printed effects were mistranslated as stomach noise or dialogue.")
+        let lexicon = try JapaneseSoundEffectLexicon.bundled()
+        let ordinary = TextBlock(box: box, originalText: "もじ", textKind: .dialogue)
+        try check(lexicon.inferKinds([ordinary]) == [ordinary], "The homophone for letters became an automatic effect.")
         try await checkReadingSpecificContext(pipeline: pipeline, box: box)
         try check(try await pipeline.translateSelected([], in: [stale], configuration: LocalTranslatorConfiguration()) == [stale],
                   "Empty selection reclassified a cache entry.")

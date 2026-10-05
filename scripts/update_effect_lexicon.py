@@ -106,7 +106,7 @@ def update(source, catalog_path):
     catalog = json.loads(catalog_path.read_text())
     if catalog.get("version") != 1:
         raise ValueError("Unsupported catalog version")
-    curated = [entry for entry in catalog["entries"] if "jmdictIDs" not in entry or "korean" in entry]
+    curated = [entry for entry in catalog["entries"] if "jmdictIDs" not in entry or "korean" in entry or entry.get("curated") is True]
     reserved = {normalize(s) for entry in curated for s in entry["sources"]}
     imported, total = import_entries(source, reserved)
     with gzip.open(source, "rt") as stream:

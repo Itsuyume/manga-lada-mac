@@ -24,6 +24,7 @@ public enum TranslatedImageRenderError: LocalizedError, Equatable {
     case pngEncodingFailed
     case originalImageSizeMismatch
     case textDoesNotFit(UUID, String)
+    case overlappingRegions(UUID, UUID)
 
     public var errorDescription: String? {
         switch self {
@@ -37,6 +38,8 @@ public enum TranslatedImageRenderError: LocalizedError, Equatable {
             return "원본과 글자 제거 이미지의 크기가 달라 기호를 복원할 수 없습니다. 원본을 다시 열어주세요."
         case .textDoesNotFit(_, let text):
             return "말풍선에 문장이 들어가지 않습니다: ‘\(text.prefix(80))’. 문구 또는 인식 영역을 확인해주세요."
+        case .overlappingRegions:
+            return "인식한 대사 영역이 서로 겹칩니다. 원본에서 겹친 영역을 나누어 지정한 뒤 다시 적용해주세요."
         }
     }
 }
@@ -66,7 +69,11 @@ public struct TranslatedImageRenderer {
         }
 
         var original: NSImage?
-        if let originalImageURL, !originalPunctuationRegions(in: drawableBlocks, imageSize: pixelBackedSize(for: image)).isEmpty {
+        let needsLettering = drawableBlocks.contains {
+            ($0.effectStyleID ?? ($0.textKind == .soundEffect ? typography.effectStyleID : nil)) == "automatic"
+        }
+        let needsPunctuation = !originalPunctuationRegions(in: drawableBlocks, imageSize: pixelBackedSize(for: image)).isEmpty
+        if let originalImageURL, needsLettering || needsPunctuation {
             guard let loaded = NSImage(contentsOf: originalImageURL) else {
                 throw TranslatedImageRenderError.imageLoadFailed(originalImageURL)
             }
@@ -123,6 +130,9 @@ public struct TranslatedImageRenderer {
 
         let lightRegionDetector = LightRegionDetector(image: image, imageSize: size)
         let pageFontSize = DialogueTypesettingRules.pageFontSize(blocks: blocks, imageSize: size)
+        let sourceLettering = originalImage.flatMap { SourceLettering(image: $0) }
+        let containers = backgroundStyle == .none
+            ? try balloonContainers(blocks: blocks, imageSize: size, detector: lightRegionDetector) : [:]
         for (index, block) in blocks.enumerated() where !preserved.contains(index) {
             try draw(
                 block: block,
@@ -130,6 +140,8 @@ public struct TranslatedImageRenderer {
                 fontScale: fontScale,
                 pageFontSize: pageFontSize,
                 backgroundStyle: backgroundStyle,
+                balloonContainer: containers[block.id],
+                sourceLettering: sourceLettering,
                 lightRegionDetector: lightRegionDetector
             )
         }
@@ -145,6 +157,8 @@ public struct TranslatedImageRenderer {
         fontScale: Double,
         pageFontSize: Double,
         backgroundStyle: TranslationTextBackgroundStyle,
+        balloonContainer: BalloonShape?,
+        sourceLettering: SourceLettering?,
         lightRegionDetector: LightRegionDetector?
     ) throws {
         let text = displayText(for: block)
@@ -154,12 +168,13 @@ public struct TranslatedImageRenderer {
 
         let originalTextRect = pixelRect(for: block.textKind == .soundEffect ? block.userDefinedBounds ?? block.box : block.box, imageSize: imageSize)
         if block.textKind == .soundEffect {
-            try SoundEffectRenderer.draw(block, in: originalTextRect, typography: typography, scale: fontScale)
+            try SoundEffectRenderer.draw(block, in: originalTextRect, typography: typography, scale: fontScale, source: sourceLettering)
             return
         }
         if backgroundStyle == .none, block.textKind != .title {
+            guard let balloonContainer else { throw TranslatedImageRenderError.textDoesNotFit(block.id, text) }
             try drawBalloon(block: block, text: text, imageSize: imageSize, pageFontSize: pageFontSize,
-                            fontScale: fontScale, lightRegionDetector: lightRegionDetector)
+                            fontScale: fontScale, shape: balloonContainer, sourceLettering: sourceLettering, lightRegionDetector: lightRegionDetector)
             return
         }
         let flow = preferredTextFlow(for: originalTextRect, block: block, text: text)

@@ -15,6 +15,10 @@ enum ReadingBehaviorChecks {
         let canonical = #"{"regions":[{"text":"ドーン","x":350,"y":600,"width":300,"height":100,"angle":-12}]}"#
         let effect = try OllamaSoundEffectDetector.decode(Data(canonical.utf8))[0]
         try check(effect.box.x == 0.35 && effect.rotationDegrees == -12 && effect.textKind == .soundEffect, "Effect geometry was not normalized.")
+        let array = #"[{"text":"ドーン","x":350,"y":600,"width":300,"height":100,"angle":-12}]"#
+        let normalized = try OllamaSoundEffectDetector.decode(Data(array.utf8))[0]
+        try check(normalized.box == effect.box && normalized.originalText == effect.originalText
+                  && normalized.rotationDegrees == effect.rotationDegrees, "Observed array response changed the effect geometry.")
         let runtimeVariant = #"{"regions":[{"text":"ドーン","x_min":350,"y_min":600,"width":300,"height":100}]}"#
         try check(try OllamaSoundEffectDetector.decode(Data(runtimeVariant.utf8))[0].rotationDegrees == nil, "Missing rotation was fabricated.")
         for invalid in [
@@ -22,6 +26,8 @@ enum ReadingBehaviorChecks {
             #"{"regions":[{"text":"ドーン","x":999,"y":0,"width":3,"height":3,"angle":0}]}"#,
             #"{"regions":[{"text":"ドーン","x":0,"x_min":20,"y":0,"width":3,"height":3,"angle":0}]}"#,
             #"{"regions":[{"text":"","x":0,"y":0,"width":3,"height":3,"angle":0}]}"#
+            , #"[{"text":"ドーン","x":999,"y":0,"width":3,"height":3}]"#
+            , #"[{"text":"ドーン","x":0,"y":0}]"#
         ] {
             do { _ = try OllamaSoundEffectDetector.decode(Data(invalid.utf8)); throw ReadingCheckError.failed("Invalid geometry was accepted.") }
             catch TranslationError.invalidPageResponse { }

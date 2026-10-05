@@ -75,6 +75,14 @@ enum CacheMigrationChecks {
                     "An older partial OCR changed verified manual punctuation into a user edit.")
         try require(try JSONDecoder().decode(PageTranslation.self, from: JSONEncoder().encode(manualPage)) == manualPage,
                     "Manual source bounds were lost during cache encoding.")
+        var compound = saved; compound.id = UUID(); compound.box.x = 0.05
+        var mixed = page; mixed.blocks = [saved, compound]
+        var lobe = compound; lobe.id = UUID(); lobe.box.width /= 2; lobe.translatedText = ""
+        guard let separated = RecognitionCacheMigration.reuse(mixed, for: [rawOCR, lobe]) else {
+            throw CheckError.failed("Splitting a different balloon discarded an unchanged reviewed region.")
+        }
+        try require(separated[0].translatedText == saved.translatedText && separated[0].effectStyleID == saved.effectStyleID
+                    && separated[1].translatedText.isEmpty, "A new lobe reused its old combined sentence or lost a neighboring review.")
         print("Cache migration checks passed: edited Japanese/Korean, new contours, manual bounds/kind/style, missing/duplicate/new/moved regions, source preserved")
     }
     private static func require(_ value: Bool, _ message: String) throws {

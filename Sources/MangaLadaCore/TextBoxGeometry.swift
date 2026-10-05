@@ -1,4 +1,4 @@
-extension TextBox {
+public extension TextBox {
     var area: Double { width * height }
     func intersectionArea(with other: TextBox) -> Double {
         let overlapWidth = max(0, min(x + width, other.x + other.width) - max(x, other.x))

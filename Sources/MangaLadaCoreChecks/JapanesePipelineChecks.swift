@@ -17,7 +17,8 @@ enum JapanesePipelineChecks {
             #"{"translations":[{"id":0,"text":"안녕","kind":"dialogue"},{"id":0,"text":"쾅","kind":"soundEffect"}]}"#,
             #"{"translations":[{"id":0,"text":" ","kind":"dialogue"},{"id":1,"text":"쾅","kind":"soundEffect"}]}"#,
             #"{"translations":[{"id":0,"text":"急いで","kind":"dialogue"},{"id":1,"text":"쾅","kind":"soundEffect"}]}"#,
-            #"{"translations":[{"id":0,"text":"그弁当, 혼자 다 못 먹어","kind":"dialogue"},{"id":1,"text":"쾅","kind":"soundEffect"}]}"#
+            #"{"translations":[{"id":0,"text":"그弁当, 혼자 다 못 먹어","kind":"dialogue"},{"id":1,"text":"쾅","kind":"soundEffect"}]}"#,
+            #"{"translations":[{"id":0,"text":"위에 먼저 가 있어.]","kind":"dialogue"},{"id":1,"text":"쾅","kind":"soundEffect"}]}"#
         ] {
             do {
                 _ = try MangaPageResponse.decode(Data(invalid.utf8), blocks: blocks)
@@ -48,15 +49,23 @@ enum JapanesePipelineChecks {
         let grounded = JapaneseRegionMerger.merge(existing: blocks, effects: [candidate], opticalCandidates: [optical])
         try check(grounded.extras.count == 1 && grounded.extras[0].textKind == .soundEffect && grounded.unverified == 0,
                   "Independently located sound-effect text was lost or duplicated.")
+        var reviewed = optical; reviewed.textKind = .dialogue; reviewed.userDefinedTextKind = true
+        reviewed.translatedText = "직접 검수한 말"
+        let protected = JapaneseRegionMerger.merge(existing: [reviewed], effects: [candidate], opticalCandidates: [optical])
+        try check(protected.blocks == [reviewed] && protected.extras.isEmpty, "Optional effects changed an explicit manual classification.")
+        reviewed.userDefinedTextKind = nil
+        reviewed.balloonShape = BalloonShape(bounds: reviewed.box, rows: [])
+        let enclosed = JapaneseRegionMerger.merge(existing: [reviewed], effects: [candidate], opticalCandidates: [optical])
+        try check(enclosed.blocks == [reviewed] && enclosed.extras.isEmpty, "A visual-model guess reclassified enclosed speech as an effect.")
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         let container = BalloonShape(bounds: TextBox(x: 0.1, y: 0.1, width: 0.5, height: 0.3), rows: [])
         let left = TextBlock(box: TextBox(x: 0.2, y: 0.1, width: 0.1, height: 0.2), originalText: "左の台詞", balloonShape: container)
         let right = TextBlock(box: TextBox(x: 0.4, y: 0.1, width: 0.1, height: 0.2), originalText: "右の台詞", balloonShape: container)
-        let grouped = JapaneseRegionMerger.speechRegions([left, right])
+        let grouped = JapaneseSpeechGrouping.resolve([left, right])
         try check(grouped.count == 1 && grouped[0].originalText == "右の台詞 左の台詞", "One balloon's split OCR columns were not combined in Japanese reading order.")
         let duplicate = TextBlock(box: TextBox(x: 0.4, y: 0.1, width: 0.05, height: 0.1), originalText: "右の")
-        try check(JapaneseRegionMerger.speechRegions([right, duplicate]).count == 1, "Contained OCR text was translated twice.")
-        try check(JapaneseRegionMerger.speechRegions([]).isEmpty, "Empty OCR regions changed behavior.")
+        try check(JapaneseSpeechGrouping.resolve([right, duplicate]).count == 1, "Contained OCR text was translated twice.")
+        try check(JapaneseSpeechGrouping.resolve([]).isEmpty, "Empty OCR regions changed behavior.")
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: root) }
         let url = root.appendingPathComponent("settings.json")

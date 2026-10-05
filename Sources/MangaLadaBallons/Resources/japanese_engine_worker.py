@@ -1,5 +1,6 @@
 """Local JSON-lines adapter. Models stay resident for the whole book."""
 import contextlib
+from copy import deepcopy
 import json
 import os
 from pathlib import Path
@@ -32,7 +33,15 @@ class JapaneseEngine:
         device = "mps" if torch.backends.mps.is_available() else "cpu"
         pcfg.module.filter_mask_by_bboxes = True
         self.cv2 = cv2
-        self.detector = ComicTextDetector(device="cpu", detect_size=1280)
+        self.detector = ComicTextDetector(device="cpu", detect_size=1024)
+        # Upstream parameter patching shares nested dictionaries between instances.
+        # Snapshot before constructing the second detector so it cannot reconfigure the first.
+        self.detector.params = deepcopy(self.detector.params)
+        self.detail_detector = ComicTextDetector(device=device, detect_size=2048) if device == "mps" else None
+        if self.detail_detector is not None:
+            self.detail_detector.params = deepcopy(self.detail_detector.params)
+        if self.detector.device != "cpu" or self.detector.detect_size != 1024:
+            raise RuntimeError("Coarse detector configuration was changed by another model")
         self.ocr = MangaOCR(device=device)
         self.painter = LamaLarge(device=device, inpaint_size=1536, precision="fp32")
         # The library's white-background shortcut mistakes outlined text for empty balloons.
@@ -47,19 +56,35 @@ class JapaneseEngine:
             return {"blocks": self.read_proposed_regions(image, request["regions"])}
         height, width = image.shape[:2]
         mask, detected = self.detector.detect(image)
+        if self.detail_detector is not None and max(height, width) > 1400:
+            from detection_refinement import refine_detection
+            detail_mask, details = self.detail_detector.detect(image)
+            mask, detected = refine_detection(image, mask, detected, detail_mask, details)
+        from balloon_lobes import detect_lobes, retain_cached_regions, source_rectangle
+        lobes = detect_lobes(image, mask, detected)
+        detected = lobes.blocks
         self.prepare_title_mask(image, mask, detected)
         blocks = request.get("blocks")
         if blocks is None:
             self.ocr.load_model()
             blocks = self.read_blocks(image, mask, detected)
+        else:
+            from detection_refinement import missing_detections
+            blocks = retain_cached_regions(blocks, lobes.replaced, width, height)
+            additions = missing_detections(detected, blocks, width, height)
+            if additions:
+                self.ocr.load_model()
+                blocks = blocks + self.read_blocks(image, mask, additions)
         optical_mask, optical_boxes = self.add_optical_effects(image, blocks, request)
         mask = self.cv2.bitwise_or(mask, optical_mask)
-        from balloon_geometry import BalloonGeometry, separate_shared_balloons
+        from balloon_geometry import BalloonGeometry
+        from balloon_partition import separate_shared_balloons
         from text_region_kind import classify_text_kind
         geometry = BalloonGeometry(image, text_mask=mask.copy())
         sound_effect_sources = set(request["soundEffectSources"])
         for block in blocks:
-            block["balloonShape"] = geometry.shape(block["box"], block["detectedFontSize"])
+            bounds = source_rectangle(block["box"], width, height)
+            block["balloonShape"] = lobes.shapes[bounds] if bounds in lobes.shapes else geometry.shape(block["box"], block["detectedFontSize"])
             kind = classify_text_kind(block, sound_effect_sources, request["soundEffectPatterns"])
             if kind is not None:
                 block["textKind"] = kind

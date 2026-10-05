@@ -5,7 +5,7 @@ import text_region_geometry as geometry
 
 
 def normalized_source(text: str) -> str:
-    return unicodedata.normalize("NFKC", text).strip(" \t\r\n.!?。…・")
+    return "".join(unicodedata.normalize("NFKC", text).split()).strip(".!?。…・")
 
 
 def is_sound_effect(text: str, sources: set[str], patterns: list[str]) -> bool:

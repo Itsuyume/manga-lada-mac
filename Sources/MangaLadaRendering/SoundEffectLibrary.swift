@@ -40,6 +40,7 @@ public struct SoundEffectLibrary: Sendable {
     public func automaticStyle(original: String, translated: String) throws -> SoundEffectStyle {
         let text = original + " " + translated
         let rules: [(String, String)] = [
+            ("ごろん|ゴロン|もじ|モジ|뒹굴|꼼지락|머뭇", "handwritten"),
             ("ドキ|두근|쿵쾅", "heartbeat"), ("ゴゴ|고오|우르|드르|부르", "rumble"),
             ("キラ|반짝|샤라|사르르", "sparkle"), ("ヒソ|소곤|속닥|속삭", "whisper"),
             ("シーン|정적|스산|오싹", "ominous"), ("シャ|シュ|싹|슉|휘익", "cut"),

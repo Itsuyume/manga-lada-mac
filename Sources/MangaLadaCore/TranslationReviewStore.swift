@@ -46,7 +46,7 @@ public struct TranslationReviewStore {
             var result = current
             result.blocks = current.blocks.map { block in
                 guard let original = before[block.id], let draft = after[block.id] else { return block }
-                return Self.merge(original: original, draft: draft, current: block)
+                return block.applyingReviewChanges(from: original, to: draft)
             }
             return result
         }
@@ -67,16 +67,6 @@ public struct TranslationReviewStore {
                 original.effectStyleID != draft.effectStyleID || original.maskedTextInterpretation != draft.maskedTextInterpretation
         }
 
-        private static func merge(original: TextBlock, draft: TextBlock, current: TextBlock) -> TextBlock {
-            var result = current
-            if original.originalText != draft.originalText { result.originalText = draft.originalText }
-            if original.translatedText != draft.translatedText { result.translatedText = draft.translatedText }
-            if original.textKind != draft.textKind { result.textKind = draft.textKind }
-            if original.userDefinedTextKind != draft.userDefinedTextKind { result.userDefinedTextKind = draft.userDefinedTextKind }
-            if original.effectStyleID != draft.effectStyleID { result.effectStyleID = draft.effectStyleID }
-            if original.maskedTextInterpretation != draft.maskedTextInterpretation { result.maskedTextInterpretation = draft.maskedTextInterpretation }
-            return result
-        }
     }
     private enum ReviewError: LocalizedError {
         case changedRegions

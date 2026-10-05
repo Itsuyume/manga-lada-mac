@@ -39,7 +39,8 @@ def check_reading_restrictions():
     with tempfile.TemporaryDirectory(prefix="effect-readings-") as directory:
         source, catalog = Path(directory) / "dictionary.gz", Path(directory) / "catalog.json"
         curated = {"sources": ["カチッ"], "korean": "딸깍", "jmdictIDs": [10]}
-        catalog.write_text(json.dumps({"version": 1, "entries": [curated]}))
+        adverb = {"sources": ["そろそろ"], "meaning": "soon", "recognition": False, "curated": True, "jmdictIDs": [1345605]}
+        catalog.write_text(json.dumps({"version": 1, "entries": [curated, adverb]}))
         source.write_bytes(gzip.compress(xml.encode()))
         original = source.read_bytes()
         with redirect_stdout(io.StringIO()):
@@ -55,6 +56,7 @@ def check_reading_restrictions():
         assert "ヌーヴォー" not in by_form and "ぬーゔぉー" not in by_form, "A non-mimetic reading became an effect"
         assert not by_form["ドンドン"]["recognition"] and not by_form["どんどん"]["recognition"], "Generated kana variants lost ordinary-word ambiguity"
         assert by_form["カチッ"] == curated and source.read_bytes() == original, "Import changed curated forms or dictionary source"
+        assert by_form["そろそろ"] == adverb, "Refresh lost a curated ordinary-word exclusion or its provenance"
         first = catalog.read_bytes()
         with redirect_stdout(io.StringIO()):
             update(source, catalog)

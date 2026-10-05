@@ -7,7 +7,8 @@ public enum SoundEffectFonts {
     /// Registers only in this process; does not change the Mac's installed font collection.
     public static func registerBundledFonts() throws {
         for (file, postScriptName) in [("BlackHanSans-Regular", "BlackHanSans-Regular"), ("NanumBrushScript-Regular", "NanumBrush"),
-                                      ("NanumMyeongjo-Regular", "NanumMyeongjo")] {
+                                      ("NanumMyeongjo-Regular", "NanumMyeongjo"), ("Gaegu-Regular", "Gaegu-Regular"),
+                                      ("Dokdo-Regular", "Dokdo-Regular")] {
             guard let url = Bundle.module.url(forResource: file, withExtension: "ttf", subdirectory: "Fonts") else {
                 throw SoundEffectLibraryError.missingResource(file)
             }

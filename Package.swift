@@ -37,6 +37,7 @@ let package = Package(
             dependencies: ["MangaLadaCore"],
             resources: [.copy("Resources/erase_supplemental_text.py"), .copy("Resources/japanese_engine_worker.py"),
                         .copy("Resources/balloon_geometry.py"), .copy("Resources/text_region_kind.py"), .copy("Resources/optical_effects.py"),
+                        .copy("Resources/detection_refinement.py"), .copy("Resources/balloon_lobes.py"), .copy("Resources/balloon_partition.py"),
                         .copy("Resources/flat_background.py"), .copy("Resources/sentence_punctuation.py"),
                         .copy("Resources/text_region_geometry.py")]
         ),
