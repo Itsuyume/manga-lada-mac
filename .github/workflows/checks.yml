@@ -16,6 +16,7 @@ jobs:
       - run: python3 scripts/check_dotted_balloons.py
       - run: python3 scripts/check_balloon_lobes.py
       - run: python3 scripts/check_detection_refinement.py
+      - run: python3 scripts/check_balloon_candidates.py
       - run: python3 scripts/check_text_region_kind.py
       - run: python3 scripts/check_effect_catalog.py
       - run: python3 scripts/check_optical_effects.py
@@ -37,6 +38,7 @@ jobs:
           assert len(workers) == 1, "Expected one packaged OCR worker"
           subprocess.run(["python3", "scripts/check_sentence_punctuation.py", "--resources", str(workers[0].parent)], check=True)
           subprocess.run(["python3", "scripts/check_dotted_balloons.py", str(workers[0].parent)], check=True)
+          subprocess.run(["python3", "scripts/check_balloon_candidates.py", str(workers[0].parent)], check=True)
           subprocess.run([str(binary_directory / "MangaLadaBallonsChecks"), "--resource-integrity", sys.executable, str(workers[0].parent)], check=True)
           PY
       - run: swift run MangaLadaCoreChecks

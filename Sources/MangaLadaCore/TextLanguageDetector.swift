@@ -8,7 +8,13 @@ public enum TextLanguageDetector {
         text.unicodeScalars.contains { (0xAC00...0xD7A3).contains($0.value) || (0x3130...0x318F).contains($0.value) }
     }
     public static func containsJapanese(_ text: String) -> Bool {
-        text.unicodeScalars.contains { (0x3040...0x30FF).contains($0.value) || (0x4E00...0x9FFF).contains($0.value) }
+        // ICU script extensions also include shared marks such as U+301C.
+        // Remove known punctuation before checking letters; NFKC covers halfwidth kana.
+        let letters = text.precomposedStringWithCompatibilityMapping.unicodeScalars.filter {
+            !punctuation.contains($0) && !wrappers.contains($0) && $0.properties.generalCategory != .letterNumber
+        }
+        return String(String.UnicodeScalarView(letters))
+            .range(of: #"[\p{Hiragana}\p{Katakana}\p{Han}]"#, options: .regularExpression) != nil
     }
     /// Speech pauses, surprise marks and standalone sokuon may translate to punctuation.
     /// Words, digits, empty quotes and commentary cannot use this exception.

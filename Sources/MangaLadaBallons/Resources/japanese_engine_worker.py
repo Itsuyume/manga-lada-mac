@@ -56,10 +56,12 @@ class JapaneseEngine:
             return {"blocks": self.read_proposed_regions(image, request["regions"])}
         height, width = image.shape[:2]
         mask, detected = self.detector.detect(image)
-        if self.detail_detector is not None and max(height, width) > 1400:
+        if self.detail_detector is not None:
             from detection_refinement import refine_detection
             detail_mask, details = self.detail_detector.detect(image)
             mask, detected = refine_detection(image, mask, detected, detail_mask, details)
+        from balloon_recovery import recover_balloons
+        mask, detected = recover_balloons(image, mask, detected, self.detector.detect, request.get("blocks"))
         from balloon_lobes import detect_lobes, retain_cached_regions, source_rectangle
         lobes = detect_lobes(image, mask, detected)
         detected = lobes.blocks
