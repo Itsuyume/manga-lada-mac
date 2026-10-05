@@ -19,6 +19,10 @@ def white_background_ratio(image: np.ndarray, box: dict, font_size: float) -> fl
 
 
 class BalloonGeometry:
+    @staticmethod
+    def contour_kernel_size(font_size: float) -> int:
+        return 9 if font_size >= 45 else 5
+
     def __init__(self, source: np.ndarray, text_mask: np.ndarray | None = None):
         self.source = source
         self.height, self.width = source.shape[:2]
@@ -56,7 +60,7 @@ class BalloonGeometry:
         _, _, sizes, _ = cv2.connectedComponentsWithStats(different, 8)
         if len(sizes) > 1 and sizes[1:, 4].max() > patch.shape[0] * patch.shape[1] * .25:
             return None
-        kernel = 9 if font_size >= 45 else 5
+        kernel = self.contour_kernel_size(font_size)
         if kernel not in self.contours:
             self.contours[kernel] = []
             for mask in (self.ink, self.edges):

@@ -111,13 +111,15 @@ def glyph_mask(image: np.ndarray, regions: list[dict], bounded: bool = False) ->
     return mask, boxes
 
 
-def outlined_glyph_mask(crop: np.ndarray):
+def outlined_glyph_mask(crop: np.ndarray, ink_mask: np.ndarray | None = None):
     """Recognize closed white outlines and include their dark ink, on varied backgrounds.
 
     Otsu alone can join the outline to a bright part of the artwork or erase only
     the dark fill. Require multiple compact outlines enclosing dark strokes;
     border-connected artwork and a mostly bright selected area do not qualify.
     """
+    if ink_mask is not None and (ink_mask.shape != crop.shape[:2] or ink_mask.dtype != np.uint8):
+        raise ValueError("Outline ink evidence does not match its source crop")
     gray = cv2.cvtColor(crop, cv2.COLOR_BGR2GRAY)
     neutral = crop.max(axis=2).astype(np.int16) - crop.min(axis=2) <= 65
     bright = ((gray >= 200) & neutral).astype(np.uint8) * 255
@@ -135,8 +137,11 @@ def outlined_glyph_mask(crop: np.ndarray):
         cv2.drawContours(filled, [contour], -1, 255, cv2.FILLED)
         inside = (filled > 0) & (bright == 0)
         dark = inside & (gray < 160)
-        if dark.sum() >= 4 and dark.sum() / max(1, inside.sum()) >= .7:
-            outlined += 1
+        if dark.sum() < 4 or dark.sum() / max(1, inside.sum()) < .7:
+            continue
+        if ink_mask is not None and np.count_nonzero(dark & (ink_mask > 0)) < dark.sum() * .5:
+            continue
+        outlined += 1
         mask |= filled
     if outlined < 2 or np.count_nonzero(mask) > gray.size * .35:
         return None

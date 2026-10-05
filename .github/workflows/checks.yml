@@ -25,6 +25,7 @@ jobs:
       - run: python3 scripts/check_sentence_punctuation.py
       - run: python3 scripts/check_flat_backgrounds.py
       - run: python3 scripts/check_supplemental_mask.py
+      - run: python3 scripts/check_outline_erasure.py
       - run: brew install swiftlint
       - run: python3 scripts/check_architecture.py
       - run: swiftlint lint --strict
@@ -43,6 +44,7 @@ jobs:
           subprocess.run(["python3", "scripts/check_balloon_candidates.py", str(workers[0].parent)], check=True)
           subprocess.run(["python3", "scripts/check_lettering_ocr.py", str(workers[0].parent)], check=True)
           subprocess.run(["python3", "scripts/check_text_detection.py", str(workers[0].parent)], check=True)
+          subprocess.run(["python3", "scripts/check_outline_erasure.py", str(workers[0].parent)], check=True)
           subprocess.run([str(binary_directory / "MangaLadaBallonsChecks"), "--resource-integrity", sys.executable, str(workers[0].parent)], check=True)
           PY
       - run: swift run MangaLadaCoreChecks

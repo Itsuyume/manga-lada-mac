@@ -46,10 +46,18 @@ enum OCRMigrationChecks {
         let old = try JapanesePageKeys(imageURL: url, configuration: .init(), context: "", title: "")
         let new = try JapanesePageKeys(imageURL: url, configuration: .init(japaneseOCR: .hayai), context: "", title: "")
         try require(old.translation != new.translation && old.recognition != new.recognition, "OCR backends shared stale cache keys")
-        try require(new.previousRecognition.first == old.recognition + "-hayai-v1",
+        try require(new.previousRecognition.first == new.recognitionBeforeCleanupUpdate,
+                    "Cleanup refresh cannot reuse the matching OCR policy")
+        try require(new.previousRecognition.contains(old.recognitionBeforeCleanupUpdate + "-hayai-v1"),
                     "Previous Hayai OCR is unavailable for preserving manual source edits")
-        try require(new.previous.first == old.translation + "-hayai-v1",
+        try require(new.previous.contains(old.translation + "-hayai-v1"),
                     "Previous Hayai review is unavailable for migration")
+        for keys in [old, new] {
+            try require(keys.recognition != keys.recognitionBeforeCleanupUpdate && keys.previousRecognition.first == keys.recognitionBeforeCleanupUpdate,
+                        "Unsafe old cleanup image can bypass regeneration")
+            try require(keys.previous.first != keys.translation && Set(keys.previous).count == keys.previous.count,
+                        "Cleanup update duplicated or reused current translation keys")
+        }
         try require(!new.previousRecognition.contains(new.recognition) && !new.previous.contains(new.translation),
                     "Current OCR accidentally reuses a prior policy key")
     }

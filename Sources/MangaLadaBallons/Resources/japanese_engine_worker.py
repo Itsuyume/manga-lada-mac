@@ -101,7 +101,9 @@ class JapaneseEngine:
         separate_shared_balloons(blocks)
         punctuation_mask, punctuation_boxes = self.add_sentence_punctuation(image, blocks)
         mask = self.cv2.bitwise_or(mask, punctuation_mask)
-        self.expand_outline_mask(image, mask, detected)
+        mask = self.expand_outline_mask(image, mask, detected)
+        from balloon_erase_mask import protect_balloon_outlines
+        mask = protect_balloon_outlines(mask, blocks, geometry)
         paint_blocks = self.inpainting_blocks(detected, width, height) + self.inpainting_regions(optical_boxes + punctuation_boxes)
         from flat_background import prepare_flat_backgrounds
         prepared, pending = prepare_flat_backgrounds(image, image, mask, [block.xyxy for block in paint_blocks])
@@ -269,21 +271,36 @@ class JapaneseEngine:
             block.xyxy = [x1, y1, x2, y2]
             mask[y1:y2, x1:x2] = 255
 
-    def expand_outline_mask(self, image, mask, detected) -> None:
-        """Erase white outlines with the ink, while leaving unrelated artwork outside the mask."""
+    @staticmethod
+    def expand_outline_mask(image, mask, detected):
+        """Complete observed glyph rims, never dilate an entire coloured balloon.
+
+        Font size controls the search crop only. Each added contour must contain
+        dark ink already selected by the detector; neighbouring artwork and
+        ordinary coloured paper cannot authorize extra erasure.
+        """
+        import cv2
+        import numpy as np
+        from erase_supplemental_text import outlined_glyph_mask
+        if mask.dtype != np.uint8 or mask.shape != image.shape[:2]:
+            raise ValueError("Outline mask dimensions or pixel type differ from the page")
         height, width = image.shape[:2]
-        from balloon_geometry import white_background_ratio
+        completed = mask.copy()
         for block in detected:
             x1, y1, x2, y2 = map(int, block.xyxy)
-            box = {"x": x1 / width, "y": y1 / height, "width": (x2 - x1) / width, "height": (y2 - y1) / height}
-            if white_background_ratio(image, box, block._detected_font_size) >= .7:
-                continue
+            if not 0 <= x1 < x2 <= width or not 0 <= y1 < y2 <= height:
+                raise ValueError("Outline search rectangle escapes the page")
+            if not np.isfinite(block._detected_font_size) or block._detected_font_size <= 0:
+                raise ValueError("Outline search requires a positive finite font size")
             pad = max(3, int(block._detected_font_size * .22))
             x1, y1, x2, y2 = max(0, x1 - pad), max(0, y1 - pad), min(width, x2 + pad), min(height, y2 + pad)
-            local = mask[y1:y2, x1:x2]
-            kernel = self.cv2.getStructuringElement(self.cv2.MORPH_ELLIPSE, (pad * 2 + 1, pad * 2 + 1))
-            mask[y1:y2, x1:x2] = self.cv2.dilate(local, kernel)
-            block.xyxy = [x1, y1, x2, y2]
+            outlined = outlined_glyph_mask(image[y1:y2, x1:x2], mask[y1:y2, x1:x2])
+            if outlined is None:
+                continue
+            # One pixel covers antialiasing, independent of the font's size.
+            rim = cv2.dilate(outlined, np.ones((3, 3), np.uint8))
+            completed[y1:y2, x1:x2] |= rim
+        return completed
 
 
 def run() -> None:

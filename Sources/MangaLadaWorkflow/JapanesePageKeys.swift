@@ -4,6 +4,7 @@ import MangaLadaCore
 package struct JapanesePageKeys {
     package let translation: String
     package let recognition: String
+    package let recognitionBeforeCleanupUpdate: String
     package let previousRecognition: [String]
     package let previous: [String]
     private static let translationVersion = 40
@@ -17,10 +18,12 @@ package struct JapanesePageKeys {
         let suffix = "balloons-\(configuration.cacheKey)-"
         let ocrSuffix = configuration.japaneseOCR == .hayai ? "-hayai-v2" : ""
         let baseTranslation = "\(prefix)v\(Self.translationVersion)-\(suffix)\(newContext)"
+        // Cleanup has its own key. Keep committed/pending review fingerprints stable.
         translation = baseTranslation + ocrSuffix
         let baseRecognition = prefix + "ocr-v\(Self.recognitionVersion)-balloons"
-        recognition = baseRecognition + ocrSuffix
-        previousRecognition = (ocrSuffix.isEmpty ? [] : [baseRecognition + "-hayai-v1", baseRecognition])
+        recognitionBeforeCleanupUpdate = baseRecognition + ocrSuffix
+        recognition = recognitionBeforeCleanupUpdate + "-ink-v2"
+        previousRecognition = [recognitionBeforeCleanupUpdate] + (ocrSuffix.isEmpty ? [] : [baseRecognition + "-hayai-v1", baseRecognition])
             + ((Self.recognitionVersion - 3)..<Self.recognitionVersion).reversed().map { prefix + "ocr-v\($0)-balloons" }
         let contexts = newContext == oldContext ? [newContext] : [newContext, oldContext]
         let olderTranslations: [String] = stride(from: Self.translationVersion - 1, through: 11, by: -1).flatMap { version in

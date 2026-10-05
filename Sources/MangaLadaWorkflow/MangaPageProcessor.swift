@@ -75,6 +75,7 @@ public final class MangaPageProcessor {
             return MangaPageDraft(translation: translated, cleanImageURL: selected, wasCached: true)
         }
         var recognized = try await recognition(imageURL: imageURL, key: keys.recognition, previousKeys: keys.previousRecognition, cleanURL: cleanURL,
+                                               reusableOCRKey: keys.recognitionBeforeCleanupUpdate,
                                                retention: configuration.ollama.retention, ocrBackend: configuration.japaneseOCR, status: status)
         recognized.blocks = JapaneseSpeechGrouping.resolve(recognized.blocks)
         var storedPrior = try storedCurrent ?? previousTranslation(keys.previous)
@@ -199,6 +200,7 @@ public final class MangaPageProcessor {
     }
 
     private func recognition(imageURL: URL, key: String, previousKeys: [String], cleanURL: URL,
+                             reusableOCRKey: String,
                              retention: OllamaConfiguration.Retention,
                              ocrBackend: JapaneseOCRBackend,
                              status: @escaping @Sendable (String) async -> Void) async throws -> PageTranslation {
@@ -214,7 +216,8 @@ public final class MangaPageProcessor {
             await status(prior == nil ? "일본어 글자 검출 · 만화 OCR · 원문 제거 중" : "기존 일본어 인식 재사용 · 원문 복원 갱신 중")
         }
         var result = try await recognitionSession.recognizeAndClean(source: imageURL, runID: key, priorBlocks: prior?.blocks,
-            opticalCandidates: observations, ocrBackend: ocrBackend, rereadExisting: ocrBackend == .hayai,
+            opticalCandidates: observations, ocrBackend: ocrBackend,
+            rereadExisting: ocrBackend == .hayai && prior?.imageFingerprint != reusableOCRKey,
             idleTimeout: retention.duration)
         try Task.checkCancellation()
         if result.blocks.contains(where: { JapaneseHorizontalOCR.canRefine($0) }) {
