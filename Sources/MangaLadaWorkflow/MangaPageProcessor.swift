@@ -62,38 +62,22 @@ public final class MangaPageProcessor {
                              force: Bool, status: @escaping @Sendable (String) async -> Void) async throws -> MangaPageDraft {
         let keys = try JapanesePageKeys(imageURL: imageURL, configuration: configuration, context: previousContext, title: bookTitle)
         let cleanURL = engine.inpaintedImageURL(runID: keys.recognition)
-        let storedCurrent = try cache.load(fingerprint: keys.translation)
-        if !force, var translated = storedCurrent, FileManager.default.fileExists(atPath: cleanURL.path) {
+        let storedCurrent = try storedTranslation(keys.translation, setAsideUnreadable: force)
+        if !force, let stored = storedCurrent, FileManager.default.fileExists(atPath: cleanURL.path) {
             await status("캐시에서 불러와 글자 배치 중")
-            translated.imageURL = imageURL
-            if RecognitionCacheMigration.hasUnverifiedPunctuation(in: translated.blocks) {
-                let recognized = try cache.load(fingerprint: keys.recognition)
-                translated.blocks = RecognitionCacheMigration.verifyPunctuation(in: translated.blocks, recognized: recognized?.blocks)
-            }
-            let manual = engine.inpaintedImageURL(runID: keys.translation + "-manual")
-            let selected = translated.blocks.contains { $0.userDefinedBounds != nil } && FileManager.default.fileExists(atPath: manual.path) ? manual : cleanURL
-            return MangaPageDraft(translation: translated, cleanImageURL: selected, wasCached: true)
+            return try await cachedDraft(stored, imageURL: imageURL, keys: keys, cleanURL: cleanURL)
         }
         var recognized = try await recognition(imageURL: imageURL, key: keys.recognition, previousKeys: keys.previousRecognition, cleanURL: cleanURL,
                                                reusableOCRKey: keys.recognitionBeforeCleanupUpdate,
                                                retention: configuration.ollama.retention, ocrBackend: configuration.japaneseOCR, status: status)
         recognized.blocks = JapaneseSpeechGrouping.resolve(recognized.blocks)
-        var storedPrior = try storedCurrent ?? previousTranslation(keys.previous)
+        var storedPrior = try storedCurrent ?? previousTranslation(keys)
         if storedCurrent == nil, configuration.japaneseOCR.usesLetteringOCR,
            let oldOCR = try previousTranslation(keys.previousRecognition), var stored = storedPrior {
             stored.blocks = RecognitionCacheMigration.recordSourceEdits(in: stored.blocks, recognized: oldOCR.blocks)
             storedPrior = stored
         }
-        let manualBlocks = storedPrior?.blocks.filter { $0.userDefinedBounds != nil } ?? []
-        for manual in manualBlocks {
-            guard let bounds = manual.userDefinedBounds else { continue }
-            var updated = manual
-            let match = recognized.blocks.first { $0.id == manual.id }
-                ?? recognized.blocks.first { ImageRegionSelection.containsCenter(bounds, of: $0.box) }
-            updated.balloonShape = match?.balloonShape
-            recognized.blocks.removeAll { ImageRegionSelection.containsCenter(bounds, of: $0.box) }
-            recognized.blocks.append(updated)
-        }
+        recognized.blocks = Self.placingManualRegions(storedPrior?.blocks.filter { $0.userDefinedBounds != nil } ?? [], over: recognized.blocks)
         recognized.blocks = MangaReadingOrder.sorted(recognized.blocks)
         for index in recognized.blocks.indices where recognized.blocks[index].textKind == .title && !recognized.blocks[index].preservesOriginalArtwork {
             recognized.blocks[index].originalText = JapaneseTitleResolver.resolve(optical: recognized.blocks[index].originalText, bookTitle: bookTitle)
@@ -129,9 +113,60 @@ public final class MangaPageProcessor {
         await status("말풍선·효과음에 글자 맞추는 중")
         return MangaPageDraft(translation: translation, cleanImageURL: selectedClean, wasCached: false)
     }
+    private func cachedDraft(_ stored: PageTranslation, imageURL: URL, keys: JapanesePageKeys, cleanURL: URL) async throws -> MangaPageDraft {
+        var translated = stored
+        translated.imageURL = imageURL
+        if RecognitionCacheMigration.hasUnverifiedPunctuation(in: translated.blocks) {
+            let recognized = try cache.load(fingerprint: keys.recognition)
+            translated.blocks = RecognitionCacheMigration.verifyPunctuation(in: translated.blocks, recognized: recognized?.blocks)
+        }
+        guard translated.blocks.contains(where: { $0.userDefinedBounds != nil }) else {
+            return MangaPageDraft(translation: translated, cleanImageURL: cleanURL, wasCached: true)
+        }
+        // A missing manual erase is rebuilt; the automatic clean image would leave the
+        // Japanese inside manual regions visible under the lettering.
+        let manual = engine.inpaintedImageURL(runID: keys.translation + "-manual")
+        let selected: URL
+        if FileManager.default.fileExists(atPath: manual.path) { selected = manual }
+        else { selected = try await manualCleanImage(for: translated, sourceCleanURL: cleanURL) }
+        return MangaPageDraft(translation: translated, cleanImageURL: selected, wasCached: true)
+    }
     private func previousTranslation(_ keys: [String]) throws -> PageTranslation? {
         for key in keys { if let value = try cache.load(fingerprint: key) { return value } }
         return nil
+    }
+    /// Same-version entries first, then the same request under another title/previous-page
+    /// context, then older cache versions.
+    private func previousTranslation(_ keys: JapanesePageKeys) throws -> PageTranslation? {
+        let sameVersion = Array(keys.previous.prefix(keys.previousSameVersionCount))
+        let older = Array(keys.previous.dropFirst(keys.previousSameVersionCount))
+        return try previousTranslation(sameVersion) ?? cache.newestEntry(where: keys.sharesTranslationRequest)
+            ?? previousTranslation(older)
+    }
+    /// Only a forced rebuild may set an undecodable current entry aside; otherwise the error surfaces.
+    private func storedTranslation(_ key: String, setAsideUnreadable: Bool) throws -> PageTranslation? {
+        do { return try cache.load(fingerprint: key) }
+        catch is DecodingError where setAsideUnreadable {
+            try cache.quarantine(fingerprint: key)
+            return nil
+        }
+    }
+    /// Manual regions replace recognized text whose center they contain and any block with the
+    /// same identifier, without removing one another, so overlapping selections and moved
+    /// identifiers never produce duplicate or lost regions.
+    package nonisolated static func placingManualRegions(_ manualBlocks: [TextBlock], over recognized: [TextBlock]) -> [TextBlock] {
+        let manualIDs = Set(manualBlocks.map(\.id))
+        var blocks = recognized
+        for manual in manualBlocks {
+            guard let bounds = manual.userDefinedBounds else { continue }
+            var updated = manual
+            let match = recognized.first { $0.id == manual.id }
+                ?? recognized.first { !manualIDs.contains($0.id) && ImageRegionSelection.containsCenter(bounds, of: $0.box) }
+            updated.balloonShape = match?.balloonShape
+            blocks.removeAll { $0.id == manual.id || (!manualIDs.contains($0.id) && ImageRegionSelection.containsCenter(bounds, of: $0.box)) }
+            blocks.append(updated)
+        }
+        return blocks
     }
     private func manualCleanImage(for translation: PageTranslation, sourceCleanURL: URL) async throws -> URL {
         let manual = translation.blocks.filter { $0.userDefinedBounds != nil }
