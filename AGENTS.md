@@ -76,6 +76,10 @@ Python OCR 프로세스의 대기 종료는 Ballons의 `JapaneseEngineSession`�
 
 복자 대상 판단과 이전 결과 안내는 `MaskedTextTranslation.requiresContextTranslation/reviewMessage`가 공유합니다. `TranslationPipeline`은 복자가 있는 대상만 Qwen의 번호 있는 출력에 넣고 나머지는 문맥으로 전달합니다. 일반 문구는 기본 제공자에 남깁니다. 명시적 재번역은 `refreshMaskedContext`를 전달해 해당 해석 키만 다시 판단하며 다른 캐시를 삭제하지 않습니다. 새 해석 실패 때 예전 가설로 조용히 대체하지 않고 오류 안내·원래 가림표 검증을 유지합니다. `MaskedTextInterpretation.translationModel/usedCachedInterpretation`은 선택 필드로 이전 캐시와 호환되며 OCR 원문 변경 시 기존 불변식에 따라 해제됩니다. 기존 페이지 캐시는 수동 검수 여부를 확정할 수 없으므로 자동 덮어쓰지 않고 재확인 대상으로 표시합니다. 선택 재번역은 임시 검수만 저장하고 이미지 갱신은 수정 적용 경계를 따릅니다.
 
+Python의 페이지 디코딩은 `source_image.read_color_image`가 소유합니다. OpenCV로 읽을 수 있는 이미지는 그대로 사용하고, 읽지 못한 HEIC·AVIF 등만 macOS `sips`로 임시 PNG를 만들어 읽은 뒤 지웁니다. 원본은 수정하지 않으며 변환 실패는 기존 디코딩 오류로 드러납니다. `scripts/check_source_image.py`는 변환기 자리에 실제 subprocess를 두고 검사합니다.
+
+번역 캐시 키는 제목·앞 페이지 문맥을 포함합니다. 같은 이미지·버전·번역 설정·OCR에서 문맥만 다른 항목은 `JapanesePageKeys.sharesTranslationRequest`와 `TranslationCache.newestEntry`로 찾아 기존 `RecognitionCacheMigration.reuse` 검증을 거쳐 재사용합니다. 같은 버전의 이전 OCR 키 다음, 이전 버전 키보다 먼저 확인합니다. 강제 재번역에서만 해석할 수 없는 현재 캐시를 `quarantine`으로 옆에 옮기며 삭제하지 않습니다. 수동 영역 배치는 `MangaPageProcessor.placingManualRegions`가 소유하며 겹친 수동 영역끼리 지우거나 UUID를 중복시키지 않습니다. 수동 원문 제거 이미지는 임시 복사본에서 지우기가 성공한 뒤에만 게시하므로, 실패·취소 뒤 남은 미완성 파일을 캐시 재사용이 완료 결과로 쓰지 않습니다. 캐시 재사용 경로는 엔진을 실행하지 않습니다.
+
 ## 구현·오류 처리
 
 개별 번역 제외의 SSOT는 `TextBlock.keepsOriginal`이며 이전 캐시의 nil은 정상 번역입니다. 삭제는 영역 ID·기존 번역을 보존하는 원본 유지 선택입니다. App은 기존 검수 임시 저장·미리보기·수정 적용 경계만 사용합니다. Core는 제외한 영역을 모델 입력과 미번역 판정에서 빼고, Workflow는 재열기·강제 재번역·보완 효과음 캐시에서 그 선택을 유지합니다. Rendering의 `OriginalArtwork`는 원본 픽셀 좌표로 해당 영역을 복원하고 다른 번역 영역의 원문을 다시 노출하지 않습니다. 번역 글자 이동값을 원본 복원 좌표로 사용하지 않습니다. 원본 부재·크기 불일치는 오류이며 저장된 이미지를 덮어쓰지 않습니다. 취소·재사용·빈 번역·겹침·원본과 캐시의 부작용을 실제 상태와 픽셀로 검사합니다.

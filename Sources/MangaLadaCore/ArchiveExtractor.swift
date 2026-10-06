@@ -49,7 +49,9 @@ public struct ArchiveExtractor: Sendable {
         process.standardInput = FileHandle.nullDevice
         try process.run()
         process.waitUntilExit()
-        let output = try String(contentsOf: log, encoding: .utf8)
+        // Japanese ZIPs often store Shift-JIS names. Replacement decoding keeps every ASCII byte
+        // ("/", ".", newline) for the safety checks instead of failing on a non-UTF-8 entry name.
+        let output = String(decoding: try Data(contentsOf: log), as: UTF8.self)
         guard process.terminationStatus == 0 else {
             throw ArchiveExtractionError.extractionFailed(archiveURL, exitCode: process.terminationStatus, message: String(output.suffix(1600)))
         }

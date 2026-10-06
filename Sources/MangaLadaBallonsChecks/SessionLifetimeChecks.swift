@@ -23,7 +23,7 @@ enum SessionLifetimeChecks {
             try? FileManager.default.removeItem(at: root)
             throw error
         }
-        print("OCR session lifetime passed: empty input, PID reuse, deadline renewal, automatic exit/restart, active work, cancellation, invalid response and explicit stop")
+        print("OCR session lifetime passed: empty input, PID reuse, deadline renewal, automatic exit/restart, active work, cancellation, invalid response, idle worker exit and explicit stop")
     }
 
     private static func checkReuseAndExpiry(_ session: JapaneseEngineSession, root: URL) async throws {
@@ -82,8 +82,16 @@ enum SessionLifetimeChecks {
         let invalidPID = try state(root).pid
         try await waitUntil("Invalid-response process remained alive.") { !alive(invalidPID) }
         _ = try await session.verifyProposedRegions(source: source, regions: [block("再開")], idleTimeout: .seconds(2))
-        let finalPID = try state(root).pid
-        try require(finalPID != invalidPID, "Failed OCR session did not recover on a new request.")
+        let recoveredPID = try state(root).pid
+        try require(recoveredPID != invalidPID, "Failed OCR session did not recover on a new request.")
+        let exiting = try await session.verifyProposedRegions(source: source, regions: [block("exit")], idleTimeout: .seconds(5))
+        try require(exiting.map(\.originalText) == ["exit"], "The exiting worker's reply was lost.")
+        try await waitUntil("The worker did not exit while idle.") { !alive(recoveredPID) }
+        try await Task.sleep(for: .milliseconds(100))
+        _ = try await session.verifyProposedRegions(source: source, regions: [block("復帰")], idleTimeout: .seconds(2))
+        let latest = try state(root)
+        let finalPID = latest.pid
+        try require(finalPID != recoveredPID && latest.text == "復帰", "A worker that exited while idle was reused.")
         await session.stop()
         try await waitUntil("Explicit stop did not terminate the process.") { !alive(finalPID) }
     }
@@ -127,5 +135,7 @@ enum SessionLifetimeChecks {
         if text in ("wait", "cancel"):
             time.sleep(1.2)
         print("{" if text == "invalid" else json.dumps({"blocks": regions}), flush=True)
+        if text == "exit":
+            os._exit(0)
     """#
 }

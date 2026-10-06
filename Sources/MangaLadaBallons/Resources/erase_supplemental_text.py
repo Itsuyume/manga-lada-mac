@@ -12,12 +12,13 @@ def run() -> None:
     engine_root, clean_path, regions_path = map(Path, sys.argv[1:4])
     sys.path.insert(0, str(engine_root))
     os.chdir(engine_root)
-    image = cv2.imread(str(clean_path), cv2.IMREAD_COLOR)
+    from source_image import read_color_image
+    image = read_color_image(clean_path)
     if image is None:
         raise ValueError(f"Cannot decode image: {clean_path.name}")
     request = json.loads(regions_path.read_text(encoding="utf-8"))
     regions = request["regions"]
-    source = cv2.imread(request["maskSource"], cv2.IMREAD_COLOR) if request.get("maskSource") else image
+    source = read_color_image(request["maskSource"]) if request.get("maskSource") else image
     if source is None or source.shape != image.shape:
         raise ValueError("Mask source and clean image dimensions differ")
     mask, boxes = glyph_mask(source, regions, bounded=request["bounded"])

@@ -38,8 +38,13 @@ public actor JapaneseEngineSession {
         cancelIdleShutdown()
         processing = true; defer { processing = false }
         let worker: JapaneseEngineConnection
-        if let connection { worker = connection }
-        else { worker = try JapaneseEngineConnection(engine: engine); connection = worker }
+        // A worker that exited while idle (crash, memory pressure) is replaced before the request
+        // is sent. Failures during a request still surface; they are never retried here.
+        if let connection, connection.isRunning { worker = connection }
+        else {
+            connection?.terminate()
+            worker = try JapaneseEngineConnection(engine: engine); connection = worker
+        }
         do {
             let data = try await withTaskCancellationHandler {
                 try await Task.detached { try worker.exchange(request) }.value
