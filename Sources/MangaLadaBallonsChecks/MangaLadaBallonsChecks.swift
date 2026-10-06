@@ -138,9 +138,7 @@ struct MangaLadaBallonsChecks {
     }
 
     private static func applicationSupportDirectory() -> URL {
-        let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)
-            .first ?? FileManager.default.temporaryDirectory
-        return base.appendingPathComponent("Manga Lada", isDirectory: true)
+        MangaLadaEdition.applicationSupport
     }
 }
 

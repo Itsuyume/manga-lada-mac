@@ -16,7 +16,7 @@ from text_stroke_assets import (CODE_HASHES, CODE_ID, CODE_REVISION, MODEL_FILE,
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--destination", type=Path, default=Path.home()/"Library/Application Support/Manga Lada/TextStrokes")
+    parser.add_argument("--destination", type=Path, default=Path.home()/"Library/Application Support/Manga Lada Claude/TextStrokes")
     parser.add_argument("--from-model", type=Path, help="Verified model snapshot; does not delete the source")
     parser.add_argument("--from-code", type=Path, help="Verified Hi-SAM source checkout")
     args = parser.parse_args()

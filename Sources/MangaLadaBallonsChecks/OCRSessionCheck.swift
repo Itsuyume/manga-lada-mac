@@ -12,8 +12,7 @@ enum OCRSessionCheck {
         let source = URL(fileURLWithPath: arguments[4]), output = URL(fileURLWithPath: arguments[5])
         guard !FileManager.default.fileExists(atPath: output.path) else { throw CocoaError(.fileWriteFileExists) }
         let before = try Data(contentsOf: source)
-        let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("Manga Lada")
+        let support = MangaLadaEdition.applicationSupport
         let engine = BallonsTranslatorEngine.standard(applicationSupportDirectory: support)
         let session = JapaneseEngineSession(engine: engine)
         let id = "ocr-session-" + UUID().uuidString

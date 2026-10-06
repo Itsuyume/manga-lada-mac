@@ -9,7 +9,7 @@ enum BookTranslationChecks {
     @MainActor
     static func run(source: URL, output: URL, configuration: LocalTranslatorConfiguration = LocalTranslatorConfiguration()) async throws {
         let began = Date()
-        let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("Manga Lada")
+        let support = MangaLadaEdition.applicationSupport
         let original = try sourceFingerprints(source)
         let loader = ComicBookLoader(extractionRoot: support.appendingPathComponent("Archives"))
         let input = try await loader.load(source)

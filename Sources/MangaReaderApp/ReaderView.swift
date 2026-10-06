@@ -1,4 +1,5 @@
 import AppKit
+import MangaLadaCore
 import MangaLadaViewerUI
 import SwiftUI
 
@@ -20,7 +21,7 @@ struct ReaderView: View {
     private var header: some View {
         HStack(spacing: 12) {
             ThumbnailToggleButton(settings: state.reading).disabled(state.pages.isEmpty)
-            AppBrand("Manga Reader", symbol: "book.closed")
+            AppBrand(MangaLadaEdition.readerName, symbol: "book.closed")
             Text(state.title.isEmpty ? "나만의 만화 서재" : state.title).font(.system(size: 12)).foregroundStyle(.secondary).lineLimit(1)
             Spacer()
             Button("파일 열기", systemImage: "doc") { state.chooseBook() }

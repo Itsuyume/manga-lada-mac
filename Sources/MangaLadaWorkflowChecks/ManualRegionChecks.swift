@@ -7,7 +7,7 @@ import MangaLadaWorkflow
 @MainActor
 enum ManualRegionChecks {
     static func run(source: URL, output: URL, box: TextBox, title: String, configuration: LocalTranslatorConfiguration) async throws {
-        let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("Manga Lada")
+        let support = MangaLadaEdition.applicationSupport
         let processor = MangaPageProcessor(applicationSupportDirectory: support)
         let bytes = try Data(contentsOf: source)
         let before = try await processor.process(imageURL: source, destinationURL: output, configuration: configuration,

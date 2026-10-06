@@ -14,7 +14,7 @@ from lettering_strokes import MODEL_ID, MODEL_REVISION, MODEL_DIRECTORY, MODEL_F
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--destination", type=Path, default=Path.home()/"Library/Application Support/Manga Lada/LetteringStrokes")
+    parser.add_argument("--destination", type=Path, default=Path.home()/"Library/Application Support/Manga Lada Claude/LetteringStrokes")
     parser.add_argument("--from-snapshot", type=Path, help="Pinned directory containing weights, README.md and LICENSE")
     args = parser.parse_args()
     destination = args.destination.expanduser().resolve()

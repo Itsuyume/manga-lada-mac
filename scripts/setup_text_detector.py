@@ -13,7 +13,7 @@ from manga_text_detector import MODEL_ID, MODEL_REVISION, MODEL_FILE, MODEL_LICE
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--destination", type=Path, default=Path.home()/"Library/Application Support/Manga Lada/TextDetector")
+    parser.add_argument("--destination", type=Path, default=Path.home()/"Library/Application Support/Manga Lada Claude/TextDetector")
     parser.add_argument("--from-snapshot", type=Path, help="Pinned local snapshot containing weights and README.md")
     args = parser.parse_args()
     destination = args.destination.expanduser().resolve()

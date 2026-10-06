@@ -21,7 +21,7 @@ struct TranslatorSettingsStore {
         UserDefaults.standard.set(try JSONEncoder().encode(typography), forKey: "translator.typography")
     }
     private var keyQuery: [String: Any] {
-        [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: "local.mangalada.mac.gemini", kSecAttrAccount as String: "api-key"]
+        [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: MangaLadaEdition.geminiKeychainService, kSecAttrAccount as String: "api-key"]
     }
     private func readAPIKey() throws -> String {
         var query = keyQuery; query[kSecReturnData as String] = true; query[kSecMatchLimit as String] = kSecMatchLimitOne

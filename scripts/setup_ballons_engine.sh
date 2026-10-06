@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-APP_SUPPORT="${APP_SUPPORT:-"$HOME/Library/Application Support/Manga Lada"}"
+APP_SUPPORT="${APP_SUPPORT:-"$HOME/Library/Application Support/Manga Lada Claude"}"
 SOURCE_DIR="${BALLONS_SOURCE_DIR:-"$APP_SUPPORT/BallonsTranslator-dev"}"
 VENV_DIR="${BALLONS_VENV_DIR:-"$APP_SUPPORT/ballons-engine"}"
 ZIP_PATH="${BALLONS_ZIP_PATH:-"$HOME/Downloads/BallonsTranslator-dev.zip"}"

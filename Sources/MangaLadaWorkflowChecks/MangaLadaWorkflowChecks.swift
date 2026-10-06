@@ -59,8 +59,7 @@ struct MangaLadaWorkflowChecks {
         }
         let source = URL(fileURLWithPath: arguments[1])
         let output = URL(fileURLWithPath: arguments[2])
-        let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("Manga Lada")
+        let support = MangaLadaEdition.applicationSupport
         let original = try Data(contentsOf: source)
         let processor = MangaPageProcessor(applicationSupportDirectory: support)
         let bookTitle = arguments.dropFirst(3).first { !$0.hasPrefix("--") } ?? ""

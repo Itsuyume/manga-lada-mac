@@ -26,10 +26,10 @@
 
 ## 설치와 실행
 
-기존 Ballons Python 환경에서 실행합니다. 공개 모델 약 629 MB를 Application Support의 `Manga Lada/LetteringOCR`에 따로 둡니다. 앱이나 Git 저장소에는 모델을 넣지 않습니다. 추가 API/Ollama 요청은 없습니다.
+기존 Ballons Python 환경에서 실행합니다. 공개 모델 약 629 MB를 Application Support의 `Manga Lada Claude/LetteringOCR`에 따로 둡니다. 앱이나 Git 저장소에는 모델을 넣지 않습니다. 추가 API/Ollama 요청은 없습니다.
 
 ```sh
-PYTHON="$HOME/Library/Application Support/Manga Lada/ballons-engine/bin/python"
+PYTHON="$HOME/Library/Application Support/Manga Lada Claude/ballons-engine/bin/python"
 "$PYTHON" -B scripts/setup_lettering_ocr.py
 
 # 이미 잘라 둔 글자 크롭. 출력은 새 파일을 지정합니다.
@@ -55,9 +55,9 @@ HF_HUB_OFFLINE=1 "$PYTHON" -B scripts/inspect_lettering.py page.png --mode detec
 "$PYTHON" -B scripts/check_text_detection.py
 ```
 
-추가 모델은 38MB이며 앱 외부 `Manga Lada/TextDetector`에 설치합니다. OpenCV CPU 검출과 기존 Hayai MPS OCR을 사용하며 추가 API나 Ollama는 필요하지 않습니다. 모델은 **CC-BY-NC-SA-4.0**이므로 비상업적 이용 조건을 확인해야 합니다. 원본 weights·README와 고정 해시를 사용하고 추론 중 다운로드나 다른 모델로 대체하지 않습니다.
+추가 모델은 38MB이며 앱 외부 `Manga Lada Claude/TextDetector`에 설치합니다. OpenCV CPU 검출과 기존 Hayai MPS OCR을 사용하며 추가 API나 Ollama는 필요하지 않습니다. 모델은 **CC-BY-NC-SA-4.0**이므로 비상업적 이용 조건을 확인해야 합니다. 원본 weights·README와 고정 해시를 사용하고 추론 중 다운로드나 다른 모델로 대체하지 않습니다.
 
-획 분할 모델은 별도로 약 48MB이며 `Manga Lada/LetteringStrokes`에 저장합니다. OpenCV의 Apache-2.0 EfficientSAM-Ti 고정 버전을 사용합니다. 입력은 1024 정사각형 한 장으로 제한하고 모델은 기존 작업 프로세스와 함께 재사용·해제합니다. 원본 읽기가 불일치하면 아래 반복 횟수 보완 조건에 해당할 때만 분할을 시도합니다. 후보 거절을 반복해 페이지의 8후보 예산을 넘기지 않으며, 일반 획 대조의 추가 OCR은 후보당 최대 3회입니다. 반복 횟수 보완의 별도 호출 상한은 아래에 명시합니다. 마스크가 일치하더라도 실제 저장 이미지에서 글자 잔상과 배경 손상을 확인해야 합니다.
+획 분할 모델은 별도로 약 48MB이며 `Manga Lada Claude/LetteringStrokes`에 저장합니다. OpenCV의 Apache-2.0 EfficientSAM-Ti 고정 버전을 사용합니다. 입력은 1024 정사각형 한 장으로 제한하고 모델은 기존 작업 프로세스와 함께 재사용·해제합니다. 원본 읽기가 불일치하면 아래 반복 횟수 보완 조건에 해당할 때만 분할을 시도합니다. 후보 거절을 반복해 페이지의 8후보 예산을 넘기지 않으며, 일반 획 대조의 추가 OCR은 후보당 최대 3회입니다. 반복 횟수 보완의 별도 호출 상한은 아래에 명시합니다. 마스크가 일치하더라도 실제 저장 이미지에서 글자 잔상과 배경 손상을 확인해야 합니다.
 
 검출은 종횡비를 유지한 전체/문맥 여백을 원본과 색 반전으로 대조한 네 뷰를 사용하며 큰 이미지는 겹치는 4개 타일을 추가합니다. 반전은 검출 입력에만 적용하고 OCR은 원본으로 읽습니다. 흰 글자 크롭의 획 분할도 같은 좌표에서 검사용 색을 정규화하며 원본 픽셀·배경을 반전해 저장하지 않습니다. 모든 뷰는 1024 정사각형으로 메모리와 호출 수를 제한합니다. 타일 내부 경계에서 잘린 단어는 제외하고 중복만 제거하며 이웃 말풍선은 합치지 않습니다. 크롭은 짧은 변의 30%까지 넓히되 이웃 검출 영역까지 거리의 절반에서 멈춥니다. 기본 OCR 예산은 24개, `--limit 0..40`으로 조정하며 초과한 후보도 `deferred`와 좌표로 반환합니다.
 
@@ -85,7 +85,7 @@ worker의 `letteringOnly: "detect"`도 같은 모듈을 사용합니다. 결과�
 "$PYTHON" -B scripts/check_text_strokes.py
 ```
 
-설정의 **장식 글자 OCR · 정밀 획 분리 (+1.35GB)**를 선택합니다. 모델은 앱 밖 `Manga Lada/TextStrokes`에 저장하며 이 옵션에는 48MB EfficientSAM 설치가 필요하지 않습니다. 기본 OCR과 기존 추가 검출 옵션은 그대로 유지됩니다.
+설정의 **장식 글자 OCR · 정밀 획 분리 (+1.35GB)**를 선택합니다. 모델은 앱 밖 `Manga Lada Claude/TextStrokes`에 저장하며 이 옵션에는 48MB EfficientSAM 설치가 필요하지 않습니다. 기본 OCR과 기존 추가 검출 옵션은 그대로 유지됩니다.
 
 원본 비율을 유지한 1024 입력과 원래 크기 입력을 최대 두 번 대조합니다. 마스크 안에 실제로 관측된 글자 획만 남기고, 기존 `confirmed_strokes`의 원문 일치·면적·배경 보호 검사를 거친 뒤 제거합니다. 모델은 작업 프로세스에서 최초 사용 시 한 번 로드하며 CPU 또는 사용 가능한 MPS를 사용합니다. 런타임 다운로드나 다른 모델로의 자동 재시도는 없습니다.
 

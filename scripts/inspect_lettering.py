@@ -45,11 +45,11 @@ def inspect(paths, model_directory, device, mode, detector_model, limit):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("images", nargs="+", type=Path)
-    parser.add_argument("--model-directory", type=Path, default=Path.home()/"Library/Application Support/Manga Lada/LetteringOCR")
+    parser.add_argument("--model-directory", type=Path, default=Path.home()/"Library/Application Support/Manga Lada Claude/LetteringOCR")
     parser.add_argument("--device", choices=("mps", "cpu"), default="mps")
     parser.add_argument("--mode", choices=("scan", "crop", "detect"), default="scan",
                         help="scan: contour candidates; crop: lettering only; detect: optional learned detector")
-    parser.add_argument("--detector-model", type=Path, default=Path.home()/"Library/Application Support/Manga Lada/TextDetector"/MODEL_FILE)
+    parser.add_argument("--detector-model", type=Path, default=Path.home()/"Library/Application Support/Manga Lada Claude/TextDetector"/MODEL_FILE)
     parser.add_argument("--limit", type=int, default=24, help="Maximum OCR regions in detect mode (0-40); remaining proposals are reported")
     parser.add_argument("--output", required=True, type=Path)
     args = parser.parse_args()

@@ -1,6 +1,21 @@
-# Manga translator & Manga Reader
+# Manga Lada Claude 1.0 (Manga translator & Manga Reader 기반)
 
 일본어 만화를 한국어로 자동 번역·식자하는 macOS 앱과 별도의 만화 뷰어입니다. 예전 **Manga Lada** 프로젝트를 이어서 개발했습니다.
+
+## Manga Lada Claude 1.0
+
+`manga-lada-claude-1.0` 브랜치는 0.2.44(`main`)에 안정성 수정과 화면 개선을 더한 **별도 에디션**입니다. 기존 앱을 대체하지 않고 나란히 설치됩니다.
+
+| | 기존 | Manga Lada Claude 1.0 |
+|---|---|---|
+| 앱 이름 | Manga translator · Manga Reader | Manga Lada Claude · Manga Lada Claude Reader |
+| 번들 ID | `local.mangalada.mac` · `local.mangareader.mac` | `local.mangaladaclaude.mac` · `local.mangaladaclaude.reader` |
+| 데이터 폴더 | `Application Support/Manga Lada` | `Application Support/Manga Lada Claude` |
+| Gemini 키(키체인) | `local.mangalada.mac.gemini` | `local.mangaladaclaude.mac.gemini` |
+
+이름·데이터 폴더의 단일 출처는 Core의 `MangaLadaEdition`입니다. 설정·캐시·검수 임시본·엔진·모델을 기존 앱과 공유하지 않으며, `install_local_app.sh`는 이 에디션의 앱만 교체(백업)하고 기존 두 앱은 건드리지 않습니다. 처음 실행하면 기존 데이터 없이 시작합니다.
+
+**엔진 준비**: 아래 설치 명령은 이제 `Manga Lada Claude` 폴더를 기본값으로 사용합니다. 외부 엔진(`setup_ballons_engine.sh`)과 선택 모델(`setup_*.py`)을 다시 설치하세요. 내려받기를 줄이려면 기존 앱의 `ballons-engine`, `BallonsTranslator-dev` 폴더를 새 폴더에 복사할 수 있습니다. 심볼릭 링크로 공유하면 두 앱이 같은 엔진 설치를 쓰게 되므로 완전한 분리가 필요하면 복사하세요. 캐시(`Cache`, `BallonsRuns`)는 옮기지 마세요. 처리 버전과 키 규칙이 같아도 이 에디션의 캐시 복구 동작은 새 폴더에서만 검증했습니다.
 
 ## 두 앱
 
@@ -165,7 +180,7 @@ Rendering 리소스의 `sound-effect-styles.json`이 14가지 스타일의 단�
 
 ## 저장·호환성
 
-앱 표시 이름은 **Manga translator**로 바뀌었지만 번들 ID `local.mangalada.mac`, Swift 제품/명령 `MangaLada`, `Application Support/Manga Lada` 경로를 유지합니다. 기존 외부 엔진·원본·캐시를 삭제하지 않습니다. 새 처리 버전은 별도의 캐시 키를 사용합니다. Reader ID는 `local.mangareader.mac`입니다.
+기존 앱의 표시 이름은 **Manga translator**이며 번들 ID `local.mangalada.mac`, Swift 제품/명령 `MangaLada`, `Application Support/Manga Lada` 경로를 사용합니다. Manga Lada Claude 1.0 에디션은 Swift 제품/명령 이름만 같고 앱 이름·번들 ID·데이터 폴더는 위 표처럼 분리합니다. 기존 외부 엔진·원본·캐시를 삭제하지 않습니다. 새 처리 버전은 별도의 캐시 키를 사용합니다. Reader ID는 `local.mangareader.mac`입니다.
 
 `translator-config.json`에는 제공자·모델 이름만 저장하며 API 키를 기록하지 않습니다. 모델, 캐시, 작업 로그와 실행 중간 이미지는 저장소에 포함하지 않습니다. 렌더러의 `render` API는 이미지 생성 실패를 호출부에 전달하도록 `throws`로 변경했습니다. 기존 CLI 제품 이름은 유지합니다.
 

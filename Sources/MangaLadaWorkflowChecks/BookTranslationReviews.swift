@@ -8,7 +8,7 @@ enum BookTranslationReviews {
     struct Correction: Decodable { let page: Int; let original: String; let translation: String }
     @MainActor
     static func run(source: URL, output: URL, correctionsURL: URL) async throws {
-        let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("Manga Lada")
+        let support = MangaLadaEdition.applicationSupport
         let inputHash = try ImageFingerprint().make(for: source)
         let input = try await ComicBookLoader(extractionRoot: support.appendingPathComponent("Archives")).load(source)
         let corrections = try JSONDecoder().decode([Correction].self, from: Data(contentsOf: correctionsURL))

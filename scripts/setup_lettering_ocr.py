@@ -14,7 +14,7 @@ from hayai_lettering import prepare_local_model, verify_installation
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--destination", type=Path, default=Path.home()/"Library/Application Support/Manga Lada/LetteringOCR")
+    parser.add_argument("--destination", type=Path, default=Path.home()/"Library/Application Support/Manga Lada Claude/LetteringOCR")
     parser.add_argument("--from-snapshot", type=Path, help="Verified local directory containing model/ and processor/")
     args = parser.parse_args()
     destination = args.destination.expanduser().resolve()

@@ -2,7 +2,7 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-BUILD_ROOT="${MANGA_LADA_BUILD_ROOT:-${TMPDIR:-/tmp}/manga-translator-build}"
+BUILD_ROOT="${MANGA_LADA_BUILD_ROOT:-${TMPDIR:-/tmp}/manga-lada-claude-build}"
 cd "$ROOT_DIR"
 swift build --scratch-path "$BUILD_ROOT" -c release "$@"
 BIN_DIR="$(swift build --scratch-path "$BUILD_ROOT" -c release "$@" --show-bin-path)"
@@ -49,8 +49,8 @@ bundle_app() {
     </dict>
   </array>
   <key>CFBundlePackageType</key><string>APPL</string>
-  <key>CFBundleShortVersionString</key><string>0.2.44</string>
-  <key>CFBundleVersion</key><string>52</string>
+  <key>CFBundleShortVersionString</key><string>1.0.0</string>
+  <key>CFBundleVersion</key><string>1</string>
   <key>LSMinimumSystemVersion</key><string>14.0</string>
   <key>NSHighResolutionCapable</key><true/>
   <key>NSSupportsAutomaticGraphicsSwitching</key><true/>
@@ -66,5 +66,7 @@ PLIST
   echo "$ROOT_DIR/dist/$name.app"
 }
 
-bundle_app "Manga translator" "MangaLada" "local.mangalada.mac" "translator"
-bundle_app "Manga Reader" "MangaReader" "local.mangareader.mac" "reader"
+# Manga Lada Claude installs beside the original Manga translator/Manga Reader: its own names,
+# bundle IDs (separate settings) and data folder (`MangaLadaEdition`).
+bundle_app "Manga Lada Claude" "MangaLada" "local.mangaladaclaude.mac" "translator"
+bundle_app "Manga Lada Claude Reader" "MangaReader" "local.mangaladaclaude.reader" "reader"

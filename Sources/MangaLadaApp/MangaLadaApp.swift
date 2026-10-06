@@ -1,3 +1,4 @@
+import MangaLadaCore
 import MangaLadaViewerUI
 import SwiftUI
 
@@ -6,7 +7,7 @@ struct MangaLadaMacApp: App {
     @NSApplicationDelegateAdaptor(ComicAppDelegate.self) private var delegate
     @StateObject private var state = AppState()
     var body: some Scene {
-        Window("Manga translator", id: "translator") {
+        Window(MangaLadaEdition.translatorName, id: "translator") {
             ContentView().environmentObject(state).frame(minWidth: 980, minHeight: 680)
                 .onAppear { delegate.installOpenHandler { url in Task { await state.open(url) } } }
         }.defaultSize(width: 1180, height: 820).windowStyle(.hiddenTitleBar)

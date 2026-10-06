@@ -19,8 +19,7 @@ final class ReaderState: ObservableObject {
     private var loadID = UUID()
     private var isShowingFilePanel = false
     init() {
-        let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("Manga Lada/Archives")
+        let support = MangaLadaEdition.applicationSupport.appendingPathComponent("Archives")
         loader = ComicBookLoader(extractionRoot: support)
     }
     func chooseBook(folderOnly: Bool = false) {
