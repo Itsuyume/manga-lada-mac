@@ -8,8 +8,6 @@ struct ReaderView: View {
         VStack(spacing: 0) {
             header
             Divider()
-            ReadingControls(settings: state.reading, index: state.index, total: state.pages.count, navigate: state.select)
-            Divider()
             ReaderBody(state: state, reading: state.reading)
             ReaderFooter(state: state, reading: state.reading)
         }.tint(MangaUI.accent).background(.background)
@@ -20,7 +18,8 @@ struct ReaderView: View {
             } message: { Text(state.errorMessage ?? "") }
     }
     private var header: some View {
-        HStack(spacing: 14) {
+        HStack(spacing: 12) {
+            ThumbnailToggleButton(settings: state.reading).disabled(state.pages.isEmpty)
             AppBrand("Manga Reader", symbol: "book.closed")
             Text(state.title.isEmpty ? "나만의 만화 서재" : state.title).font(.system(size: 12)).foregroundStyle(.secondary).lineLimit(1)
             Spacer()
@@ -46,8 +45,11 @@ private struct ReaderFooter: View {
     @ObservedObject var state: ReaderState
     @ObservedObject var reading: ReadingSettings
     var body: some View {
-        HStack {
+        HStack(spacing: 12) {
             Text(state.isLoading ? "책을 여는 중…" : "\(state.pages.isEmpty ? 0 : state.index + 1) / \(state.pages.count) 페이지").monospacedDigit()
+            if state.pages.count > 1 {
+                ProgressView(value: Double(state.index), total: Double(state.pages.count - 1)).progressViewStyle(.linear).frame(width: 160)
+            }
             Spacer()
             Text(reading.direction == .rightToLeft ? "← 다음 · → 이전 · Space 다음" : "→ 다음 · ← 이전 · Space 다음")
                 .foregroundStyle(.secondary)
@@ -62,13 +64,17 @@ private struct ReaderBody: View {
         HStack(spacing: 0) {
             if reading.showThumbnails { ThumbnailSidebar(pages: state.pages.map(\.url), index: state.index, select: state.select); Divider() }
             if state.pages.isEmpty {
-                VStack(spacing: 18) {
-                    Image(systemName: "book.pages").font(.system(size: 50, weight: .light)).foregroundStyle(.white.opacity(0.65))
-                    Text("만화를 펼쳐보세요").font(.system(size: 22, weight: .semibold)).foregroundStyle(.white)
-                    Text("파일이나 폴더를 끌어놓거나 열기 버튼을 누르세요.").foregroundStyle(.white.opacity(0.6))
-                    Text("ZIP · 7z · RAR · CBZ · CBR · PDF · 이미지").font(.system(size: 12)).foregroundStyle(.white.opacity(0.45))
-                }.frame(maxWidth: .infinity, maxHeight: .infinity).background(MangaUI.canvas)
-            } else { ComicPageCanvas(pages: state.pages.map(\.url), index: state.index, settings: reading, onSelect: state.select) }
+                ComicDropPrompt(symbol: "book.pages", title: "만화를 펼쳐보세요",
+                                message: "파일이나 폴더를 여기로 끌어다 놓거나 열기를 누르세요.",
+                                formats: ["ZIP", "7z", "RAR", "CBZ · CBR", "PDF", "이미지"],
+                                openFile: { state.chooseBook() }, openFolder: { state.chooseBook(folderOnly: true) })
+            } else {
+                VStack(spacing: 0) {
+                    ComicPageCanvas(pages: state.pages.map(\.url), index: state.index, settings: reading, onSelect: state.select)
+                    ReadingControls(settings: reading, index: state.index, total: state.pages.count, navigate: state.select)
+                        .padding(.vertical, 8).frame(maxWidth: .infinity).background(MangaUI.canvas)
+                }
+            }
         }.overlay { if state.isLoading { ProgressView().controlSize(.large).padding(22).background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12)) } }
     }
 }
