@@ -6,9 +6,6 @@ struct ContentView: View {
     var body: some View {
         VStack(spacing: 0) {
             TranslatorActions()
-            if state.isSelectingRegion { RegionSelectionControls(state: state) }
-            Divider()
-            ReadingControls(settings: state.reading, index: state.currentIndex, total: state.pages.count, navigate: state.select)
             Divider()
             TranslatorBody(state: state, reading: state.reading)
             TranslatorFooter()
@@ -28,20 +25,12 @@ private struct TranslatorBody: View {
     var body: some View {
         HStack(spacing: 0) {
             if reading.showThumbnails {
-                ThumbnailSidebar(pages: state.pages.map(\.url), index: state.currentIndex, completed: state.completed, select: state.select)
+                ThumbnailSidebar(pages: state.pages.map(\.url), index: state.currentIndex, badges: thumbnailBadges, select: state.select)
                 Divider()
             }
             if state.pages.isEmpty { TranslatorEmptyState() }
             else { VStack(spacing: 0) {
-                if (state.showInspector || state.isSelectingRegion) && state.currentReview?.blocks.isEmpty == false {
-                    RecognizedRegionLegend(state: state)
-                }
-                if !state.isSelectingRegion && state.mode == .translated
-                    && (state.currentResult == nil || state.failures[state.currentIndex] != nil) {
-                    pageNotice.font(.system(size: 12, weight: .medium))
-                        .frame(maxWidth: .infinity, alignment: .leading).padding(10)
-                        .background(.regularMaterial)
-                }
+                canvasHeader
                 ComicPageCanvas(pages: state.displayPages, index: state.currentIndex, settings: reading, revision: state.imageRevision,
                                    selection: state.isSelectingRegion ? Binding(get: { state.selectedRegion }, set: { state.selectRegion($0) }) : nil,
                                    regions: state.showInspector || state.isSelectingRegion ? state.currentReview?.blocks ?? [] : [],
@@ -50,11 +39,44 @@ private struct TranslatorBody: View {
                                    useLetteringCoordinates: state.mode == .translated && !state.isSelectingRegion,
                                    onSelect: state.select)
                 .allowsHitTesting(!state.isSelectingRegion || !state.isBusy)
+                // Laid out below the page, not over it, so markers and drags near the edge stay reachable.
+                ReadingControls(settings: reading, index: state.currentIndex, total: state.pages.count, navigate: state.select)
+                    .padding(.vertical, 8).frame(maxWidth: .infinity).background(MangaUI.canvas)
             } }
-            if state.showInspector && !state.pages.isEmpty { Divider(); TranslationInspector(state: state).frame(width: 290) }
+            if state.showInspector && !state.pages.isEmpty { Divider(); TranslationInspector(state: state).frame(width: 300) }
         }.overlay {
             if state.isLoading { ProgressView("페이지를 여는 중…").padding(22).background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12)) }
         }
+    }
+    private var showsNotice: Bool {
+        !state.isSelectingRegion && state.mode == .translated
+            && (state.currentResult == nil || state.failures[state.currentIndex] != nil)
+    }
+    private var showsLegend: Bool {
+        (state.showInspector || state.isSelectingRegion) && state.currentReview?.blocks.isEmpty == false
+    }
+    /// Selection controls, page notice and region legend share one strip above the page.
+    @ViewBuilder private var canvasHeader: some View {
+        if state.isSelectingRegion || showsNotice || showsLegend {
+            VStack(spacing: 8) {
+                if state.isSelectingRegion { RegionSelectionControls(state: state) }
+                else if showsNotice {
+                    pageNotice.font(.system(size: 12, weight: .medium)).foregroundStyle(.white)
+                        .padding(.horizontal, 12).padding(.vertical, 6)
+                        .background(.black.opacity(0.45), in: Capsule())
+                }
+                if showsLegend { RecognizedRegionLegend(state: state) }
+            }.padding(.horizontal, 12).padding(.vertical, 10).frame(maxWidth: .infinity).background(MangaUI.canvas)
+        }
+    }
+    private var thumbnailBadges: [Int: ThumbnailBadge] {
+        var badges: [Int: ThumbnailBadge] = [:]
+        for index in state.completed { badges[index] = .completed }
+        for index in state.failures.keys { badges[index] = .failed }
+        // A failed page with recognized text is reviewable; that is the actionable state.
+        for index in state.pendingPages.keys { badges[index] = .needsReview }
+        if state.isBusy, let index = state.processingIndex { badges[index] = .processing }
+        return badges
     }
     private var moveRegion: ((UUID, CGSize) -> Void)? {
         guard !state.isBusy, !state.isLoading, state.mode == .translated else { return nil }
@@ -74,12 +96,10 @@ private struct TranslatorBody: View {
 private struct TranslatorEmptyState: View {
     @EnvironmentObject private var state: AppState
     var body: some View {
-        VStack(spacing: 18) {
-            Image(systemName: "character.bubble.ja").font(.system(size: 50, weight: .light)).foregroundStyle(.white.opacity(0.65))
-            Text("일본어 만화를 한국어로").font(.system(size: 23, weight: .semibold)).foregroundStyle(.white)
-            Text("책을 열면 말풍선과 효과음을 번역해 자동 저장합니다.").foregroundStyle(.white.opacity(0.65))
-            Button("만화 열기", systemImage: "folder.badge.plus") { state.chooseBook() }.buttonStyle(.borderedProminent).controlSize(.large)
-            Text("ZIP · 7z · RAR · CBZ · CBR · PDF · 이미지 · 폴더").font(.system(size: 12)).foregroundStyle(.white.opacity(0.45))
-        }.frame(maxWidth: .infinity, maxHeight: .infinity).background(MangaUI.canvas)
+        ComicDropPrompt(symbol: "character.bubble.ja", title: "일본어 만화를 한국어로",
+                        message: "책을 여기로 끌어다 놓거나 열기를 누르세요.\n말풍선과 효과음을 번역해 지정한 폴더에 자동 저장합니다.",
+                        formats: ["ZIP", "7z", "RAR", "CBZ · CBR", "PDF", "이미지 · 폴더"],
+                        steps: ["책 열기", "글자 인식 · 번역", "검수 · 저장"],
+                        openFile: { state.chooseBook() }, openFolder: { state.chooseBook(folderOnly: true) })
     }
 }
