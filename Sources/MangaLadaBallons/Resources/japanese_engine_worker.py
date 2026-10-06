@@ -56,7 +56,8 @@ class JapaneseEngine:
         began = time.monotonic()
         from region_ocr import validate_backend
         backend = validate_backend(request.get("ocrBackend", "manga"))
-        image = self.cv2.imread(request["source"], self.cv2.IMREAD_COLOR)
+        from source_image import read_color_image
+        image = read_color_image(request["source"])
         if image is None:
             raise ValueError("Cannot decode source image")
         if "letteringOnly" in request:

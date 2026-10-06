@@ -78,19 +78,35 @@ public actor ComicBookLoader {
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         var pages: [ImagePage] = []
         for number in 1...max(1, document.numberOfPages) {
+            try Task.checkCancellation()
             let target = root.appendingPathComponent(String(format: "%05d.png", number))
             if !FileManager.default.fileExists(atPath: target.path) {
                 guard let page = document.page(at: number) else { throw ComicImportError.invalidPDF }
-                try writePDFPage(page, to: target)
+                try publishPDFPage(page, to: target)
             }
             pages.append(ImagePage(url: target))
         }
         return pages
     }
 
+    /// A cached page exists only after a complete PNG is written; an interrupted render is never reused.
+    private func publishPDFPage(_ page: CGPDFPage, to target: URL) throws {
+        let partial = target.deletingLastPathComponent().appendingPathComponent(".\(UUID().uuidString).partial.png")
+        defer { if FileManager.default.fileExists(atPath: partial.path) { try? FileManager.default.removeItem(at: partial) } }
+        try writePDFPage(page, to: partial)
+        do { try FileManager.default.moveItem(at: partial, to: target) }
+        catch {
+            // Another reader may publish the same page first; only a completed page is reused.
+            guard FileManager.default.fileExists(atPath: target.path) else { throw error }
+        }
+    }
+
     private func writePDFPage(_ page: CGPDFPage, to target: URL) throws {
-        let rect = page.getBoxRect(.cropBox)
-        guard rect.width > 0, rect.height > 0 else { throw ComicImportError.invalidPDF }
+        let box = page.getBoxRect(.cropBox)
+        guard box.width > 0, box.height > 0 else { throw ComicImportError.invalidPDF }
+        // The drawing transform applies the page's /Rotate; the canvas must follow it.
+        let quarterTurned = abs(Int(page.rotationAngle)) % 180 == 90
+        let rect = quarterTurned ? CGRect(x: 0, y: 0, width: box.height, height: box.width) : box
         let scale = min(4, 2400 / max(rect.width, rect.height))
         let width = max(1, Int(rect.width * scale)), height = max(1, Int(rect.height * scale))
         guard let context = CGContext(data: nil, width: width, height: height, bitsPerComponent: 8,

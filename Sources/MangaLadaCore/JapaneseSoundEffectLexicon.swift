@@ -62,11 +62,13 @@ public struct JapaneseSoundEffectLexicon: Sendable {
         return choices
     }
 
-    public static func bundled() throws -> Self {
+    /// The bundled catalog is immutable; it is read and validated once per process.
+    public static func bundled() throws -> Self { try bundledCatalog.get() }
+    private static let bundledCatalog = Result<JapaneseSoundEffectLexicon, any Error> {
         guard let url = Bundle.module.url(forResource: "sound-effect-lexicon", withExtension: "json") else {
             throw CocoaError(.fileNoSuchFile)
         }
-        return try Self(data: Data(contentsOf: url))
+        return try JapaneseSoundEffectLexicon(data: Data(contentsOf: url))
     }
     public func translation(for source: String) -> String? { translations[Self.normalized(source)] }
     public func meaning(for source: String) -> String? {

@@ -12,6 +12,7 @@ struct MangaLadaWorkflowChecks {
         if arguments.count == 2, arguments[1] == "--cache-migration" {
             try ManualRecognitionChecks.run()
             try CacheMigrationChecks.run()
+            try CacheRecoveryChecks.run()
             try PunctuationReviewChecks.run()
             try await LegacyPunctuationCacheChecks.run()
             try await SupplementalCacheChecks.run()

@@ -7,6 +7,10 @@ package struct JapanesePageKeys {
     package let recognitionBeforeCleanupUpdate: String
     package let previousRecognition: [String]
     package let previous: [String]
+    /// Leading `previous` entries that share this cache version (other OCR choices, same context).
+    package let previousSameVersionCount: Int
+    private let translationFamily: String
+    private let translationOCRSuffix: String
     private static let translationVersion = 40
     private static let recognitionVersion = 39
     package init(imageURL: URL, configuration: LocalTranslatorConfiguration, context: String, title: String) throws {
@@ -48,5 +52,17 @@ package struct JapanesePageKeys {
             contexts.map { "\(prefix)v\(version)-\(suffix)\($0)" }
         }
         previous = priorOCRSuffixes.map { baseTranslation + $0 } + olderTranslations
+        previousSameVersionCount = priorOCRSuffixes.count
+        translationFamily = "\(prefix)v\(Self.translationVersion)-\(suffix)"
+        translationOCRSuffix = ocrSuffix
+    }
+
+    /// Same image, cache version, translator settings and OCR, but another title or previous-page
+    /// context. Retitling a book or editing the previous page must not orphan reviewed text.
+    package func sharesTranslationRequest(_ fingerprint: String) -> Bool {
+        guard fingerprint != translation, fingerprint.hasPrefix(translationFamily),
+              fingerprint.hasSuffix(translationOCRSuffix) else { return false }
+        let context = fingerprint.dropFirst(translationFamily.count).dropLast(translationOCRSuffix.count)
+        return context.count == 12 && context.allSatisfy(\.isHexDigit)
     }
 }

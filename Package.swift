@@ -45,7 +45,7 @@ let package = Package(
                         .copy("Resources/text_detection.py"), .copy("Resources/manga_text_detector.py"), .copy("Resources/lettering_recovery.py"),
                         .copy("Resources/lettering_strokes.py"), .copy("Resources/lettering_repetition.py"),
                         .copy("Resources/text_strokes.py"),
-                        .copy("Resources/text_stroke_assets.py")]
+                        .copy("Resources/text_stroke_assets.py"), .copy("Resources/source_image.py")]
         ),
         .executableTarget(
             name: "MangaLadaApp",
