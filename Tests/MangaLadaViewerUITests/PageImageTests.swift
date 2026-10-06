@@ -79,6 +79,22 @@ private final class PageImageTests {
         try check(pixel.width == 1 && pixel.height == 1)
     }
 
+    func testLongStripKeepsSquarePixelBudget() async throws {
+        let fixture = try Fixture()
+        defer { fixture.remove() }
+        let strip = fixture.folder.appendingPathComponent("strip.png")
+        try fixture.write(strip, width: 20, height: 400)
+        let original = try Data(contentsOf: strip)
+        let image = try await PageImageLoader.load(strip, maximumPixels: 40)
+        try check(image.width == 4 && image.height == 80)
+        try check(image.width * image.height <= 40 * 40)
+        try check(PageImageLoader.longestSide(width: 600, height: 300, maximumPixels: 30) == 30)
+        try check(PageImageLoader.longestSide(width: 800, height: 20_000, maximumPixels: 4_096) == PageImageLoader.longestSideLimit)
+        try check(PageImageLoader.longestSide(width: 800, height: 20_000, maximumPixels: 240) == 240)
+        try check(PageImageLoader.longestSide(width: 0, height: 0, maximumPixels: 240) == 240)
+        try check(try Data(contentsOf: strip) == original)
+    }
+
     private struct Fixture {
         let folder: URL
         var portrait: URL { folder.appendingPathComponent("portrait.png") }
@@ -114,6 +130,7 @@ struct PageImageChecks {
         try await tests.testCorruptAndMissingFilesNeverKeepPreviousImage()
         try await tests.testCancelledLoadDoesNotPublishImageOrFailure()
         try await tests.testDecoderBoundsPixelsAndSupportsOnePixelImage()
+        try await tests.testLongStripKeepsSquarePixelBudget()
         print("Page image checks passed: release/reload, geometry, source preservation, URL changes, corrupt/missing input, cancellation, pixel bounds")
     }
 }
