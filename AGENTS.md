@@ -78,7 +78,7 @@ Python OCR 프로세스의 대기 종료는 Ballons의 `JapaneseEngineSession`�
 
 Python의 페이지 디코딩은 `source_image.read_color_image`가 소유합니다. OpenCV로 읽을 수 있는 이미지는 그대로 사용하고, 읽지 못한 HEIC·AVIF 등만 macOS `sips`로 임시 PNG를 만들어 읽은 뒤 지웁니다. 원본은 수정하지 않으며 변환 실패는 기존 디코딩 오류로 드러납니다. `scripts/check_source_image.py`는 변환기 자리에 실제 subprocess를 두고 검사합니다.
 
-번역 캐시 키는 제목·앞 페이지 문맥을 포함합니다. 같은 이미지·버전·번역 설정·OCR에서 문맥만 다른 항목은 `JapanesePageKeys.sharesTranslationRequest`와 `TranslationCache.newestEntry`로 찾아 기존 `RecognitionCacheMigration.reuse` 검증을 거쳐 재사용합니다. 같은 버전의 이전 OCR 키 다음, 이전 버전 키보다 먼저 확인합니다. 강제 재번역에서만 해석할 수 없는 현재 캐시를 `quarantine`으로 옆에 옮기며 삭제하지 않습니다. 수동 영역 배치는 `MangaPageProcessor.placingManualRegions`가 소유하며 겹친 수동 영역끼리 지우거나 UUID를 중복시키지 않습니다. 캐시에서 연 페이지의 수동 원문 제거 이미지가 없으면 자동 제거 이미지로 대체하지 않고 다시 만듭니다.
+번역 캐시 키는 제목·앞 페이지 문맥을 포함합니다. 같은 이미지·버전·번역 설정·OCR에서 문맥만 다른 항목은 `JapanesePageKeys.sharesTranslationRequest`와 `TranslationCache.newestEntry`로 찾아 기존 `RecognitionCacheMigration.reuse` 검증을 거쳐 재사용합니다. 같은 버전의 이전 OCR 키 다음, 이전 버전 키보다 먼저 확인합니다. 강제 재번역에서만 해석할 수 없는 현재 캐시를 `quarantine`으로 옆에 옮기며 삭제하지 않습니다. 수동 영역 배치는 `MangaPageProcessor.placingManualRegions`가 소유하며 겹친 수동 영역끼리 지우거나 UUID를 중복시키지 않습니다. 수동 원문 제거 이미지는 임시 복사본에서 지우기가 성공한 뒤에만 게시하므로, 실패·취소 뒤 남은 미완성 파일을 캐시 재사용이 완료 결과로 쓰지 않습니다. 캐시 재사용 경로는 엔진을 실행하지 않습니다.
 
 ## 구현·오류 처리
 

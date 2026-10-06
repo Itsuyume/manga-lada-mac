@@ -123,12 +123,10 @@ public final class MangaPageProcessor {
         guard translated.blocks.contains(where: { $0.userDefinedBounds != nil }) else {
             return MangaPageDraft(translation: translated, cleanImageURL: cleanURL, wasCached: true)
         }
-        // A missing manual erase is rebuilt; the automatic clean image would leave the
-        // Japanese inside manual regions visible under the lettering.
+        // Reusing a cache never starts the engine. The manual image exists only after a
+        // complete erase (see `manualCleanImage`), so its presence is the success record.
         let manual = engine.inpaintedImageURL(runID: keys.translation + "-manual")
-        let selected: URL
-        if FileManager.default.fileExists(atPath: manual.path) { selected = manual }
-        else { selected = try await manualCleanImage(for: translated, sourceCleanURL: cleanURL) }
+        let selected = FileManager.default.fileExists(atPath: manual.path) ? manual : cleanURL
         return MangaPageDraft(translation: translated, cleanImageURL: selected, wasCached: true)
     }
     private func previousTranslation(_ keys: [String]) throws -> PageTranslation? {
@@ -172,9 +170,19 @@ public final class MangaPageProcessor {
         let manual = translation.blocks.filter { $0.userDefinedBounds != nil }
         guard !manual.isEmpty else { return sourceCleanURL }
         let destination = engine.inpaintedImageURL(runID: translation.imageFingerprint + "-manual")
-        try FileManager.default.createDirectory(at: destination.deletingLastPathComponent(), withIntermediateDirectories: true)
-        try Data(contentsOf: sourceCleanURL).write(to: destination, options: .atomic)
-        try await engine.eraseSupplementalText(manual, cleanImageURL: destination, bounded: true, maskSourceURL: translation.imageURL)
+        let directory = destination.deletingLastPathComponent()
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        // Erase a private copy and publish it only after success: a failed or cancelled erase
+        // must never leave an unerased copy that a later cache hit would treat as finished.
+        let partial = directory.appendingPathComponent(".\(UUID().uuidString)-manual.partial.png")
+        defer { if FileManager.default.fileExists(atPath: partial.path) { try? FileManager.default.removeItem(at: partial) } }
+        try FileManager.default.copyItem(at: sourceCleanURL, to: partial)
+        try await engine.eraseSupplementalText(manual, cleanImageURL: partial, bounded: true, maskSourceURL: translation.imageURL)
+        if FileManager.default.fileExists(atPath: destination.path) {
+            _ = try FileManager.default.replaceItemAt(destination, withItemAt: partial)
+        } else {
+            try FileManager.default.moveItem(at: partial, to: destination)
+        }
         return destination
     }
 

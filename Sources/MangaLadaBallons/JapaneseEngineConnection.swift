@@ -1,3 +1,4 @@
+import Darwin
 import Foundation
 
 /// File handles belong to one worker request. Only cancellation crosses threads.
@@ -46,8 +47,18 @@ final class JapaneseEngineConnection: @unchecked Sendable {
                 return response
             }
             guard pending.count <= Self.responseLimit else { throw JapaneseEngineSessionError.invalidResponse }
-            guard let chunk = try output.read(upToCount: 65_536), !chunk.isEmpty else { throw JapaneseEngineSessionError.workerStopped }
-            pending.append(chunk)
+            try readAvailable()
+        }
+    }
+    /// One read(2) returns whatever the worker has written. `FileHandle.read(upToCount:)` would
+    /// wait for the full chunk and stall on a short reply from a worker that stays alive.
+    private func readAvailable() throws {
+        var buffer = [UInt8](repeating: 0, count: 65_536)
+        while true {
+            let count = buffer.withUnsafeMutableBytes { Darwin.read(output.fileDescriptor, $0.baseAddress, $0.count) }
+            if count > 0 { pending.append(contentsOf: buffer[0..<count]); return }
+            if count == 0 { throw JapaneseEngineSessionError.workerStopped }
+            guard errno == EINTR else { throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO) }
         }
     }
     func terminate() { lock.withLock { if process.isRunning { process.terminate() } } }
