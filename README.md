@@ -219,6 +219,7 @@ python scripts/check_sentence_punctuation.py
 python scripts/check_flat_backgrounds.py
 python scripts/check_supplemental_mask.py
 python scripts/check_outline_erasure.py
+python scripts/check_source_image.py
 # 실제 설치된 Ballons의 마스크 필터와 어댑터 계약 검사 (모델 실행 없음)
 python scripts/check_inpaint_contract.py /path/to/BallonsTranslator-dev
 # 외부 엔진과 로컬 모델을 준비한 경우 실제 페이지 전체 처리
