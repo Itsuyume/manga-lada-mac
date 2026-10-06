@@ -79,6 +79,10 @@ struct MangaLadaImportChecks {
         for _ in 0..<2 { context.beginPDFPage(nil); context.endPDFPage() }; context.closePDF()
         let book = try await loader.load(pdf)
         try check(book.pages.count == 2 && book.pages.allSatisfy { CGImageSourceCreateWithURL($0.url as CFURL, nil) != nil }, "PDF pages did not render.")
+        let rendered = try FileManager.default.contentsOfDirectory(atPath: book.pages[0].url.deletingLastPathComponent().path)
+        try check(rendered.sorted() == ["00001.png", "00002.png"], "PDF rendering left partial or extra page files.")
+        let fingerprint = ImageFingerprint()
+        try check(try fingerprint.make(for: pdf) == fingerprint.make(for: Data(contentsOf: pdf)), "Streaming and in-memory fingerprints differ.")
     }
     private static func checkConcurrentArchive(source: URL, root: URL) async throws {
         let archive = root.appendingPathComponent("concurrent.cbz")
