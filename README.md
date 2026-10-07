@@ -271,6 +271,8 @@ swift run -c release MangaLadaWorkflowChecks --text-benchmark fixtures/translati
 
 앱 묶음을 만들기 전에 배포용으로 최적화한 `MangaLadaCoreChecks`를 실행합니다. 개발용 검사만 통과하고 배포용 실행에서 다르게 동작하는 회귀를 확인하며, 실패하면 기존 설치 앱을 교체하기 전에 중단합니다. 이 검사는 외부 모델이나 실제 API 요청을 사용하지 않습니다.
 
+설치 앱의 글꼴·사전·OCR 작업자 리소스는 앱 내부의 `Contents/Resources`에서 읽습니다. 개발 검사 실행파일은 SwiftPM 리소스를 사용합니다. `./scripts/check_packaged_resources.sh "dist/Manga translator.app"`로 누락·빈 리소스 이름의 오류, 개발 검사 경로, 실제 배포본의 리소스 읽기를 확인할 수 있습니다.
+
 설치된 기본 SDK의 SwiftUI 매크로가 누락된 환경은 사용 가능한 SDK를 명시합니다. 스크립트는 추가 빌드 인자를 전달합니다.
 
 ```bash

@@ -1,4 +1,5 @@
 import Foundation
+import MangaLadaCore
 
 public struct SoundEffectStyle: Codable, Equatable, Identifiable, Sendable {
     public let id: String
@@ -28,7 +29,8 @@ public struct SoundEffectLibrary: Sendable {
         styles = decoded
     }
     public static func standard() throws -> SoundEffectLibrary {
-        guard let url = Bundle.module.url(forResource: "sound-effect-styles", withExtension: "json") else {
+        let resources = try PackageResourceBundle.load(named: "MangaLadaMac_MangaLadaRendering") { Bundle.module }
+        guard let url = resources.url(forResource: "sound-effect-styles", withExtension: "json") else {
             throw SoundEffectLibraryError.missingResource("sound-effect-styles.json")
         }
         return try SoundEffectLibrary(data: Data(contentsOf: url))

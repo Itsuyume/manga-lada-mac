@@ -32,6 +32,7 @@ jobs:
       - run: python3 scripts/check_outline_erasure.py
       - run: brew install swiftlint
       - run: python3 scripts/check_architecture.py
+      - run: scripts/check_packaged_resources.sh
       - run: swiftlint lint --strict
       - run: swift build --explicit-target-dependency-import-check error
       - name: Packaged punctuation behavior

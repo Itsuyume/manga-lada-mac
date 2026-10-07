@@ -14,7 +14,8 @@ extension BallonsTranslatorEngine {
 
     private func eraseSynchronously(_ blocks: [TextBlock], cleanImageURL: URL, bounded: Bool, maskSourceURL: URL?,
                                     cancellation: CancellableProcess) throws {
-        guard let script = Bundle.module.url(forResource: "erase_supplemental_text", withExtension: "py") else {
+        let resources = try PackageResourceBundle.load(named: "MangaLadaMac_MangaLadaBallons") { Bundle.module }
+        guard let script = resources.url(forResource: "erase_supplemental_text", withExtension: "py") else {
             throw BallonsTranslatorEngineError.engineNotInstalled
         }
         let regionsURL = cleanImageURL.deletingLastPathComponent().appendingPathComponent("supplemental-regions.json")
