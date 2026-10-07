@@ -63,7 +63,8 @@ public struct JapaneseSoundEffectLexicon: Sendable {
     }
 
     public static func bundled() throws -> Self {
-        guard let url = Bundle.module.url(forResource: "sound-effect-lexicon", withExtension: "json") else {
+        let resources = try PackageResourceBundle.load(named: "MangaLadaMac_MangaLadaCore") { Bundle.module }
+        guard let url = resources.url(forResource: "sound-effect-lexicon", withExtension: "json") else {
             throw CocoaError(.fileNoSuchFile)
         }
         return try Self(data: Data(contentsOf: url))

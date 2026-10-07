@@ -1,4 +1,5 @@
 import Foundation
+import MangaLadaCore
 
 /// File handles belong to one worker request. Only cancellation crosses threads.
 final class JapaneseEngineConnection: @unchecked Sendable {
@@ -9,7 +10,8 @@ final class JapaneseEngineConnection: @unchecked Sendable {
 
     init(engine: BallonsTranslatorEngine) throws {
         guard engine.isInstalled else { throw BallonsTranslatorEngineError.engineNotInstalled }
-        guard let script = Bundle.module.url(forResource: "japanese_engine_worker", withExtension: "py") else {
+        let resources = try PackageResourceBundle.load(named: "MangaLadaMac_MangaLadaBallons") { Bundle.module }
+        guard let script = resources.url(forResource: "japanese_engine_worker", withExtension: "py") else {
             throw CocoaError(.fileNoSuchFile)
         }
         try FileManager.default.createDirectory(at: engine.runsDirectoryURL, withIntermediateDirectories: true)

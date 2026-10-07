@@ -48,7 +48,9 @@ final class LocalModelRuntime {
         for _ in 0..<20 {
             try Task.checkCancellation()
             do { return try await installedModels() }
-            catch let error as URLError where error.code == .cannotConnectToHost { try await Task.sleep(for: .milliseconds(250)) }
+            catch let error as URLError where [.cannotConnectToHost, .timedOut].contains(error.code) {
+                try await Task.sleep(for: .milliseconds(250))
+            }
         }
         throw LocalRuntimeError.serverFailed
     }

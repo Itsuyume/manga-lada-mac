@@ -9,73 +9,98 @@ struct TranslationInspector: View {
     private var isPending: Bool { state.pendingPages[state.currentIndex] != nil }
     private var editingDisabled: Bool { state.isBusy || state.isLoading || state.reviewErrors[state.currentIndex] != nil }
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            header
-            if draft != nil {
-                Text(isPending ? "번역을 입력하거나 ‘원본 유지’를 선택한 뒤 ‘수정 적용’을 누르세요."
-                     : "번호로 위치를 확인하세요. 틀린 번역은 ‘번역 삭제 · 원본 유지’로 되돌린 뒤 ‘수정 적용’을 누르세요.")
-                    .font(.system(size: 10)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-            }
-            ForEach(state.currentResult?.reviewWarnings ?? [], id: \.self) { warning in
-                Label(warning, systemImage: "exclamationmark.triangle").font(.system(size: 11)).foregroundStyle(.orange)
-                    .fixedSize(horizontal: false, vertical: true).textSelection(.enabled)
-            }
-            reviewNotice
-            if let failure = state.letteringPreviewError {
-                Text("미리보기: \(failure)").font(.system(size: 10)).foregroundStyle(.orange).fixedSize(horizontal: false, vertical: true)
-            }
-            if let draft, !draft.blocks.isEmpty {
-                if !draft.maskedTextReviewIDs.isEmpty {
-                    Button("가림표 \(draft.maskedTextReviewIDs.count)개 Qwen 재번역", systemImage: "arrow.clockwise") {
-                        state.retranslateMaskedWords()
-                    }.disabled(editingDisabled).help("표시한 문구의 이전 해석 캐시를 건너뛰고 다시 판단합니다. 나머지 검수 문구는 유지됩니다.")
+        VStack(alignment: .leading, spacing: 0) {
+            VStack(alignment: .leading, spacing: 10) {
+                header
+                if draft != nil {
+                    Text(isPending ? "번역을 입력하거나 ‘원본 유지’를 선택한 뒤 ‘수정 적용’을 누르세요."
+                         : "번호를 누르면 문구가 펼쳐집니다. 틀린 번역은 ‘번역 삭제 · 원본 유지’로 되돌린 뒤 ‘수정 적용’을 누르세요.")
+                        .font(.system(size: 10)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                 }
-                if isPending, !draft.untranslatedBlockIDs.isEmpty {
-                    Button("빈 문구 \(draft.untranslatedBlockIDs.count)개 번역", systemImage: "character.bubble") {
-                        state.translatePendingWords()
-                    }.disabled(editingDisabled).help("입력한 번역은 유지하고, 번역이 비어 있는 문구만 처리합니다.")
+                ForEach(state.currentResult?.reviewWarnings ?? [], id: \.self) { warning in
+                    Label(warning, systemImage: "exclamationmark.triangle").font(.system(size: 11)).foregroundStyle(.orange)
+                        .fixedSize(horizontal: false, vertical: true).textSelection(.enabled)
                 }
-                editors(draft)
-                HStack {
-                    Button("수정 적용", systemImage: "checkmark") { apply() }.disabled(editingDisabled)
-                    if state.hasCurrentReview { discardButton }
+                reviewNotice
+                if let failure = state.letteringPreviewError {
+                    Text("미리보기: \(failure)").font(.system(size: 10)).foregroundStyle(.orange).fixedSize(horizontal: false, vertical: true)
                 }
-            } else if draft != nil {
+                if let failure = state.failures[state.currentIndex] { failureDetails(failure) }
+                batchActions
+            }.padding(14)
+            Divider()
+            pageContent.frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            Divider()
+            footer
+        }.font(.system(size: 12)).background(Color(nsColor: .controlBackgroundColor))
+    }
+    @ViewBuilder private var batchActions: some View {
+        if let draft, !draft.blocks.isEmpty {
+            if !draft.maskedTextReviewIDs.isEmpty {
+                Button("가림표 \(draft.maskedTextReviewIDs.count)개 Qwen 재번역", systemImage: "arrow.clockwise") {
+                    state.retranslateMaskedWords()
+                }.disabled(editingDisabled).help("표시한 문구의 이전 해석 캐시를 건너뛰고 다시 판단합니다. 나머지 검수 문구는 유지됩니다.")
+            }
+            if isPending, !draft.untranslatedBlockIDs.isEmpty {
+                Button("빈 문구 \(draft.untranslatedBlockIDs.count)개 번역", systemImage: "character.bubble") {
+                    state.translatePendingWords()
+                }.disabled(editingDisabled).help("입력한 번역은 유지하고, 번역이 비어 있는 문구만 처리합니다.")
+            }
+        }
+    }
+    @ViewBuilder private var pageContent: some View {
+        if let draft, !draft.blocks.isEmpty {
+            editors(draft)
+        } else if draft != nil {
+            VStack(alignment: .leading, spacing: 10) {
                 Text("인식된 글자가 없는 페이지입니다.").foregroundStyle(.secondary)
                 if isPending {
                     Button("이미지 다시 저장", systemImage: "square.and.arrow.down") { apply() }.disabled(editingDisabled)
                 }
-                if state.hasCurrentReview { discardButton }
-            } else {
-                Text(state.processingIndex == state.currentIndex ? "일본어를 인식하고 번역하는 중입니다." : "이 페이지가 번역되면 문구를 수정할 수 있습니다.")
-                    .foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-            }
-            if let failure = state.failures[state.currentIndex] {
-                DisclosureGroup("처리 실패 내용") {
-                    ScrollView {
-                        Text(failure).font(.system(size: 11)).foregroundStyle(.red)
-                            .fixedSize(horizontal: false, vertical: true).textSelection(.enabled)
-                    }.frame(maxHeight: 120)
-                }.font(.system(size: 11)).foregroundStyle(.red)
+            }.padding(14)
+        } else {
+            Text(state.processingIndex == state.currentIndex ? "일본어를 인식하고 번역하는 중입니다." : "이 페이지가 번역되면 문구를 수정할 수 있습니다.")
+                .foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true).padding(14)
+        }
+    }
+    /// Apply/cancel stay visible while the list scrolls.
+    private var footer: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            if state.hasCurrentReview || draft?.blocks.isEmpty == false {
+                HStack(spacing: 8) {
+                    Spacer(minLength: 0)
+                    if state.hasCurrentReview { discardButton }
+                    if draft?.blocks.isEmpty == false {
+                        Button("수정 적용", systemImage: "checkmark") { apply() }
+                            .buttonStyle(.borderedProminent).disabled(editingDisabled)
+                    }
+                }
             }
             if !isPending && (state.currentResult != nil || state.failures[state.currentIndex] != nil) {
                 Button(state.failures[state.currentIndex] == nil ? "현재 페이지 다시 번역" : "이 페이지 재시도", systemImage: "arrow.clockwise") {
                     state.startTranslation(onlyCurrent: true, force: true)
-                }.disabled(state.isBusy || state.isLoading)
+                }.buttonStyle(.borderless).disabled(state.isBusy || state.isLoading)
             }
-            Spacer(minLength: 0)
             if !state.failures.isEmpty { failureList }
-            Divider()
             Button { state.chooseOutputFolder() } label: {
                 Label(state.outputRoot?.lastPathComponent ?? "완성본 폴더 지정", systemImage: "folder").lineLimit(1)
-            }.disabled(state.isBusy).help(state.outputRoot?.path ?? "완성본을 저장할 폴더를 선택해주세요.")
-        }.font(.system(size: 12)).padding(16).background(Color(nsColor: .controlBackgroundColor))
+            }.buttonStyle(.borderless).foregroundStyle(.secondary).disabled(state.isBusy)
+                .help(state.outputRoot?.path ?? "완성본을 저장할 폴더를 선택해주세요.")
+        }.padding(14)
+    }
+    private func failureDetails(_ failure: String) -> some View {
+        DisclosureGroup("처리 실패 내용") {
+            ScrollView {
+                Text(failure).font(.system(size: 11)).foregroundStyle(.red)
+                    .fixedSize(horizontal: false, vertical: true).textSelection(.enabled)
+            }.frame(maxHeight: 120)
+        }.font(.system(size: 11)).foregroundStyle(.red)
     }
     private var header: some View {
         HStack(spacing: 10) {
             Text("번역 검수").font(.system(size: 13, weight: .semibold))
             Spacer()
-            Text("\(state.currentIndex + 1)쪽").foregroundStyle(.secondary)
+            Text("\(state.currentIndex + 1)쪽" + (draft.map { " · \($0.blocks.count)개 문구" } ?? "")).foregroundStyle(.secondary)
             Button("번역 검수 닫기", systemImage: "xmark") { state.showInspector = false }
                 .labelStyle(.iconOnly).buttonStyle(.borderless).controlSize(.small)
                 .help("검수창을 닫고 만화를 넓게 보기 · 임시 수정은 유지됩니다.")
@@ -101,11 +126,11 @@ struct TranslationInspector: View {
     private func editors(_ translation: PageTranslation) -> some View {
         ScrollViewReader { proxy in
             ScrollView {
-                VStack(alignment: .leading, spacing: 14) {
+                VStack(alignment: .leading, spacing: 8) {
                     ForEach(translation.blocks.indices, id: \.self) { index in
                         editor(translation.blocks[index], number: index + 1).id(translation.blocks[index].id)
                     }
-                }
+                }.padding(10)
             }
             .onChange(of: state.blockFocusRevision) { _, _ in
                 if let id = state.selectedBlockID { withAnimation(.easeOut(duration: 0.18)) { proxy.scrollTo(id, anchor: .top) } }
@@ -117,37 +142,71 @@ struct TranslationInspector: View {
             }
         }
     }
+    /// The selected region is expanded; others show one line each. Pending pages keep every
+    /// region open because each one still needs a translation.
     private func editor(_ block: TextBlock, number: Int) -> some View {
         let active = state.isBlockSelected(block.id)
-        return VStack(alignment: .leading, spacing: 6) {
-            HStack {
+        let color = (block.textKind ?? .dialogue).regionColor
+        return VStack(alignment: .leading, spacing: 7) {
+            HStack(spacing: 8) {
                 Button { state.focusBlock(block.id) } label: {
                     Text("\(number)").font(.system(size: 11, weight: .bold)).monospacedDigit()
-                        .foregroundStyle(active ? Color.white : Color.secondary).frame(minWidth: 23, minHeight: 22)
-                        .background(active ? Color.accentColor : Color.clear, in: RoundedRectangle(cornerRadius: 4))
+                        .foregroundStyle(active ? Color.white : color).frame(minWidth: 22, minHeight: 22)
+                        .background(active ? color : Color.clear, in: Capsule())
+                        .overlay { Capsule().strokeBorder(color, lineWidth: active ? 0 : 1.5) }
                 }.buttonStyle(.plain).help("이미지에서 \(number)번 문구 표시")
-                Picker("문구 종류", selection: kindBinding(block)) {
-                    ForEach(MangaTextKind.allCases, id: \.self) { Text($0.regionLabel).tag($0) }
-                }.labelsHidden().controlSize(.small).disabled(editingDisabled || block.keepsOriginal == true)
+                if active || isPending {
+                    Picker("문구 종류", selection: kindBinding(block)) {
+                        ForEach(MangaTextKind.allCases, id: \.self) { Text($0.regionLabel).tag($0) }
+                    }.labelsHidden().controlSize(.small).fixedSize().disabled(editingDisabled || block.keepsOriginal == true)
+                } else {
+                    Text((block.textKind ?? .dialogue).regionBadge).font(.system(size: 11)).foregroundStyle(.secondary)
+                }
+                Spacer(minLength: 0)
+                status(block)
             }
-            TextField("일본어 원문", text: textBinding(block, \.originalText), axis: .vertical)
-                .font(.system(size: 11)).foregroundStyle(.secondary).disabled(editingDisabled || block.keepsOriginal == true)
-            Button(block.keepsOriginal == true ? "번역 다시 사용" : "번역 삭제 · 원본 유지",
-                   systemImage: block.keepsOriginal == true ? "arrow.uturn.backward" : "arrow.uturn.backward.circle") {
-                state.setKeepsOriginal(block.id, block.keepsOriginal != true)
-            }.font(.system(size: 11)).disabled(editingDisabled)
-                .accessibilityLabel("\(number)번 " + (block.keepsOriginal == true ? "번역 다시 사용" : "번역 삭제 · 원본 유지"))
-                .help("이 영역만 원본으로 되돌립니다. ‘수정 적용’으로 저장하며, 기존 번역은 다시 사용할 수 있습니다.")
-            if block.keepsOriginal == true {
-                Label("원본 유지 · 재번역 제외", systemImage: "photo")
-                    .font(.system(size: 11)).foregroundStyle(.secondary)
-            } else if let candidates = block.recognitionAlternatives {
-                recognitionReview(block, candidates: candidates)
-            } else {
-                translationControls(block, number: number)
-            }
-        }.padding(7).background(active ? Color.accentColor.opacity(0.08) : Color.clear, in: RoundedRectangle(cornerRadius: 7))
-            .overlay { RoundedRectangle(cornerRadius: 7).stroke(active ? Color.accentColor : Color.clear, lineWidth: 1) }
+            if active || isPending { expandedEditor(block, number: number) } else { summary(block) }
+        }
+        .padding(9)
+        .background(active ? Color.accentColor.opacity(0.08) : Color.primary.opacity(0.035), in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+        .overlay { RoundedRectangle(cornerRadius: 9, style: .continuous).strokeBorder(active ? Color.accentColor : Color.clear, lineWidth: 1.5) }
+    }
+    @ViewBuilder private func status(_ block: TextBlock) -> some View {
+        if block.keepsOriginal == true {
+            Label("원본 유지", systemImage: "photo").labelStyle(.titleAndIcon).font(.system(size: 10)).foregroundStyle(.secondary)
+        } else if block.recognitionAlternatives != nil {
+            Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.orange).help("글자 인식 확인 필요")
+        } else if block.translatedText.isEmpty {
+            Text("번역 없음").font(.system(size: 10)).foregroundStyle(.orange)
+        }
+    }
+    private func summary(_ block: TextBlock) -> some View {
+        Button { state.focusBlock(block.id) } label: {
+            VStack(alignment: .leading, spacing: 3) {
+                Text(block.originalText).font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(1)
+                if !block.translatedText.isEmpty && block.keepsOriginal != true {
+                    Text(block.translatedText).font(.system(size: 13)).foregroundStyle(.primary).lineLimit(2)
+                }
+            }.frame(maxWidth: .infinity, alignment: .leading).contentShape(Rectangle())
+        }.buttonStyle(.plain).padding(.leading, 30).help("눌러서 펼치고 수정하기")
+    }
+    @ViewBuilder private func expandedEditor(_ block: TextBlock, number: Int) -> some View {
+        TextField("일본어 원문", text: textBinding(block, \.originalText), axis: .vertical)
+            .font(.system(size: 11)).foregroundStyle(.secondary).disabled(editingDisabled || block.keepsOriginal == true)
+        Button(block.keepsOriginal == true ? "번역 다시 사용" : "번역 삭제 · 원본 유지",
+               systemImage: block.keepsOriginal == true ? "arrow.uturn.backward" : "arrow.uturn.backward.circle") {
+            state.setKeepsOriginal(block.id, block.keepsOriginal != true)
+        }.font(.system(size: 11)).buttonStyle(.borderless).disabled(editingDisabled)
+            .accessibilityLabel("\(number)번 " + (block.keepsOriginal == true ? "번역 다시 사용" : "번역 삭제 · 원본 유지"))
+            .help("이 영역만 원본으로 되돌립니다. ‘수정 적용’으로 저장하며, 기존 번역은 다시 사용할 수 있습니다.")
+        if block.keepsOriginal == true {
+            Label("원본 유지 · 재번역 제외", systemImage: "photo")
+                .font(.system(size: 11)).foregroundStyle(.secondary)
+        } else if let candidates = block.recognitionAlternatives {
+            recognitionReview(block, candidates: candidates)
+        } else {
+            translationControls(block, number: number)
+        }
     }
     private func recognitionReview(_ block: TextBlock, candidates: [String]) -> some View {
         VStack(alignment: .leading, spacing: 5) {
@@ -178,24 +237,29 @@ struct TranslationInspector: View {
                     }
                 }.font(.system(size: 10)).fixedSize(horizontal: false, vertical: true).textSelection(.enabled)
             }
-            Button(MaskedTextTranslation.requiresContextTranslation(block.originalText) ? "Qwen으로 이 문구 다시 번역" : "이 문구 다시 번역") {
+            TextEditor(text: textBinding(block, \.translatedText)).font(.system(size: 13)).frame(minHeight: 54, maxHeight: 100)
+                .padding(4).background(.background, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+                .overlay { RoundedRectangle(cornerRadius: 6, style: .continuous).stroke(.quaternary) }
+                .disabled(editingDisabled)
+            Button(MaskedTextTranslation.requiresContextTranslation(block.originalText) ? "Qwen으로 이 문구 다시 번역" : "이 문구 다시 번역",
+                   systemImage: "arrow.clockwise") {
                 if let draft, let index = draft.blocks.firstIndex(where: { $0.id == block.id }) {
                     state.retranslateBlock(in: draft, at: index)
                 }
-            }.font(.system(size: 10)).disabled(editingDisabled)
+            }.font(.system(size: 10)).buttonStyle(.borderless).disabled(editingDisabled)
                 .help("이 문구의 번역만 검수창에서 갱신합니다. ‘수정 적용’을 누르면 이미지에 저장됩니다.")
-            if block.textKind == .soundEffect || block.textKind == .dialogue {
-                Picker("글자 스타일", selection: effectStyleBinding(block)) {
-                    Text("전체 설정 따르기").tag("")
-                    Text("원문에 맞춰 추천").tag("automatic")
-                    ForEach(state.effectStyles) { Text($0.name).tag($0.id) }
-                }.controlSize(.small).disabled(editingDisabled)
-            }
-            LetteringControls(state: state, block: block).disabled(editingDisabled)
-            TextEditor(text: textBinding(block, \.translatedText)).font(.system(size: 13)).frame(minHeight: 54, maxHeight: 100)
-                .padding(4).background(.background, in: RoundedRectangle(cornerRadius: 5))
-                .overlay { RoundedRectangle(cornerRadius: 5).stroke(.quaternary) }
-                .disabled(editingDisabled)
+            DisclosureGroup("글자 배치 · 스타일") {
+                VStack(alignment: .leading, spacing: 6) {
+                    if block.textKind == .soundEffect || block.textKind == .dialogue {
+                        Picker("글자 스타일", selection: effectStyleBinding(block)) {
+                            Text("전체 설정 따르기").tag("")
+                            Text("원문에 맞춰 추천").tag("automatic")
+                            ForEach(state.effectStyles) { Text($0.name).tag($0.id) }
+                        }.controlSize(.small).disabled(editingDisabled)
+                    }
+                    LetteringControls(state: state, block: block).disabled(editingDisabled)
+                }.padding(.top, 4)
+            }.font(.system(size: 11))
             if let korean = state.effectLexicon?.translation(for: block.originalText),
                block.textKind != .soundEffect || block.translatedText != korean {
                 Button("효과음 사전 적용: \(korean)") {

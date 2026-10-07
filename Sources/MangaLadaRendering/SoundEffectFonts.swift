@@ -1,15 +1,17 @@
 import AppKit
 import CoreText
 import Foundation
+import MangaLadaCore
 
 @MainActor
 public enum SoundEffectFonts {
     /// Registers only in this process; does not change the Mac's installed font collection.
     public static func registerBundledFonts() throws {
+        let resources = try PackageResourceBundle.load(named: "MangaLadaMac_MangaLadaRendering") { Bundle.module }
         for (file, postScriptName) in [("BlackHanSans-Regular", "BlackHanSans-Regular"), ("NanumBrushScript-Regular", "NanumBrush"),
                                       ("NanumMyeongjo-Regular", "NanumMyeongjo"), ("Gaegu-Regular", "Gaegu-Regular"),
                                       ("Dokdo-Regular", "Dokdo-Regular")] {
-            guard let url = Bundle.module.url(forResource: file, withExtension: "ttf", subdirectory: "Fonts") else {
+            guard let url = resources.url(forResource: file, withExtension: "ttf", subdirectory: "Fonts") else {
                 throw SoundEffectLibraryError.missingResource(file)
             }
             // A lookup before registration can ask macOS to download a missing
