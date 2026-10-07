@@ -12,34 +12,34 @@ public struct ReadingControls: View {
         self.settings = settings; self.index = index; self.total = total; self.navigate = navigate
     }
     public var body: some View {
-        HStack(spacing: 10) {
-            Button { settings.showThumbnails.toggle() } label: { Image(systemName: "sidebar.left") }
-                .help("썸네일 표시 / 숨기기")
+        HStack(spacing: 4) {
             navigationButtons
-            Spacer(minLength: 8)
+            separator
             Picker("페이지 표시", selection: $settings.layout) {
                 ForEach(PageLayout.allCases, id: \.self) { Text($0.label).tag($0) }
-            }.labelsHidden().frame(width: 115)
+            }.labelsHidden().fixedSize().help("페이지 표시")
+            Picker("화면 맞춤", selection: $settings.fit) {
+                ForEach(PageFit.allCases, id: \.self) { Text($0.label).tag($0) }
+            }.labelsHidden().fixedSize().help("화면 맞춤")
             Menu {
                 Picker("읽기 방향", selection: $settings.direction) {
                     ForEach(ReadingDirection.allCases, id: \.self) { Text($0.label).tag($0) }
                 }
                 Toggle("표지는 한 페이지로", isOn: $settings.coverAlone)
             } label: { Image(systemName: settings.direction == .rightToLeft ? "arrow.left.to.line" : "arrow.right.to.line") }
-                .help(settings.direction.label)
-            Picker("화면 맞춤", selection: $settings.fit) {
-                ForEach(PageFit.allCases, id: \.self) { Text($0.label).tag($0) }
-            }.labelsHidden().frame(width: 110)
+                .fixedSize().help(settings.direction.label)
+            separator
             Button { settings.zoomOut() } label: { Image(systemName: "minus.magnifyingglass") }
                 .disabled(!settings.canZoomOut).help("축소")
             Button("\(settings.zoomPercent)%") { settings.endMagnification(); settings.zoom = 1 }
-                .monospacedDigit().frame(width: 55).help("확대 초기화 · 트랙패드에서 두 손가락을 벌리거나 오므려 확대·축소")
+                .monospacedDigit().frame(width: 50).help("확대 초기화 · 트랙패드에서 두 손가락을 벌리거나 오므려 확대·축소")
             Button { settings.zoomIn() } label: { Image(systemName: "plus.magnifyingglass") }
                 .disabled(!settings.canZoomIn).help("확대")
-        }.buttonStyle(.borderless).controlSize(.small).padding(.horizontal, 18).padding(.vertical, 10)
-            .background(.bar).onChange(of: index, initial: true) { _, value in pageNumber = total == 0 ? "0" : String(value + 1) }
+        }.buttonStyle(.borderless).controlSize(.small).mangaFloatingBar()
+            .onChange(of: index, initial: true) { _, value in pageNumber = total == 0 ? "0" : String(value + 1) }
             .onChange(of: total) { _, value in pageNumber = value == 0 ? "0" : String(index + 1); pageFieldFocused = false }
     }
+    private var separator: some View { Divider().frame(height: 16).padding(.horizontal, 4) }
     private var navigationButtons: some View {
         HStack(spacing: 7) {
             let navigation = settings.navigation(count: total)
