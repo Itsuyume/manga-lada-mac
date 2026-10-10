@@ -11,6 +11,7 @@ enum RealPageRegressionChecks {
         let expected: [Expectation]
         let expectsNoText: Bool?
         let requiresWarning: Bool?
+        let sourceLanguage: LanguageCode?
     }
     struct Expectation: Decodable {
         let original: String
@@ -27,6 +28,7 @@ enum RealPageRegressionChecks {
         let errors: [String]
         let warnings: [String]
         let blocks: [TextBlock]
+        let sourceLanguage: LanguageCode?
     }
 
     @MainActor
@@ -62,19 +64,23 @@ enum RealPageRegressionChecks {
         let original = try Data(contentsOf: image), began = Date()
         let destination = output.appendingPathComponent(fixture.id + ".png")
         var blocks: [TextBlock] = [], errors: [String] = [], warnings: [String] = [], reused = false
+        var language: LanguageCode?
         do {
             let result = try await processor.process(imageURL: image, destinationURL: destination,
                 configuration: configuration, typography: MangaTypography())
             blocks = result.translation.blocks
+            language = result.translation.sourceLanguage
             warnings = result.reviewWarnings
             let saved = try Data(contentsOf: destination)
             let cached = try await processor.process(imageURL: image, destinationURL: destination,
                 configuration: configuration, typography: MangaTypography())
             let cachedBytes = try Data(contentsOf: destination)
             reused = cached.wasCached && cached.translation.blocks == blocks && cached.reviewWarnings == warnings && saved == cachedBytes
+                && cached.translation.sourceLanguage == language
             if !reused { errors.append("Cache reuse changed regions or saved pixels") }
         } catch let failure as MangaPageFailure {
             blocks = failure.draft.translation.blocks
+            language = failure.draft.translation.sourceLanguage
             errors.append(failure.localizedDescription)
         } catch {
             if error is CancellationError || Task.isCancelled { throw CancellationError() }
@@ -85,8 +91,9 @@ enum RealPageRegressionChecks {
         errors += mismatches(fixture.expected, blocks: blocks)
         if fixture.expectsNoText == true, !blocks.isEmpty { errors.append("A textless page acquired invented regions") }
         if fixture.requiresWarning == true, warnings.isEmpty { errors.append("Unresolved recognition lost its visible review warning") }
+        if let expected = fixture.sourceLanguage, expected != language { errors.append("Wrong page language: expected \(expected.rawValue)") }
         return Result(id: fixture.id, elapsed: Date().timeIntervalSince(began), sourcePreserved: preserved,
-                      cacheReused: reused, errors: errors, warnings: warnings, blocks: blocks)
+                      cacheReused: reused, errors: errors, warnings: warnings, blocks: blocks, sourceLanguage: language)
     }
 
     static func mismatches(_ expected: [Expectation], blocks: [TextBlock]) -> [String] {

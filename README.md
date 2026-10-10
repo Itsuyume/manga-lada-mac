@@ -251,7 +251,7 @@ swift run MangaLadaWorkflowChecks --real-regression /path/to/cases.json /path/to
 
 추가 검출 경로를 같은 실제 파이프라인으로 확인하려면 위 명령에 `--ocr=hayai-detected`, 정밀 획 분리는 `--ocr=hayai-text-strokes`를 추가합니다. 기본 OCR은 `manga`, 일반 Hayai는 `hayai`이며 잘못된 선택값은 거부합니다. 선택형 모델은 [장식 글자 OCR](docs/lettering-ocr.md)의 설치 절차를 먼저 따릅니다.
 
-`--real-regression`의 JSON 배열은 각 사례의 `id`, manifest 기준 상대 이미지 경로 `image`, `expected`를 받습니다. `expected`에는 원문 일부인 `original`과 선택 조건 `koreanContainsAny`, `forbiddenKorean`, `kind`, `requiresShape`를 넣습니다. 실제 `MangaPageProcessor`로 OCR·번역·식자·저장을 실행한 뒤 같은 캐시로 다시 처리해 문구와 PNG 바이트가 같은지 확인합니다. 원본 보존·실패 내용·전체 인식 문구는 `regression-results.json`에 남깁니다. 결과 폴더는 새 경로여야 하며 모델은 지정한 지원 폴더에서 준비되어 있어야 합니다. 자동 기대값 통과와 저장 이미지의 시각·의미 검수는 별도입니다. 개인 원본·검수 이미지·로컬 경로는 공개 저장소에 넣지 않습니다.
+`--real-regression`의 JSON 배열은 각 사례의 `id`, manifest 기준 상대 이미지 경로 `image`, `expected`를 받습니다. `expected`에는 원문 일부인 `original`과 선택 조건 `koreanContainsAny`, `forbiddenKorean`, `kind`, `requiresShape`를 넣습니다. 선택 필드 `sourceLanguage` (`ja`/`en`)는 페이지별 실제 판별 결과를 검사합니다. `--source=auto`로 일본어·영어 자동 판별을, `--source=ja`/`--source=en`으로 고정 언어를 검증합니다. 실제 `MangaPageProcessor`로 OCR·번역·식자·저장을 실행한 뒤 같은 캐시로 다시 처리해 언어·문구·경고·PNG 바이트가 같은지 확인합니다. 원본 보존·실패 내용·전체 인식 문구는 `regression-results.json`에 남깁니다. 결과 폴더는 새 경로여야 하며 모델은 지정한 지원 폴더에서 준비되어 있어야 합니다. 자동 기대값 통과와 저장 이미지의 시각·의미 검수는 별도입니다. 개인 원본·검수 이미지·로컬 경로는 공개 저장소에 넣지 않습니다.
 
 모델의 번역 문장과 시간을 비교할 때는 아래 검수를 별도로 실행합니다. 로컬 모델이 준비되어 있어야 하며 OCR·식자·번역 캐시를 거치지 않고 앱의 실제 번역 경로를 호출합니다. 출력 JSON의 일본어·한국어·검토 항목을 직접 대조해야 합니다. 명령의 성공은 응답 형식과 영역 보존을 뜻하며 의미 정확도의 합격을 뜻하지 않습니다. 기존 보고서 파일은 덮어쓰지 않습니다.
 
