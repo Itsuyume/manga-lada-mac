@@ -50,7 +50,8 @@ enum ManualRecognitionChecks {
         settings.japaneseOCR = .hayaiDetected
         let irrelevantJapaneseOCR = try JapanesePageKeys(imageURL: source, configuration: settings, context: "", title: "book")
         guard english.recognition != japanese.recognition, english.translation != japanese.translation,
-              english.previous.isEmpty && english.previousRecognition == [english.recognitionBeforeCleanupUpdate],
+              english.previous.isEmpty && english.previousRecognition.contains(english.recognitionBeforeCleanupUpdate),
+              english.previousRecognition.count == 2 && !english.previousRecognition.contains(english.recognition),
               english.translation == irrelevantJapaneseOCR.translation && english.recognition == irrelevantJapaneseOCR.recognition else {
             throw Failure.acceptedInvalidInput
         }

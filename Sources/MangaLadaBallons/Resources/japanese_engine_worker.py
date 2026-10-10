@@ -159,8 +159,10 @@ class JapaneseEngine:
         prepared, pending = prepare_flat_backgrounds(image, image, mask, [block.xyxy for block in paint_blocks])
         from stroke_inpainting import prepare_thin_strokes
         prepared, pending = prepare_thin_strokes(prepared, pending)
-        unresolved = [block for block in paint_blocks if pending[block.xyxy[1]:block.xyxy[3], block.xyxy[0]:block.xyxy[2]].any()]
-        result = self.painter.inpaint(prepared, pending.copy(), unresolved, check_need_inpaint=False) if unresolved else prepared.copy()
+        from inpaint_mask import reconstruction_mask, reconstruction_bounds
+        context = reconstruction_mask(pending)
+        unresolved = self.inpainting_regions(reconstruction_bounds(context))
+        result = self.painter.inpaint(prepared, context.copy(), unresolved, check_need_inpaint=False) if unresolved else prepared.copy()
         result[pending == 0] = prepared[pending == 0]
         destination.parent.mkdir(parents=True, exist_ok=True)
         temporary = destination.with_name("recognized.partial.png")

@@ -41,6 +41,7 @@ let package = Package(
                         .copy("Resources/dotted_balloon.py"), .copy("Resources/balloon_candidates.py"), .copy("Resources/balloon_recovery.py"),
                         .copy("Resources/english_regions.py"),
                         .copy("Resources/stroke_inpainting.py"),
+                        .copy("Resources/text_ink.py"), .copy("Resources/inpaint_mask.py"),
                         .copy("Resources/flat_background.py"), .copy("Resources/sentence_punctuation.py"), .copy("Resources/balloon_erase_mask.py"),
                         .copy("Resources/text_region_geometry.py"), .copy("Resources/lettering_ocr.py"),
                         .copy("Resources/lettering_regions.py"), .copy("Resources/hayai_lettering.py"), .copy("Resources/region_ocr.py"),

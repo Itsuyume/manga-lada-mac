@@ -1,4 +1,4 @@
-# 영어 번역과 원문 제거 검증 — 0.2.46
+# 영어 번역과 원문 제거 검증 — 0.2.47
 
 설정의 **원문 언어 → 영어**로 영어→한국어 번역을 선택합니다. 기존 한국어 글꼴, 연결 말풍선 분리, 자동 식자, 영역 지정, 검수 저장과 원본 유지 기능을 공유합니다. 추가 영어 OCR 모델이나 확산 모델을 설치하지 않습니다.
 
@@ -47,6 +47,7 @@ Ballons의 기존 환경에 numpy·OpenCV와 기존 모델이 필요합니다. O
 python scripts/check_architecture.py
 python scripts/check_confirmed_ink.py
 python scripts/check_stroke_inpainting.py
+python scripts/check_inpaint_mask.py
 python scripts/check_english_regions.py
 python scripts/check_flat_backgrounds.py
 python scripts/check_outline_erasure.py
@@ -64,4 +65,4 @@ CI도 소스 모듈과 패키지에 들어간 Python 모듈의 출력 행동을 
 
 복잡한 영문 손글씨·배경 위 효과음의 위치 검출과 모든 영어 효과음의 뜻을 검증하지 않았습니다. 19개 기본 효과음은 실제 목록·반복형·일반 대사 오분류 방지 검사를 통과했으며, 전체 만화의 누락 없는 인식을 보장하지 않습니다. 영어의 가림표 문맥에는 일본어 전용 Qwen 경로를 적용하지 않습니다.
 
-[LCM LoRA 인페인팅](https://huggingface.co/docs/diffusers/v0.26.1/using-diffusers/inference_with_lcm_lora)은 적은 단계의 후보를 검토할 수 있지만 이번 수정에서는 실행·다운로드하지 않았습니다. 이 맥에서의 속도·메모리·복원 정확도 측정은 없습니다. 원본 보존이 우선이므로 기본 경로는 실제 입력에서 확인한 제한된 픽셀 복원으로 유지합니다. 모델 점수는 마스크 후보의 보조 근거일 수 있지만 새 그림 영역을 지워도 된다는 확률로 취급하지 않습니다. 확산 경로를 추가한다면 [Diffusers의 원본 합성 방법](https://huggingface.co/docs/diffusers/en/using-diffusers/inpaint)처럼 최종 결과를 승인 마스크 안에만 합성하고 동일 원본에서 비교해야 합니다.
+2026-10-10에 SD1.5 인페인팅과 LCM LoRA를 MPS에서 실제 실행했습니다. 같은 승인 마스크를 사용한 512px 비교에서 기존 방식이 더 빠르고 메모리 할당이 적었으며 선화 오차도 작았습니다. 시험한 LCM은 글자 형태를 재생성하는 사례가 있어 앱에 추가하지 않고 시험 모델·별도 환경을 폐기했습니다. [측정 조건·결과·한계](text-erasure-evaluation.md)를 참고하세요. 모델 점수나 확장한 입력 문맥을 새 그림 영역의 제거 권한으로 취급하지 않습니다.

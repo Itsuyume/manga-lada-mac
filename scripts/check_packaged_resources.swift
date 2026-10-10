@@ -42,7 +42,9 @@ struct PackagedResourceChecks {
                         ("Rendering", "sound-effect-styles", "json", nil),
                         ("Rendering", "BlackHanSans-Regular", "ttf", "Fonts"),
                         ("Ballons", "japanese_engine_worker", "py", nil),
-                        ("Ballons", "erase_supplemental_text", "py", nil)]
+                        ("Ballons", "erase_supplemental_text", "py", nil),
+                        ("Ballons", "text_ink", "py", nil),
+                        ("Ballons", "inpaint_mask", "py", nil)]
         for (module, name, fileExtension, subdirectory) in expected {
             let bundle = try PackageResourceBundle.load(named: "MangaLadaMac_MangaLada" + module, in: app) {
                 fatalError("Installed apps cannot use SwiftPM build resources")

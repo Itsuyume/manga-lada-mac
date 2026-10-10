@@ -3,6 +3,7 @@ from pathlib import Path
 import sys
 
 import numpy as np
+import cv2
 
 sys.dont_write_bytecode = True
 resources = Path(sys.argv.pop(1)) if len(sys.argv) > 1 else Path(__file__).resolve().parents[1] / "Sources/MangaLadaBallons/Resources"
@@ -42,6 +43,7 @@ def run():
     check_mixed_regions()
     check_nearby_artwork()
     check_separate_strokes_near_a_frame()
+    check_compressed_white_paper()
     check_invalid_inputs(source, mask)
     print("Flat background checks passed: white/dark/pastel cleanup, neural-mask exclusion, artwork/evidence/base preservation, empty/mixed/duplicate/invalid regions, gradients/textures/insufficient evidence remain pending")
 
@@ -125,6 +127,27 @@ def check_separate_strokes_near_a_frame():
     result, pending = prepare(source, mask, [[20, 15, 120, 80]])
     assert not pending[:, :60].any() and np.array_equal(pending[:, 90:], mask[:, 90:])
     assert np.array_equal(result[:, 90:], source[:, 90:]), "A nearby mixed colour was flattened"
+
+
+def check_compressed_white_paper():
+    paper = np.full((180, 220, 3), 255, np.uint8)
+    ink = np.zeros(paper.shape[:2], np.uint8)
+    for row in (65, 105, 145):
+        cv2.putText(ink, "TEXT", (35, row), cv2.FONT_HERSHEY_SIMPLEX, 1, 255, 2, cv2.LINE_AA)
+    paper[ink > 0] = 0
+    encoded, data = cv2.imencode(".jpg", paper, [cv2.IMWRITE_JPEG_QUALITY, 65])
+    assert encoded
+    source = cv2.imdecode(data, cv2.IMREAD_COLOR)
+    mask = cv2.dilate((ink > 0).astype(np.uint8) * 255, np.ones((5, 5), np.uint8))
+    result, pending = prepare(source, mask, [[25, 30, 160, 155]])
+    assert not pending.any(), "JPEG ringing on white paper forced confirmed text through neural reconstruction"
+    assert result[mask > 0].min() >= 250, "White paper retained a glyph-shaped ghost"
+    for texture in (np.indices(mask.shape).sum(0) % 2 * 7 + 248,
+                    np.broadcast_to(np.linspace(246, 255, 220), mask.shape)):
+        source = np.repeat(texture.astype(np.uint8)[:, :, None], 3, axis=2)
+        source[mask > 0] = 0
+        result, pending = prepare(source, mask, [[25, 30, 160, 155]])
+        assert np.array_equal(pending, mask), "Near-white texture or gradient was classified as compressed solid paper"
 
 
 if __name__ == "__main__":

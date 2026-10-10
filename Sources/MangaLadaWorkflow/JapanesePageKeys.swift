@@ -18,8 +18,8 @@ package struct JapanesePageKeys {
         if configuration.sourceLanguage == .english {
             translation = "\(image)-en-v2-balloons-\(configuration.cacheKey)-\(newContext)"
             recognitionBeforeCleanupUpdate = "\(image)-en-ocr-v2-balloons-ink-v1"
-            recognition = "\(image)-en-ocr-v2-balloons-ink-v2"
-            reusableRecognition = [recognitionBeforeCleanupUpdate]
+            recognition = "\(image)-en-ocr-v2-balloons-ink-v3"
+            reusableRecognition = ["\(image)-en-ocr-v2-balloons-ink-v2", recognitionBeforeCleanupUpdate]
             previousRecognition = reusableRecognition; previous = []
             return
         }
@@ -45,13 +45,14 @@ package struct JapanesePageKeys {
         translation = baseTranslation + ocrSuffix
         let baseRecognition = prefix + "ocr-v\(Self.recognitionVersion)-balloons"
         recognitionBeforeCleanupUpdate = baseRecognition + ocrSuffix
-        recognition = recognitionBeforeCleanupUpdate + "-ink-v4"
+        recognition = recognitionBeforeCleanupUpdate + "-ink-v5"
         let priorRecognition: [String] = priorOCRSuffixes.flatMap { value in
             let key = baseRecognition + value
-            return [key + "-ink-v4", key + "-ink-v3", key + "-ink-v2", key]
+            return [key + "-ink-v5", key + "-ink-v4", key + "-ink-v3", key + "-ink-v2", key]
         }
         let olderRecognition = ((Self.recognitionVersion - 3)..<Self.recognitionVersion).reversed().map { prefix + "ocr-v\($0)-balloons" }
-        reusableRecognition = [recognitionBeforeCleanupUpdate + "-ink-v3", recognitionBeforeCleanupUpdate + "-ink-v2", recognitionBeforeCleanupUpdate]
+        reusableRecognition = [recognitionBeforeCleanupUpdate + "-ink-v4", recognitionBeforeCleanupUpdate + "-ink-v3",
+                               recognitionBeforeCleanupUpdate + "-ink-v2", recognitionBeforeCleanupUpdate]
         previousRecognition = reusableRecognition + priorRecognition + olderRecognition
         let contexts = newContext == oldContext ? [newContext] : [newContext, oldContext]
         let olderTranslations: [String] = stride(from: Self.translationVersion - 1, through: 11, by: -1).flatMap { version in

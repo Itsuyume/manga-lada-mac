@@ -19,6 +19,8 @@
 
 원문 글자의 잔상은 확인된 글자 성분의 빠진 획과 안티앨리어싱 가장자리만 보완합니다. 균일한 배경은 측정한 색으로 복원하고, 얇은 글자 획은 [OpenCV Telea 복원](https://docs.opencv.org/4.13.0/d7/d8b/group__photo__inpaint.html)을 먼저 적용하며 큰 구멍만 기존 LaMa로 처리합니다. 모든 복원은 보호된 글자 마스크 안에 제한합니다. 원문 제거 캐시만 갱신하고 같은 인식 정책의 기존 번역·번호·수동 검수는 유지합니다. 글자와 그림이 연결되어 안전한 성분을 확인할 수 없는 경우에는 과도하게 지우지 않습니다.
 
+0.2.47은 중간 밝기의 색상 배경에서 검은 글씨를 놓치는 문제, 글자 안쪽 구멍을 말풍선 테두리로 오인하는 문제, OCR 사각형 밖의 후리가나가 복원에서 잘리는 문제를 고칩니다. 압축된 흰 종이는 확인된 글자 성분 주변에서만 색을 측정해 복원합니다. LCM과 실제 추론 비교 후 기존 복원 방식을 유지했습니다. 질감 배경에는 옅은 복원 자국이 남을 수 있습니다. [비교 조건과 검증 범위](docs/text-erasure-evaluation.md)를 참고하세요.
+
 Reader 0.2.46은 같은 완성본 폴더를 다시 열어도 화면과 썸네일을 새로 읽습니다. 번역기에서 수정한 PNG를 이전 이미지로 계속 표시하던 문제를 고쳤습니다. [검증 범위와 재현 방법](docs/english-support.md)을 참고하세요.
 
 0.2.45는 번역·인식·캐시 동작을 바꾸지 않고 화면만 정리합니다. 작업 막대와 읽기 막대를 한 줄 도구줄로 합치고, 페이지 이동·표시·맞춤·확대는 만화 아래의 작은 막대로 옮깁니다. 영역 지정·페이지 안내·인식 영역 표시는 만화 위쪽 띠에 모아 페이지를 가리지 않습니다. 썸네일은 완료·처리 중·실패·검수 필요를 기호로 표시하고, 검수창은 선택한 문구만 펼치며 **수정 적용**을 아래에 고정합니다(번역 미완료 페이지는 모든 문구를 펼칩니다). 자동 번역 설정은 **열기** 옆 화살표 메뉴에 있습니다. 앱 이름·번들 ID·데이터 폴더는 그대로입니다.
@@ -227,6 +229,7 @@ python scripts/check_text_region_kind.py
 python scripts/check_optical_effects.py
 python scripts/check_sentence_punctuation.py
 python scripts/check_flat_backgrounds.py
+python scripts/check_inpaint_mask.py
 python scripts/check_stroke_inpainting.py
 python scripts/check_supplemental_mask.py
 python scripts/check_outline_erasure.py

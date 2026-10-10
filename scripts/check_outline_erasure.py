@@ -13,7 +13,7 @@ import numpy as np
 from japanese_engine_worker import JapaneseEngine
 from erase_supplemental_text import outlined_glyph_mask
 from balloon_geometry import BalloonGeometry
-from balloon_erase_mask import protect_balloon_outlines
+from balloon_erase_mask import protect_balloon_outlines, exterior_boundary_band, observed_boundary
 
 
 def block(bounds, size):
@@ -118,6 +118,39 @@ class OutlineErasureChecks(unittest.TestCase):
             self.assertFalse(np.shares_memory(result, ink))
         with self.assertRaises(ValueError):
             protect_balloon_outlines(ink[:-1], [], geometry)
+
+    def test_enclosure_holes_do_not_protect_interior_letters(self):
+        source = np.full((200, 180, 3), 255, np.uint8)
+        interior = np.zeros(source.shape[:2], np.uint8)
+        cv2.rectangle(interior, (15, 15), (165, 185), 255, -1)
+        border = np.zeros_like(interior)
+        cv2.rectangle(border, (15, 15), (165, 185), 255, 2)
+        ink = np.zeros_like(interior)
+        cv2.putText(ink, "O", (50, 110), cv2.FONT_HERSHEY_SIMPLEX, 2, 255, 3)
+        source[(border | ink) > 0] = 0
+        # A source contour can include closed glyph-shaped holes after closing.
+        interior[cv2.dilate(ink, np.ones((3, 3), np.uint8)) > 0] = 0
+        before = interior.copy(), source.copy()
+        padded, band = exterior_boundary_band(interior, 6)
+        protected = observed_boundary(cv2.copyMakeBorder(source, 6, 6, 6, 6, cv2.BORDER_REPLICATE), padded, band)[6:-6, 6:-6]
+        self.assertFalse(protected[ink > 0].any(), "A glyph-shaped contour hole protected a letter")
+        self.assertTrue(np.all(protected[border > 0] > 0), "The actual exterior border lost protection")
+        self.assertTrue(np.array_equal(before[0], interior) and np.array_equal(before[1], source))
+
+    def test_boundary_band_does_not_clip_whole_recognized_letters(self):
+        source = np.full((180, 180, 3), 255, np.uint8)
+        interior = np.zeros(source.shape[:2], np.uint8)
+        cv2.rectangle(interior, (15, 15), (165, 165), 255, -1)
+        border = np.zeros_like(interior)
+        cv2.rectangle(border, (15, 15), (165, 165), 255, 2)
+        ink = np.zeros_like(interior)
+        cv2.putText(ink, "HI", (55, 159), cv2.FONT_HERSHEY_SIMPLEX, .45, 255, 1)
+        source[(border | ink) > 0] = 0
+        padded, band = exterior_boundary_band(interior, 6)
+        observed = cv2.copyMakeBorder(source, 6, 6, 6, 6, cv2.BORDER_REPLICATE)
+        protected = observed_boundary(observed, padded, band, (55 + 6, 144 + 6, 72 + 6, 160 + 6))[6:-6, 6:-6]
+        self.assertFalse(protected[ink > 0].any(), "Border uncertainty clipped a confirmed whole letter")
+        self.assertTrue(np.all(protected[border > 0] > 0), "Exterior border was no longer protected")
 
     def test_solid_and_dashed_borders_on_light_dark_and_colour(self):
         for colour in [(245,)*3, (35,)*3, (210, 185, 235)]:

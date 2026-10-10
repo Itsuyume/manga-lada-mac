@@ -56,7 +56,7 @@ enum OCRMigrationChecks {
         try require(detected.previousRecognition.contains(new.recognition) && detected.previous.contains(new.translation),
                     "Detector upgrade cannot preserve existing Hayai review edits")
         try require(old.translation != new.translation && old.recognition != new.recognition, "OCR backends shared stale cache keys")
-        try require(new.previousRecognition.first == new.recognitionBeforeCleanupUpdate + "-ink-v3"
+        try require(new.previousRecognition.first == new.recognitionBeforeCleanupUpdate + "-ink-v4"
                     && new.previousRecognition.contains(new.recognitionBeforeCleanupUpdate),
                     "Cleanup refresh cannot reuse the matching OCR policy")
         try require(new.previousRecognition.contains(old.recognitionBeforeCleanupUpdate + "-hayai-v1"),
@@ -75,12 +75,13 @@ enum OCRMigrationChecks {
                         "Source-disagreement policy lost previous manual reviews")
         }
         for keys in [old, new, detected, precise] {
-            try require(keys.reusableRecognition.contains(keys.recognitionBeforeCleanupUpdate + "-ink-v3")
+            try require(keys.reusableRecognition.contains(keys.recognitionBeforeCleanupUpdate + "-ink-v4")
+                        && keys.reusableRecognition.contains(keys.recognitionBeforeCleanupUpdate + "-ink-v3")
                         && keys.reusableRecognition.contains(keys.recognitionBeforeCleanupUpdate + "-ink-v2")
                         && keys.reusableRecognition.contains(keys.recognitionBeforeCleanupUpdate),
                         "Cleanup-only refresh cannot reuse the current OCR policy")
             try require(keys.recognition != keys.recognitionBeforeCleanupUpdate
-                        && keys.previousRecognition.first == keys.recognitionBeforeCleanupUpdate + "-ink-v3"
+                        && keys.previousRecognition.first == keys.recognitionBeforeCleanupUpdate + "-ink-v4"
                         && keys.previousRecognition.contains(keys.recognitionBeforeCleanupUpdate),
                         "Unsafe old cleanup image can bypass regeneration")
             try require(keys.previous.first != keys.translation && Set(keys.previous).count == keys.previous.count,

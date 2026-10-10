@@ -63,8 +63,11 @@ PLIST
   mkdir -p "$ROOT_DIR/dist"
   rm -rf "$ROOT_DIR/dist/$name.app"
   ditto "$app_dir" "$ROOT_DIR/dist/$name.app"
+  # Synced output folders can attach Finder metadata during the final copy.
+  xattr -cr "$ROOT_DIR/dist/$name.app"
+  codesign --verify --deep --strict "$ROOT_DIR/dist/$name.app"
   echo "$ROOT_DIR/dist/$name.app"
 }
 
-bundle_app "Manga translator" "MangaLada" "local.mangalada.mac" "translator" "0.2.46" "54"
-bundle_app "Manga Reader" "MangaReader" "local.mangareader.mac" "reader" "0.2.46" "54"
+bundle_app "Manga translator" "MangaLada" "local.mangalada.mac" "translator" "0.2.47" "55"
+bundle_app "Manga Reader" "MangaReader" "local.mangareader.mac" "reader" "0.2.47" "55"

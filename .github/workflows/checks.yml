@@ -29,6 +29,7 @@ jobs:
       - run: python3 scripts/check_sentence_punctuation.py
       - run: python3 scripts/check_flat_backgrounds.py
       - run: python3 scripts/check_stroke_inpainting.py
+      - run: python3 scripts/check_inpaint_mask.py
       - run: python3 scripts/check_supplemental_mask.py
       - run: python3 scripts/check_outline_erasure.py
       - run: python3 scripts/check_confirmed_ink.py
@@ -59,6 +60,7 @@ jobs:
           subprocess.run(["python3", "scripts/check_outline_erasure.py", str(workers[0].parent)], check=True)
           subprocess.run(["python3", "scripts/check_flat_backgrounds.py", str(workers[0].parent)], check=True)
           subprocess.run(["python3", "scripts/check_stroke_inpainting.py", str(workers[0].parent)], check=True)
+          subprocess.run(["python3", "scripts/check_inpaint_mask.py", str(workers[0].parent)], check=True)
           subprocess.run(["python3", "scripts/check_confirmed_ink.py", str(workers[0].parent)], check=True)
           subprocess.run(["python3", "scripts/check_english_regions.py", str(workers[0].parent)], check=True)
           subprocess.run([str(binary_directory / "MangaLadaBallonsChecks"), "--resource-integrity", sys.executable, str(workers[0].parent)], check=True)

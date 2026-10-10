@@ -24,20 +24,38 @@ def protect_balloon_outlines(mask: np.ndarray, regions: list[dict], geometry: Ba
         # Closing can move a jagged/dashed contour inward by its kernel radius.
         # Include that uncertainty as well as the original stroke/antialiasing.
         margin = geometry.contour_kernel_size(font_size) // 2 + max(2, min(8, int(np.ceil(font_size * .04)))) + 1
-        padded = cv2.copyMakeBorder(interior, margin, margin, margin, margin, cv2.BORDER_CONSTANT)
-        kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (margin * 2 + 1, margin * 2 + 1))
-        band = cv2.dilate(padded, kernel) & ~cv2.erode(padded, kernel)
+        padded, band = exterior_boundary_band(interior, margin)
         left, top = max(0, x - margin), max(0, y - margin)
         right = min(geometry.width, x + interior.shape[1] + margin)
         bottom = min(geometry.height, y + interior.shape[0] + margin)
         offset_x, offset_y = left - x + margin, top - y + margin
         crop = np.s_[offset_y:offset_y + bottom - top, offset_x:offset_x + right - left]
-        protected = observed_boundary(geometry.source[top:bottom, left:right], padded[crop], band[crop])
+        box = region["box"]
+        # Two pixels account for raster rounding and antialiased glyph ends.
+        text_bounds = (int(box["x"] * geometry.width) - left - 2, int(box["y"] * geometry.height) - top - 2,
+                       int(np.ceil((box["x"] + box["width"]) * geometry.width)) - left + 2,
+                       int(np.ceil((box["y"] + box["height"]) * geometry.height)) - top + 2)
+        protected = observed_boundary(geometry.source[top:bottom, left:right], padded[crop], band[crop], text_bounds)
         result[top:bottom, left:right][protected > 0] = 0
     return result
 
 
-def observed_boundary(source: np.ndarray, interior: np.ndarray, band: np.ndarray) -> np.ndarray:
+def exterior_boundary_band(interior: np.ndarray, margin: int) -> tuple[np.ndarray, np.ndarray]:
+    """Search only the exterior; closed glyph holes are not balloon borders.
+
+    Filling holes affects border protection alone. It cannot grant new erase
+    permission or change the original enclosure used for typesetting.
+    """
+    exterior = np.zeros_like(interior)
+    contours, _ = cv2.findContours(interior, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    cv2.drawContours(exterior, contours, -1, 255, -1)
+    padded = cv2.copyMakeBorder(exterior, margin, margin, margin, margin, cv2.BORDER_CONSTANT)
+    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (margin * 2 + 1, margin * 2 + 1))
+    return padded, cv2.dilate(padded, kernel) & ~cv2.erode(padded, kernel)
+
+
+def observed_boundary(source: np.ndarray, interior: np.ndarray, band: np.ndarray,
+                      text_bounds: tuple[int, int, int, int] | None = None) -> np.ndarray:
     """Keep original boundary strokes, without reserving a wide blank margin.
 
     Closing uncertainty only guides the search. A component must lie mostly on
@@ -55,6 +73,12 @@ def observed_boundary(source: np.ndarray, interior: np.ndarray, band: np.ndarray
     _, labels, stats, _ = cv2.connectedComponentsWithStats(foreground.astype(np.uint8), 8)
     support = np.bincount(labels[band > 0], minlength=len(stats))
     selected = (support >= stats[:, cv2.CC_STAT_AREA] * .5) & (stats[:, cv2.CC_STAT_AREA] >= 2)
+    if text_bounds is not None:
+        x1, y1, x2, y2 = text_bounds
+        # A whole isolated letter contained by the recognized text rectangle is
+        # text, even when a closing artifact puts it in the border search band.
+        text_support = np.bincount(labels[max(0, y1):max(0, y2), max(0, x1):max(0, x2)].ravel(), minlength=len(stats))
+        selected &= text_support < stats[:, cv2.CC_STAT_AREA] * .98
     selected[0] = False
     boundary = selected[labels].astype(np.uint8) * 255
     return cv2.dilate(boundary, np.ones((3, 3), np.uint8))
