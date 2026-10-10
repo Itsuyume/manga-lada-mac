@@ -2,6 +2,7 @@ import Foundation
 import MangaLadaBallons
 import MangaLadaCore
 import MangaLadaRendering
+import MangaLadaVision
 
 @MainActor
 package struct ManualRegionTranslation {
@@ -13,13 +14,17 @@ package struct ManualRegionTranslation {
     func apply(to draft: MangaPageDraft, box: TextBox, kind: MangaTextKind, destinationURL: URL,
                configuration: LocalTranslatorConfiguration, typography: MangaTypography,
                status: @escaping @Sendable (String) async -> Void) async throws -> ProcessedMangaPage {
-        await status("지정 영역 · 일본어 인식 중")
+        let language = draft.translation.sourceLanguage
+        await status("지정 영역 · \(language.localizedName) 인식 중")
         let replaced = draft.translation.blocks.filter { ImageRegionSelection.containsCenter(box, of: $0.box) }
         let proposals = try proposedRegions(box: box, kind: kind, existing: replaced)
+        let observations = language == .english
+            ? try await VisionOCRService().recognizeText(in: draft.translation.imageURL, sourceLanguage: language) : []
         var recognized = try await session.verifyProposedRegions(source: draft.translation.imageURL, regions: proposals,
                                                                   ocrBackend: configuration.japaneseOCR,
+                                                                  sourceLanguage: language, opticalCandidates: observations,
                                                                   idleTimeout: configuration.ollama.retention.duration)
-        try Self.validateRecognition(recognized, for: proposals)
+        try Self.validateRecognition(recognized, for: proposals, sourceLanguage: language)
         for index in recognized.indices {
             recognized[index].userDefinedOriginalText = false
             recognized[index].verifiedPunctuationBounds = TextLanguageDetector.isPunctuationOnly(recognized[index].originalText) ? recognized[index].box : nil
@@ -35,9 +40,9 @@ package struct ManualRegionTranslation {
         }
         await status("지정 영역 · 페이지 문맥을 참고해 번역 중")
         let selectedIDs = Set(recognized.map(\.id)), replacedIDs = Set(replaced.map(\.id))
-        let context = MangaReadingOrder.sorted(draft.translation.blocks.filter { !replacedIDs.contains($0.id) } + recognized)
+        let context = MangaReadingOrder.sorted(draft.translation.blocks.filter { !replacedIDs.contains($0.id) } + recognized, sourceLanguage: language)
         var translation = draft.translation
-        translation.blocks = try await pipeline.translateSelected(selectedIDs, in: context, configuration: configuration)
+        translation.blocks = try await pipeline.forSourceLanguage(language).translateSelected(selectedIDs, in: context, configuration: configuration)
         try Task.checkCancellation()
         let translated = translation.blocks.filter { selectedIDs.contains($0.id) }
         let cleanURL = engine.inpaintedImageURL(runID: translation.imageFingerprint + "-manual")
@@ -54,13 +59,13 @@ package struct ManualRegionTranslation {
         return ProcessedMangaPage(translation: rendered.translation, cleanImageURL: cleanURL,
                                  renderedImageURL: rendered.renderedImageURL, wasCached: false)
     }
-    package static func validateRecognition(_ recognized: [TextBlock], for proposals: [TextBlock]) throws {
+    package static func validateRecognition(_ recognized: [TextBlock], for proposals: [TextBlock], sourceLanguage: LanguageCode = .japanese) throws {
         guard !proposals.isEmpty, recognized.count == proposals.count else { throw ManualRegionError.noJapanese }
         let identifiers = Set(recognized.map(\.id))
         guard identifiers.count == recognized.count, identifiers == Set(proposals.map(\.id)) else { throw ManualRegionError.invalidRecognition }
         guard recognized.allSatisfy({ block in proposals.contains { $0.id == block.id && $0.box == block.box } }) else { throw ManualRegionError.invalidRecognition }
         guard recognized.allSatisfy({ $0.recognitionAlternatives == nil }) else { throw ManualRegionError.uncertainRecognition }
-        guard recognized.allSatisfy({ TextLanguageDetector.containsJapanese($0.originalText)
+        guard recognized.allSatisfy({ TextLanguageDetector.containsSourceText($0.originalText, language: sourceLanguage)
             || TextLanguageDetector.isPunctuationOnly($0.originalText) }) else { throw ManualRegionError.noJapanese }
     }
     private func proposedRegions(box: TextBox, kind: MangaTextKind, existing: [TextBlock]) throws -> [TextBlock] {
@@ -81,7 +86,7 @@ public enum ManualRegionError: LocalizedError {
     public var errorDescription: String? {
         switch self {
         case .invalidBounds: "이미지 안에서 글자와 배치 공간을 포함하도록 영역을 다시 드래그해주세요."
-        case .noJapanese: "지정한 영역에서 일본어 또는 기호를 읽지 못했습니다. 글자가 선명하게 들어오도록 영역을 조절해주세요."
+        case .noJapanese: "지정한 영역에서 선택한 언어의 글자 또는 기호를 읽지 못했습니다. 글자가 선명하게 들어오도록 영역을 조절해주세요."
         case .invalidRecognition: "지정한 영역과 인식 결과가 맞지 않습니다. 영역을 다시 지정해주세요."
         case .uncertainRecognition: "여러 방식으로 읽은 글자가 서로 달라 원본을 유지했습니다. 영역을 좁히거나 검수창에서 원문을 입력해주세요."
         }

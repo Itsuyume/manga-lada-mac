@@ -39,6 +39,23 @@ private final class PageImageTests {
         try check(state.failure == nil)
     }
 
+    func testSameURLReloadShowsReplacementPixels() async throws {
+        let fixture = try Fixture()
+        defer { fixture.remove() }
+        let state = PageImageState()
+        await state.load(fixture.portrait, maximumPixels: 100)
+        let previous = try require(state.image?.tiffRepresentation)
+        try fixture.write(fixture.portrait, width: 120, height: 200, color: CGColor(red: 0, green: 1, blue: 0, alpha: 1))
+        let replacement = try Data(contentsOf: fixture.portrait)
+        await state.load(fixture.portrait, maximumPixels: 100)
+        let pixels = try require(state.image?.tiffRepresentation)
+        let bitmap = try require(NSBitmapImageRep(data: pixels))
+        let color = try require(bitmap.colorAt(x: 1, y: 1)?.usingColorSpace(.deviceRGB))
+        try check(pixels != previous && color.greenComponent > 0.9 && color.redComponent < 0.1)
+        try check(state.sourceSize == CGSize(width: 60, height: 100))
+        try check(try Data(contentsOf: fixture.portrait) == replacement)
+    }
+
     func testCorruptAndMissingFilesNeverKeepPreviousImage() async throws {
         let fixture = try Fixture()
         defer { fixture.remove() }
@@ -89,10 +106,10 @@ private final class PageImageTests {
             try write(portrait, width: 120, height: 200)
             try write(landscape, width: 600, height: 300)
         }
-        func write(_ url: URL, width: Int, height: Int) throws {
+        func write(_ url: URL, width: Int, height: Int, color: CGColor = CGColor(red: 1, green: 0, blue: 0, alpha: 1)) throws {
             let context = try require(CGContext(data: nil, width: width, height: height, bitsPerComponent: 8,
                 bytesPerRow: width * 4, space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue))
-            context.setFillColor(CGColor(red: 1, green: 0, blue: 0, alpha: 1))
+            context.setFillColor(color)
             context.fill(CGRect(x: 0, y: 0, width: width, height: height))
             let destination = try require(CGImageDestinationCreateWithURL(url as CFURL, UTType.png.identifier as CFString, 1, nil))
             CGImageDestinationAddImage(destination, try require(context.makeImage()), nil)
@@ -111,10 +128,11 @@ struct PageImageChecks {
         let tests = PageImageTests()
         try await tests.testReleasePreservesGeometryAndReloadsOriginalPixels()
         try await tests.testNewURLReplacesImageAndAspectRatio()
+        try await tests.testSameURLReloadShowsReplacementPixels()
         try await tests.testCorruptAndMissingFilesNeverKeepPreviousImage()
         try await tests.testCancelledLoadDoesNotPublishImageOrFailure()
         try await tests.testDecoderBoundsPixelsAndSupportsOnePixelImage()
-        print("Page image checks passed: release/reload, geometry, source preservation, URL changes, corrupt/missing input, cancellation, pixel bounds")
+        print("Page image checks passed: release/reload, same-URL replacement pixels, geometry, source preservation, URL changes, corrupt/missing input, cancellation, pixel bounds")
     }
 }
 

@@ -96,7 +96,7 @@ private struct TranslatorBody: View {
 private struct TranslatorEmptyState: View {
     @EnvironmentObject private var state: AppState
     var body: some View {
-        ComicDropPrompt(symbol: "character.bubble.ja", title: "일본어 만화를 한국어로",
+        ComicDropPrompt(symbol: "character.bubble", title: "일본어·영어 만화를 한국어로",
                         message: "책을 여기로 끌어다 놓거나 열기를 누르세요.\n말풍선과 효과음을 번역해 지정한 폴더에 자동 저장합니다.",
                         formats: ["ZIP", "7z", "RAR", "CBZ · CBR", "PDF", "이미지 · 폴더"],
                         steps: ["책 열기", "글자 인식 · 번역", "검수 · 저장"],

@@ -26,7 +26,7 @@ extension AppState {
     func retranslateBlock(in translation: PageTranslation, at blockIndex: Int) {
         guard translation.blocks.indices.contains(blockIndex) else { return }
         let block = translation.blocks[blockIndex]
-        retranslateBlocks([block.id], in: translation, interpretMasks: MaskedTextTranslation.requiresContextTranslation(block.originalText))
+        retranslateBlocks([block.id], in: translation, interpretMasks: translation.sourceLanguage == .japanese && MaskedTextTranslation.requiresContextTranslation(block.originalText))
     }
     func retranslateMaskedWords() {
         guard let translation = currentReview else { return }
@@ -42,9 +42,10 @@ extension AppState {
         guard reviewErrors[currentIndex] == nil else { _ = requireAppliedReviews(at: [currentIndex]); return }
         let page = currentIndex, id = sessionID
         var requestConfiguration = configuration
+        requestConfiguration.sourceLanguage = translation.sourceLanguage
         if interpretMasks { requestConfiguration.interpretMaskedText = true }
         let configuration = requestConfiguration
-        let onlyMasked = configuration.interpretMaskedText && translation.blocks.filter { selectedIDs.contains($0.id) }
+        let onlyMasked = translation.sourceLanguage == .japanese && configuration.interpretMaskedText && translation.blocks.filter { selectedIDs.contains($0.id) }
             .allSatisfy { MaskedTextTranslation.requiresContextTranslation($0.originalText) }
         isBusy = true
         job = Task { [self] in
@@ -56,7 +57,7 @@ extension AppState {
                 statusMessage = onlyMasked ? "이전 해석 캐시를 건너뛰고 Qwen으로 선택 문구를 판단하는 중…"
                     : "페이지 문맥을 참고해 선택한 문구를 다시 번역하는 중…"
                 var updated = translation
-                updated.blocks = try await processor.textTranslator.translateSelected(
+                updated.blocks = try await processor.textTranslator.forSourceLanguage(translation.sourceLanguage).translateSelected(
                     selectedIDs, in: translation.blocks, configuration: configuration, refreshMaskedContext: true)
                 try Task.checkCancellation()
                 guard sessionID == id else { return }

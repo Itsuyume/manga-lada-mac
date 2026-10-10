@@ -12,13 +12,13 @@ public protocol MangaPageTranslating: Sendable {
 }
 
 public enum MangaReadingOrder {
-    public static func sorted(_ blocks: [TextBlock]) -> [TextBlock] {
+    public static func sorted(_ blocks: [TextBlock], sourceLanguage: LanguageCode = .japanese) -> [TextBlock] {
         // Fixed row bands keep the comparator transitive; within a row read right to left.
         blocks.sorted { lhs, rhs in
             let leftRow = Int((lhs.box.y / 0.12).rounded(.down))
             let rightRow = Int((rhs.box.y / 0.12).rounded(.down))
             if leftRow != rightRow { return leftRow < rightRow }
-            if lhs.box.x != rhs.box.x { return lhs.box.x > rhs.box.x }
+            if lhs.box.x != rhs.box.x { return sourceLanguage == .english ? lhs.box.x < rhs.box.x : lhs.box.x > rhs.box.x }
             return lhs.box.y < rhs.box.y
         }
     }
@@ -62,9 +62,9 @@ public enum MangaPageResponse {
                 }
             }
             let hasKorean = TextLanguageDetector.containsKorean(text)
-            let sourceHasJapanese = TextLanguageDetector.containsJapanese(block.originalText)
+            let sourceHasText = TextLanguageDetector.containsJapanese(block.originalText) || TextLanguageDetector.containsEnglish(block.originalText)
             let nonverbal = TextLanguageDetector.isNonverbalTranslation(text, source: block.originalText)
-            guard !text.isEmpty, (!sourceHasJapanese || nonverbal || hasKorean), !TextLanguageDetector.containsJapanese(text) else {
+            guard !text.isEmpty, (!sourceHasText || nonverbal || hasKorean), !TextLanguageDetector.containsJapanese(text) else {
                 throw TranslationError.invalidPageResponse("영역 \(index)에 한국어 번역이 없습니다. 원문: \(block.originalText) / 모델 응답: \(text)")
             }
             var translated = block
@@ -91,7 +91,10 @@ enum MangaTranslationPrompt {
     Read neighboring regions for context but keep each region's own words and punctuation under its own identifier. Do not move, repeat, omit or invent a sentence across identifiers. Short spoken fragments and timing adverbs such as そろそろ are dialogue, not sound effects.
     A casual question offering food or drink (飲む？) is an invitation (마실래?), not a claim about somebody's plans. Sentence-ending とか can list the speaker's examples; do not invent "someone said" or "I heard". A noun caption stays a noun phrase; do not turn it into spoken dialogue or add a new subject.
     """
-    static func dialogueGuidance(blocks: [TextBlock]) -> String {
+    static func dialogueGuidance(blocks: [TextBlock], sourceLanguage: LanguageCode = .japanese) -> String {
+        if sourceLanguage == .english {
+            return "English dialogue: preserve each speaker's tone, contractions, idioms, and sentence fragments. Use natural Korean; do not invent honorifics or relationships. Keep each region's own words under its identifier. Narration stays narration. A polite request differs from a casual reply."
+        }
         let hints = blocks.enumerated().compactMap { index, block -> String? in
             if block.textKind == .caption { return "R\(index): narration/caption; preserve fragments and noun phrases." }
             guard block.textKind == nil || block.textKind == .dialogue else { return nil }
@@ -109,15 +112,24 @@ enum MangaTranslationPrompt {
     Classify each region as dialogue, caption, or soundEffect. Render Japanese onomatopoeia by meaning as concise natural Korean sound effects (ドーン -> 쾅, ゴゴゴ -> 고오오, ドキドキ -> 두근두근, サラサラ -> 사락사락 or 찰랑찰랑 depending on the scene). Never just transliterate a Japanese sound into Hangul (e.g. サラサラ is not 살라살라). Short speech is still dialogue when it is spoken. Use Korean script, punctuation and needed numbers. Do not output Japanese, explanations, romaji or markdown. Keep dialogue compact without summarizing away meaning. Return JSON {"translations":[{"id":0,"text":"한국어","kind":"dialogue"}]} with each input id exactly once.
     """
 
-    static func user(blocks: [TextBlock], previousContext: String) throws -> String {
+    static func system(for language: LanguageCode) -> String {
+        guard language == .english else { return system }
+        return """
+        You are a professional English-to-Korean comic translator. Translate ALL numbered regions using page context and English left-to-right reading order. Preserve names, relationships, tense, speaker tone, jokes, idioms and sentence meaning. Use fluent compact Korean without omitting meaning. Previous-page text is context only. Never invent missing plot facts.
+        Classify each region as dialogue, caption, or soundEffect. Render English onomatopoeia as concise natural Korean effects (BOOM -> 쾅, CLICK -> 딸깍, WHOOSH -> 휙); repeated effects retain their repetition. Do not transliterate English sounds or replace spoken exclamations with unrelated noises. Translate names into Korean script. Return only JSON {"translations":[{"id":0,"text":"한국어","kind":"dialogue"}]} with every input id exactly once. No English-only output, explanations or markdown.
+        """
+    }
+
+    static func user(blocks: [TextBlock], previousContext: String, sourceLanguage: LanguageCode = .japanese) throws -> String {
         let regions = blocks.enumerated().map { index, block in
-            Region(id: index, text: MaskedTextTranslation.modelText(block.originalText), x: block.box.x, y: block.box.y,
+            Region(id: index, text: sourceLanguage == .japanese ? MaskedTextTranslation.modelText(block.originalText) : block.originalText,
+                   x: block.box.x, y: block.box.y,
                    width: block.box.width, height: block.box.height, vertical: block.sourceIsVertical == true, detectedKind: block.textKind)
         }
         let data = try JSONEncoder().encode(regions)
-        let masking = MaskedTextTranslation.instruction(for: blocks.map(\.originalText))
-        let effects = try soundEffectGuidance(blocks: blocks)
-        return "Previous page (context only):\n\(previousContext.suffix(3_000))\n\(dialogueGuidance(blocks: blocks))\n\(masking)\n\(effects)\nRegions in reading order:\n\(String(decoding: data, as: UTF8.self))"
+        let masking = sourceLanguage == .japanese ? MaskedTextTranslation.instruction(for: blocks.map(\.originalText)) : ""
+        let effects = sourceLanguage == .japanese ? try soundEffectGuidance(blocks: blocks) : "Render effects by sound/motion in natural Korean; preserve repeated units."
+        return "Previous page (context only):\n\(previousContext.suffix(3_000))\n\(dialogueGuidance(blocks: blocks, sourceLanguage: sourceLanguage))\n\(masking)\n\(effects)\nRegions in reading order:\n\(String(decoding: data, as: UTF8.self))"
     }
 
     static func soundEffectGuidance(blocks: [TextBlock]) throws -> String {

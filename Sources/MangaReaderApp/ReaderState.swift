@@ -10,6 +10,7 @@ final class ReaderState: ObservableObject {
     @Published private(set) var index = 0
     @Published private(set) var title = ""
     @Published private(set) var isLoading = false
+    @Published private(set) var imageRevision = 0
     @Published var errorMessage: String?
     @Published private(set) var bookmarks: Set<Int> = []
     let reading = ReadingSettings(prefix: "reader")
@@ -42,6 +43,7 @@ final class ReaderState: ObservableObject {
             let book = try await loader.load(input)
             guard loadID == id else { return }
             pages = book.pages; title = book.title; sourceURL = book.sourceURL
+            imageRevision += 1
             bookKey = "reader." + ImageFingerprint().make(for: Data(book.sourceURL.standardizedFileURL.path.utf8))
             let saved = UserDefaults.standard.object(forKey: bookKey + ".page") as? Int
             let requested: Int

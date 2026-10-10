@@ -24,6 +24,11 @@ struct MangaLadaWorkflowChecks {
         }
         var settings = LocalTranslatorConfiguration(enhanceSoundEffects: arguments.contains("--effects"))
         settings.interpretMaskedText = arguments.contains("--masked-context")
+        if let option = arguments.first(where: { $0.hasPrefix("--source=") }) {
+            guard let language = LanguageCode(rawValue: String(option.dropFirst(9))) else { throw CheckFailure.invalidOCR }
+            try language.validateComicSource()
+            settings.sourceLanguage = language
+        }
         if let option = arguments.first(where: { $0.hasPrefix("--model=") }) { settings.ollama.model = String(option.dropFirst(8)) }
         if let option = arguments.first(where: { $0.hasPrefix("--ocr=") }) {
             guard let backend = JapaneseOCRBackend(rawValue: String(option.dropFirst(6))) else { throw CheckFailure.invalidOCR }
@@ -53,7 +58,7 @@ struct MangaLadaWorkflowChecks {
             return
         }
         guard arguments.count >= 3 else {
-            print("Usage: MangaLadaWorkflowChecks <source-image> <output.png>")
+            print("Usage: MangaLadaWorkflowChecks <source-image> <output.png> [--source=ja|en]")
             exit(1)
         }
         let source = URL(fileURLWithPath: arguments[1])

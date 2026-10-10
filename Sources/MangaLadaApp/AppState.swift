@@ -11,7 +11,7 @@ final class AppState: ObservableObject {
     @Published var pages: [ImagePage] = []
     @Published var currentIndex = 0
     @Published var title = ""
-    @Published var statusMessage = "일본어 만화 파일 또는 폴더를 열어주세요."
+    @Published var statusMessage = "번역할 만화 파일 또는 폴더를 열어주세요."
     @Published var errorMessage: String?
     @Published var isBusy = false
     @Published var isLoading = false

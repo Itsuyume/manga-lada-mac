@@ -63,7 +63,7 @@ struct LocalModelSettings: View {
         }
         var detail: String {
             switch self {
-            case .translation: "일본어 문구를 한국어로 번역합니다. 대사·효과음의 종류는 인식 결과 또는 직접 지정한 값을 따릅니다."
+            case .translation: "일본어·영어 문구를 한국어로 번역합니다. 대사·효과음의 종류는 인식 결과 또는 직접 지정한 값을 따릅니다."
             case .context: "앞 페이지 문맥을 참고하고 대사·설명·효과음 종류를 함께 판단합니다. 문맥과 효과음 번역은 검수가 필요합니다."
             case .custom: "Ollama에 설치할 모델 이름을 입력하세요. 로컬 모델만 사용할 수 있습니다."
             }

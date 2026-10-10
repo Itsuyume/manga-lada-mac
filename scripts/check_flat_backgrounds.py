@@ -5,7 +5,8 @@ import sys
 import numpy as np
 
 sys.dont_write_bytecode = True
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "Sources/MangaLadaBallons/Resources"))
+resources = Path(sys.argv.pop(1)) if len(sys.argv) > 1 else Path(__file__).resolve().parents[1] / "Sources/MangaLadaBallons/Resources"
+sys.path.insert(0, str(resources))
 from flat_background import prepare_flat_backgrounds
 
 
@@ -40,6 +41,7 @@ def run():
     check_unresolved(source, mask, bounds)
     check_mixed_regions()
     check_nearby_artwork()
+    check_separate_strokes_near_a_frame()
     check_invalid_inputs(source, mask)
     print("Flat background checks passed: white/dark/pastel cleanup, neural-mask exclusion, artwork/evidence/base preservation, empty/mixed/duplicate/invalid regions, gradients/textures/insufficient evidence remain pending")
 
@@ -107,6 +109,22 @@ def check_invalid_inputs(source, mask):
             pass
         else:
             raise AssertionError("Invalid image/mask contract was accepted")
+
+
+def check_separate_strokes_near_a_frame():
+    source = np.full((100, 160, 3), 255, np.uint8)
+    mask = np.zeros((100, 160), np.uint8)
+    mask[30:60, 30:42] = mask[30:60, 95:107] = 255
+    source[mask > 0] = 0
+    source[15:85, 65:68] = 0
+    result, pending = prepare(source, mask, [[20, 15, 120, 80]])
+    assert not pending.any(), "A frame between separate glyphs forced all ink through LaMa"
+    assert np.all(result[mask > 0] == 255), "Confirmed separate glyphs left neural residue"
+    assert np.array_equal(result[:, 65:68], source[:, 65:68]), "Component cleanup erased the frame"
+    source[30:60, 92:95] = 100
+    result, pending = prepare(source, mask, [[20, 15, 120, 80]])
+    assert not pending[:, :60].any() and np.array_equal(pending[:, 90:], mask[:, 90:])
+    assert np.array_equal(result[:, 90:], source[:, 90:]), "A nearby mixed colour was flattened"
 
 
 if __name__ == "__main__":

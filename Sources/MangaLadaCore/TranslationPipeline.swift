@@ -13,7 +13,7 @@ public struct TranslationProgress: Equatable, Sendable {
 }
 
 public struct TranslationPipeline: Sendable {
-    private let sourceLanguage: LanguageCode
+    private var sourceLanguage: LanguageCode
     private let targetLanguage: LanguageCode
     private let refiner: KoreanTranslationRefiner
     private let progress: (@Sendable (TranslationProgress) async -> Void)?
@@ -34,6 +34,12 @@ public struct TranslationPipeline: Sendable {
         self.progress = progress
         self.session = session
         self.maskedPreparation = MaskedPagePreparation(resolver: maskedResolver, session: session)
+    }
+
+    public func forSourceLanguage(_ language: LanguageCode) -> Self {
+        var pipeline = self
+        pipeline.sourceLanguage = language
+        return pipeline
     }
 
     /// Uses page context but replaces only selected text, retaining draft order and all metadata.
@@ -79,7 +85,7 @@ public struct TranslationPipeline: Sendable {
         let restored = try MaskedPagePreparation.restore(translated, originals: active)
         guard active.count != blocks.count else { return restored }
         let byID = Dictionary(uniqueKeysWithValues: restored.map { ($0.id, $0) })
-        let ordered = injectedTranslator == nil && configuration.provider != .googleWeb ? MangaReadingOrder.sorted(blocks) : blocks
+        let ordered = injectedTranslator == nil && configuration.provider != .googleWeb ? MangaReadingOrder.sorted(blocks, sourceLanguage: sourceLanguage) : blocks
         return try ordered.map { block in
             if block.preservesOriginalArtwork { return block }
             guard let updated = byID[block.id] else { throw TranslationSelectionError.missingRegion }
@@ -90,6 +96,11 @@ public struct TranslationPipeline: Sendable {
     private func translateRequest(_ blocks: [TextBlock], selectedIDs: Set<UUID>?, configuration: LocalTranslatorConfiguration,
                                   translator: TextTranslating?, previousContext: String, refreshMaskedContext: Bool) async throws -> [TextBlock] {
         let requested = selectedIDs ?? Set(blocks.map(\.id))
+        guard sourceLanguage == .japanese else {
+            let classified = EnglishSoundEffects.inferKinds(blocks, selectedIDs: requested)
+            return try await translatePrepared(classified, configuration: configuration, translator: translator,
+                                               previousContext: previousContext, selectedIDs: selectedIDs)
+        }
         let classified = try JapaneseSoundEffectLexicon.bundled().inferKinds(blocks, selectedIDs: requested)
         let maskedIDs = Set(blocks.filter {
             configuration.interpretMaskedText && requested.contains($0.id) && MaskedTextTranslation.requiresContextTranslation($0.originalText)
@@ -106,13 +117,13 @@ public struct TranslationPipeline: Sendable {
         var translated: [TextBlock] = []
         if !ordinaryIDs.isEmpty {
             translated = try await translatePrepared(ordinary, configuration: configuration, translator: nil,
-                previousContext: Self.context(masked, previous: previousContext), selectedIDs: ordinaryIDs)
+                previousContext: context(masked, previous: previousContext), selectedIDs: ordinaryIDs)
         }
         var qwen = configuration
         qwen.provider = .ollama; qwen.ollama.model = OllamaConfiguration.visionModel
         // Only masked targets receive numbered output slots; the rest is read-only context.
         let contextual = try await translatePage(masked, configuration: qwen,
-            previousContext: Self.context(ordinary, previous: previousContext), selectedIDs: maskedIDs)
+            previousContext: context(ordinary, previous: previousContext), selectedIDs: maskedIDs)
         translated += contextual.map { block in
             var updated = block
             let interpretation = block.maskedTextInterpretation
@@ -128,9 +139,9 @@ public struct TranslationPipeline: Sendable {
         return prepared.map { updates[$0.id] ?? $0 }
     }
 
-    private static func context(_ neighbors: [TextBlock], previous: String) -> String {
+    private func context(_ neighbors: [TextBlock], previous: String) -> String {
         previous + "\nSame page, context only (do not translate):\n"
-            + MangaReadingOrder.sorted(neighbors).map(\.originalText).joined(separator: "\n")
+            + MangaReadingOrder.sorted(neighbors, sourceLanguage: sourceLanguage).map(\.originalText).joined(separator: "\n")
     }
 
     private func translatePrepared(_ blocks: [TextBlock], configuration: LocalTranslatorConfiguration,
@@ -144,7 +155,7 @@ public struct TranslationPipeline: Sendable {
             configuration: configuration, session: session
         )
         let translatedTexts = try await translateTexts(
-            input.map { MaskedTextTranslation.modelText($0.originalText) },
+            input.map { sourceLanguage == .japanese ? MaskedTextTranslation.modelText($0.originalText) : $0.originalText },
             translator: translator,
             maxConcurrentRequests: configuration.maxConcurrentRequests
         )
@@ -163,10 +174,13 @@ public struct TranslationPipeline: Sendable {
 
     private func translatePage(_ blocks: [TextBlock], configuration: LocalTranslatorConfiguration,
                                previousContext: String, selectedIDs: Set<UUID>?) async throws -> [TextBlock] {
-        let ordered = MangaReadingOrder.sorted(blocks)
+        let ordered = MangaReadingOrder.sorted(blocks, sourceLanguage: sourceLanguage)
         let lexicon = try JapaneseSoundEffectLexicon.bundled()
         let fixedEffects = Dictionary(uniqueKeysWithValues: ordered.compactMap { block -> (UUID, String)? in
-            guard block.textKind == .soundEffect, let text = lexicon.translation(for: block.originalText) else { return nil }
+            guard block.textKind == .soundEffect else { return nil }
+            let preferred = sourceLanguage == .japanese ? lexicon.translation(for: block.originalText)
+                : EnglishSoundEffects.translation(for: block.originalText)
+            guard let text = preferred else { return nil }
             return (block.id, text)
         })
         let count = selectedIDs?.count ?? ordered.count
@@ -177,10 +191,10 @@ public struct TranslationPipeline: Sendable {
         var translated: [TextBlock] = []
         if !input.isEmpty, selectedWords?.isEmpty != true {
             let translator: any MangaPageTranslating = configuration.provider == .ollama
-                ? OllamaPageTranslator(configuration: configuration.ollama, session: session, selectedIDs: selectedWords)
-                : GeminiPageTranslator(configuration: configuration.gemini, session: session, selectedIDs: selectedWords)
+                ? OllamaPageTranslator(configuration: configuration.ollama, session: session, selectedIDs: selectedWords, sourceLanguage: sourceLanguage)
+                : GeminiPageTranslator(configuration: configuration.gemini, session: session, selectedIDs: selectedWords, sourceLanguage: sourceLanguage)
             let context = fixedEffects.isEmpty ? previousContext
-                : Self.context(ordered.filter { fixedEffects[$0.id] != nil }, previous: previousContext)
+                : context(ordered.filter { fixedEffects[$0.id] != nil }, previous: previousContext)
             translated = try await translator.translatePage(input, previousContext: context)
         }
         let result = try ordered.map { block in

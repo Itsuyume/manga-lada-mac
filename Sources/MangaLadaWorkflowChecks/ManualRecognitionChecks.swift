@@ -30,7 +30,30 @@ enum ManualRecognitionChecks {
         try rejects([moved], for: [first])
         var uncertain = symbols; uncertain.recognitionAlternatives = ["!?", "!!"]
         try rejects([uncertain], for: [first])
+        var english = first; english.originalText = "Hello, world!"
+        try ManualRegionTranslation.validateRecognition([english], for: [first], sourceLanguage: .english)
+        do {
+            try ManualRegionTranslation.validateRecognition([dialogue], for: [second], sourceLanguage: .english)
+            throw Failure.acceptedInvalidInput
+        } catch ManualRegionError.noJapanese { }
+        try checkLanguageCacheKeys()
         print("Manual recognition passed: symbols/Japanese/mixed order accepted; empty/non-Japanese/missing/extra/duplicate/wrong IDs rejected; inputs unchanged")
+    }
+
+    private static func checkLanguageCacheKeys() throws {
+        let source = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: source) }
+        try Data("fingerprint source".utf8).write(to: source)
+        let japanese = try JapanesePageKeys(imageURL: source, configuration: LocalTranslatorConfiguration(), context: "", title: "book")
+        var settings = LocalTranslatorConfiguration(sourceLanguage: .english)
+        let english = try JapanesePageKeys(imageURL: source, configuration: settings, context: "", title: "book")
+        settings.japaneseOCR = .hayaiDetected
+        let irrelevantJapaneseOCR = try JapanesePageKeys(imageURL: source, configuration: settings, context: "", title: "book")
+        guard english.recognition != japanese.recognition, english.translation != japanese.translation,
+              english.previous.isEmpty && english.previousRecognition == [english.recognitionBeforeCleanupUpdate],
+              english.translation == irrelevantJapaneseOCR.translation && english.recognition == irrelevantJapaneseOCR.recognition else {
+            throw Failure.acceptedInvalidInput
+        }
     }
 
     private static func rejects(_ recognized: [TextBlock], for proposals: [TextBlock]) throws {

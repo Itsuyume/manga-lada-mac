@@ -15,21 +15,25 @@ public actor JapaneseEngineSession {
                                   opticalCandidates: [TextBlock] = [],
                                   ocrBackend: JapaneseOCRBackend = .manga,
                                   rereadExisting: Bool = false,
+                                  sourceLanguage: LanguageCode = .japanese,
                                   idleTimeout: Duration = OllamaConfiguration.Retention.balanced.duration) async throws -> PageTranslation {
         let lexicon = try JapaneseSoundEffectLexicon.bundled()
         let blocks = try await exchange(Request(source: source.path, destination: engine.inpaintedImageURL(runID: runID).path,
                                                blocks: priorBlocks, regions: nil, soundEffectSources: lexicon.sourceForms,
                                                soundEffectPatterns: lexicon.recognitionPatterns, opticalCandidates: opticalCandidates,
-                                               ocrBackend: ocrBackend, rereadExisting: rereadExisting), idleTimeout: idleTimeout)
-        return PageTranslation(imageURL: source, imageFingerprint: runID, sourceLanguage: .japanese, targetLanguage: .korean, blocks: blocks)
+                                               ocrBackend: ocrBackend, rereadExisting: rereadExisting,
+                                               sourceLanguage: sourceLanguage), idleTimeout: idleTimeout)
+        return PageTranslation(imageURL: source, imageFingerprint: runID, sourceLanguage: sourceLanguage, targetLanguage: .korean, blocks: blocks)
     }
     public func verifyProposedRegions(source: URL, regions: [TextBlock],
                                       ocrBackend: JapaneseOCRBackend = .manga,
+                                      sourceLanguage: LanguageCode = .japanese, opticalCandidates: [TextBlock] = [],
                                       idleTimeout: Duration = OllamaConfiguration.Retention.balanced.duration) async throws -> [TextBlock] {
         guard !regions.isEmpty else { return [] }
         return try await exchange(Request(source: source.path, destination: nil, blocks: nil, regions: regions,
-                                          soundEffectSources: nil, soundEffectPatterns: nil, opticalCandidates: nil,
-                                          ocrBackend: ocrBackend, rereadExisting: false), idleTimeout: idleTimeout)
+                                          soundEffectSources: nil, soundEffectPatterns: nil, opticalCandidates: opticalCandidates,
+                                          ocrBackend: ocrBackend, rereadExisting: false,
+                                          sourceLanguage: sourceLanguage), idleTimeout: idleTimeout)
     }
     private func exchange(_ value: Request, idleTimeout: Duration) async throws -> [TextBlock] {
         guard !processing else { throw JapaneseEngineSessionError.busy }
@@ -82,6 +86,7 @@ public actor JapaneseEngineSession {
         let opticalCandidates: [TextBlock]?
         let ocrBackend: JapaneseOCRBackend
         let rereadExisting: Bool
+        let sourceLanguage: LanguageCode
     }
     private struct Response: Decodable { let blocks: [TextBlock]?; let error: String? }
 }

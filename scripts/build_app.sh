@@ -9,7 +9,7 @@ BIN_DIR="$(swift build --scratch-path "$BUILD_ROOT" -c release "$@" --show-bin-p
 "$BIN_DIR/MangaLadaCoreChecks"
 
 bundle_app() {
-  local name="$1" executable="$2" identifier="$3" icon_variant="$4"
+  local name="$1" executable="$2" identifier="$3" icon_variant="$4" version="$5" build="$6"
   local app_dir="$BUILD_ROOT/AppBundles/$name.app"
   rm -rf "$app_dir"
   mkdir -p "$app_dir/Contents/MacOS" "$app_dir/Contents/Resources"
@@ -49,8 +49,8 @@ bundle_app() {
     </dict>
   </array>
   <key>CFBundlePackageType</key><string>APPL</string>
-  <key>CFBundleShortVersionString</key><string>0.2.45</string>
-  <key>CFBundleVersion</key><string>53</string>
+  <key>CFBundleShortVersionString</key><string>$version</string>
+  <key>CFBundleVersion</key><string>$build</string>
   <key>LSMinimumSystemVersion</key><string>14.0</string>
   <key>NSHighResolutionCapable</key><true/>
   <key>NSSupportsAutomaticGraphicsSwitching</key><true/>
@@ -66,5 +66,5 @@ PLIST
   echo "$ROOT_DIR/dist/$name.app"
 }
 
-bundle_app "Manga translator" "MangaLada" "local.mangalada.mac" "translator"
-bundle_app "Manga Reader" "MangaReader" "local.mangareader.mac" "reader"
+bundle_app "Manga translator" "MangaLada" "local.mangalada.mac" "translator" "0.2.46" "54"
+bundle_app "Manga Reader" "MangaReader" "local.mangareader.mac" "reader" "0.2.46" "54"

@@ -5,6 +5,7 @@ package struct JapanesePageKeys {
     package let translation: String
     package let recognition: String
     package let recognitionBeforeCleanupUpdate: String
+    package let reusableRecognition: [String]
     package let previousRecognition: [String]
     package let previous: [String]
     private static let translationVersion = 40
@@ -14,6 +15,14 @@ package struct JapanesePageKeys {
         let image = try fingerprints.make(for: imageURL)
         let oldContext = fingerprints.make(for: Data((title + context.suffix(3_000)).utf8)).prefix(12)
         let newContext = configuration.usesPreviousPageContext ? oldContext : fingerprints.make(for: Data(title.utf8)).prefix(12)
+        if configuration.sourceLanguage == .english {
+            translation = "\(image)-en-v2-balloons-\(configuration.cacheKey)-\(newContext)"
+            recognitionBeforeCleanupUpdate = "\(image)-en-ocr-v2-balloons-ink-v1"
+            recognition = "\(image)-en-ocr-v2-balloons-ink-v2"
+            reusableRecognition = [recognitionBeforeCleanupUpdate]
+            previousRecognition = reusableRecognition; previous = []
+            return
+        }
         let prefix = "\(image)-jp-"
         let suffix = "balloons-\(configuration.cacheKey)-"
         let ocrSuffix: String
@@ -36,13 +45,14 @@ package struct JapanesePageKeys {
         translation = baseTranslation + ocrSuffix
         let baseRecognition = prefix + "ocr-v\(Self.recognitionVersion)-balloons"
         recognitionBeforeCleanupUpdate = baseRecognition + ocrSuffix
-        recognition = recognitionBeforeCleanupUpdate + "-ink-v2"
+        recognition = recognitionBeforeCleanupUpdate + "-ink-v4"
         let priorRecognition: [String] = priorOCRSuffixes.flatMap { value in
             let key = baseRecognition + value
-            return [key + "-ink-v2", key]
+            return [key + "-ink-v4", key + "-ink-v3", key + "-ink-v2", key]
         }
         let olderRecognition = ((Self.recognitionVersion - 3)..<Self.recognitionVersion).reversed().map { prefix + "ocr-v\($0)-balloons" }
-        previousRecognition = [recognitionBeforeCleanupUpdate] + priorRecognition + olderRecognition
+        reusableRecognition = [recognitionBeforeCleanupUpdate + "-ink-v3", recognitionBeforeCleanupUpdate + "-ink-v2", recognitionBeforeCleanupUpdate]
+        previousRecognition = reusableRecognition + priorRecognition + olderRecognition
         let contexts = newContext == oldContext ? [newContext] : [newContext, oldContext]
         let olderTranslations: [String] = stride(from: Self.translationVersion - 1, through: 11, by: -1).flatMap { version in
             contexts.map { "\(prefix)v\(version)-\(suffix)\($0)" }

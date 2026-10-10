@@ -8,11 +8,12 @@ public struct LocalTranslatorConfiguration: Equatable, Sendable {
     public var enhanceSoundEffects: Bool
     public var interpretMaskedText: Bool
     public var japaneseOCR: JapaneseOCRBackend
+    public var sourceLanguage: LanguageCode
 
     public init(provider: TranslationProvider = .ollama, maxConcurrentRequests: Int = 1,
                 ollama: OllamaConfiguration = OllamaConfiguration(), gemini: GeminiConfiguration = GeminiConfiguration(),
                 enhanceSoundEffects: Bool = false, interpretMaskedText: Bool = false,
-                japaneseOCR: JapaneseOCRBackend = .manga) {
+                japaneseOCR: JapaneseOCRBackend = .manga, sourceLanguage: LanguageCode = .japanese) {
         self.provider = provider
         self.maxConcurrentRequests = min(max(maxConcurrentRequests, 1), 8)
         self.ollama = ollama
@@ -20,6 +21,7 @@ public struct LocalTranslatorConfiguration: Equatable, Sendable {
         self.enhanceSoundEffects = enhanceSoundEffects
         self.interpretMaskedText = interpretMaskedText
         self.japaneseOCR = japaneseOCR
+        self.sourceLanguage = sourceLanguage
     }
 
     public static func load(configURL: URL, environment: [String: String] = ProcessInfo.processInfo.environment) throws -> Self {
@@ -27,6 +29,7 @@ public struct LocalTranslatorConfiguration: Equatable, Sendable {
         if FileManager.default.fileExists(atPath: configURL.path) {
             file = try JSONDecoder().decode(ConfigurationFile.self, from: Data(contentsOf: configURL))
         } else { file = nil }
+        try (file?.sourceLanguage ?? .japanese).validateComicSource()
         return Self(
             provider: file?.provider ?? .ollama,
             maxConcurrentRequests: environment["MANGA_LADA_MAX_CONCURRENT_TRANSLATIONS"].flatMap(Int.init) ?? file?.maxConcurrentRequests ?? 1,
@@ -35,14 +38,17 @@ public struct LocalTranslatorConfiguration: Equatable, Sendable {
             gemini: GeminiConfiguration(model: file?.geminiModel ?? GeminiConfiguration.defaultModel, apiKey: environment["GEMINI_API_KEY"] ?? ""),
             enhanceSoundEffects: file?.enhanceSoundEffects ?? false,
             interpretMaskedText: file?.interpretMaskedText ?? true,
-            japaneseOCR: file?.japaneseOCR ?? .manga
+            japaneseOCR: file?.japaneseOCR ?? .manga,
+            sourceLanguage: file?.sourceLanguage ?? .japanese
         )
     }
 
     public func save(to url: URL) throws {
+        try sourceLanguage.validateComicSource()
         let file = ConfigurationFile(provider: provider, maxConcurrentRequests: maxConcurrentRequests,
                                      ollamaModel: ollama.model, geminiModel: gemini.model, enhanceSoundEffects: enhanceSoundEffects,
-                                     ollamaKeepAlive: ollama.retention, interpretMaskedText: interpretMaskedText, japaneseOCR: japaneseOCR)
+                                     ollamaKeepAlive: ollama.retention, interpretMaskedText: interpretMaskedText,
+                                     japaneseOCR: japaneseOCR, sourceLanguage: sourceLanguage)
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
@@ -76,6 +82,7 @@ public struct LocalTranslatorConfiguration: Equatable, Sendable {
         let ollamaKeepAlive: OllamaConfiguration.Retention?
         let interpretMaskedText: Bool?
         let japaneseOCR: JapaneseOCRBackend?
+        let sourceLanguage: LanguageCode?
     }
 }
 

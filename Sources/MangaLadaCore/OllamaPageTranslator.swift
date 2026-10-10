@@ -5,20 +5,24 @@ public struct OllamaPageTranslator: MangaPageTranslating {
     private let configuration: OllamaConfiguration
     private let session: URLSession
     private let selectedIDs: Set<UUID>?
-    public init(configuration: OllamaConfiguration = OllamaConfiguration(), session: URLSession = .shared, selectedIDs: Set<UUID>? = nil) {
+    private let sourceLanguage: LanguageCode
+    public init(configuration: OllamaConfiguration = OllamaConfiguration(), session: URLSession = .shared,
+                selectedIDs: Set<UUID>? = nil, sourceLanguage: LanguageCode = .japanese) {
         self.configuration = configuration
         self.session = session
         self.selectedIDs = selectedIDs
+        self.sourceLanguage = sourceLanguage
     }
 
     public func translatePage(_ blocks: [TextBlock], previousContext: String = "") async throws -> [TextBlock] {
         guard !blocks.isEmpty else { return [] }
         if configuration.isTranslationSpecialist {
-            return try await TranslateGemmaPageTranslator(configuration: configuration, session: session, selectedIDs: selectedIDs)
+            return try await TranslateGemmaPageTranslator(configuration: configuration, session: session, selectedIDs: selectedIDs, sourceLanguage: sourceLanguage)
                 .translatePage(blocks, previousContext: previousContext)
         }
         return try await OllamaChatClient(configuration: configuration, session: session).validated(
-            system: MangaTranslationPrompt.system, user: MangaTranslationPrompt.user(blocks: blocks, previousContext: previousContext),
+            system: MangaTranslationPrompt.system(for: sourceLanguage),
+            user: MangaTranslationPrompt.user(blocks: blocks, previousContext: previousContext, sourceLanguage: sourceLanguage),
             schema: .page(count: blocks.count), outputTokens: blocks.count * 160) { try MangaPageResponse.decode($0, blocks: blocks, selectedIDs: selectedIDs) }
     }
 }

@@ -4,10 +4,13 @@ public struct GeminiPageTranslator: MangaPageTranslating {
     private let configuration: GeminiConfiguration
     private let session: URLSession
     private let selectedIDs: Set<UUID>?
-    public init(configuration: GeminiConfiguration, session: URLSession = .shared, selectedIDs: Set<UUID>? = nil) {
+    private let sourceLanguage: LanguageCode
+    public init(configuration: GeminiConfiguration, session: URLSession = .shared, selectedIDs: Set<UUID>? = nil,
+                sourceLanguage: LanguageCode = .japanese) {
         self.configuration = configuration
         self.session = session
         self.selectedIDs = selectedIDs
+        self.sourceLanguage = sourceLanguage
     }
 
     public func translatePage(_ blocks: [TextBlock], previousContext: String = "") async throws -> [TextBlock] {
@@ -26,8 +29,8 @@ public struct GeminiPageTranslator: MangaPageTranslating {
         request.setValue(configuration.apiKey, forHTTPHeaderField: "x-goog-api-key")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = try JSONEncoder().encode(Request(
-            systemInstruction: Content(parts: [Part(text: MangaTranslationPrompt.system)]),
-            contents: [Content(parts: [Part(text: try MangaTranslationPrompt.user(blocks: blocks, previousContext: previousContext))])],
+            systemInstruction: Content(parts: [Part(text: MangaTranslationPrompt.system(for: sourceLanguage))]),
+            contents: [Content(parts: [Part(text: try MangaTranslationPrompt.user(blocks: blocks, previousContext: previousContext, sourceLanguage: sourceLanguage))])],
             generationConfig: GenerationConfig(temperature: 0.15, responseMimeType: "application/json", maxOutputTokens: min(8192, max(1024, blocks.count * 160)))
         ))
         let data = try await TranslationHTTP.data(for: request, session: session)

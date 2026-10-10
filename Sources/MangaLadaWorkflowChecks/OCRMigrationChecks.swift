@@ -56,7 +56,8 @@ enum OCRMigrationChecks {
         try require(detected.previousRecognition.contains(new.recognition) && detected.previous.contains(new.translation),
                     "Detector upgrade cannot preserve existing Hayai review edits")
         try require(old.translation != new.translation && old.recognition != new.recognition, "OCR backends shared stale cache keys")
-        try require(new.previousRecognition.first == new.recognitionBeforeCleanupUpdate,
+        try require(new.previousRecognition.first == new.recognitionBeforeCleanupUpdate + "-ink-v3"
+                    && new.previousRecognition.contains(new.recognitionBeforeCleanupUpdate),
                     "Cleanup refresh cannot reuse the matching OCR policy")
         try require(new.previousRecognition.contains(old.recognitionBeforeCleanupUpdate + "-hayai-v1"),
                     "Previous Hayai OCR is unavailable for preserving manual source edits")
@@ -74,13 +75,22 @@ enum OCRMigrationChecks {
                         "Source-disagreement policy lost previous manual reviews")
         }
         for keys in [old, new, detected, precise] {
-            try require(keys.recognition != keys.recognitionBeforeCleanupUpdate && keys.previousRecognition.first == keys.recognitionBeforeCleanupUpdate,
+            try require(keys.reusableRecognition.contains(keys.recognitionBeforeCleanupUpdate + "-ink-v3")
+                        && keys.reusableRecognition.contains(keys.recognitionBeforeCleanupUpdate + "-ink-v2")
+                        && keys.reusableRecognition.contains(keys.recognitionBeforeCleanupUpdate),
+                        "Cleanup-only refresh cannot reuse the current OCR policy")
+            try require(keys.recognition != keys.recognitionBeforeCleanupUpdate
+                        && keys.previousRecognition.first == keys.recognitionBeforeCleanupUpdate + "-ink-v3"
+                        && keys.previousRecognition.contains(keys.recognitionBeforeCleanupUpdate),
                         "Unsafe old cleanup image can bypass regeneration")
             try require(keys.previous.first != keys.translation && Set(keys.previous).count == keys.previous.count,
                         "Cleanup update duplicated or reused current translation keys")
         }
         try require(!new.previousRecognition.contains(new.recognition) && !new.previous.contains(new.translation),
                     "Current OCR accidentally reuses a prior policy key")
+        try require(!precise.reusableRecognition.contains(detected.recognition)
+                    && !detected.reusableRecognition.contains(new.recognition),
+                    "Different OCR policies were allowed to skip fresh recognition")
     }
     private static func require(_ condition: Bool, _ message: String) throws {
         if !condition { throw Failure.failed(message) }
