@@ -47,9 +47,9 @@ enum JapaneseEngineSessionError: LocalizedError {
     case workerStopped, invalidResponse, busy, processing(String)
     var errorDescription: String? {
         switch self {
-        case .workerStopped: "일본어 인식 엔진이 종료되었습니다. Japanese worker 로그를 확인해주세요."
-        case .invalidResponse: "일본어 인식 엔진 응답이 올바르지 않습니다."
-        case .busy: "일본어 인식 엔진이 이미 다른 페이지를 처리하고 있습니다."
+        case .workerStopped: "글자 인식 엔진이 종료되었습니다. 인식 worker 로그를 확인해주세요."
+        case .invalidResponse: "글자 인식 엔진 응답이 올바르지 않습니다."
+        case .busy: "글자 인식 엔진이 이미 다른 페이지를 처리하고 있습니다."
         case .processing(let message): "글자 인식 실패: \(message)"
         }
     }

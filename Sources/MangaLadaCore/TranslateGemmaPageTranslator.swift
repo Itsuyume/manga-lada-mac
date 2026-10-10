@@ -37,7 +37,7 @@ public struct TranslateGemmaPageTranslator: MangaPageTranslating {
             try Task.checkCancellation()
             let outputTokens = max(1024, blocks.reduce(0) { $0 + $1.originalText.count * 3 + 96 })
             let response = try await client.text(user: instruction, outputTokens: outputTokens)
-            do { return try MangaNumberedPageResponse.decode(response, blocks: blocks, selectedIDs: selectedIDs) }
+            do { return try MangaNumberedPageResponse.decode(response, blocks: blocks, selectedIDs: selectedIDs, sourceLanguage: sourceLanguage) }
             catch TranslationError.invalidPageResponse(let detail) {
                 guard attempt == 0 else { throw TranslationError.invalidPageResponse(detail) }
                 instruction = """
@@ -58,7 +58,8 @@ public struct TranslateGemmaPageTranslator: MangaPageTranslating {
 }
 
 public enum MangaNumberedPageResponse {
-    public static func decode(_ text: String, blocks: [TextBlock], selectedIDs: Set<UUID>? = nil) throws -> [TextBlock] {
+    public static func decode(_ text: String, blocks: [TextBlock], selectedIDs: Set<UUID>? = nil,
+                              sourceLanguage: LanguageCode = .japanese) throws -> [TextBlock] {
         let expression = try NSRegularExpression(pattern: #"\[R(\d+)\]\s*([\s\S]*?)(?=\[R\d+\]|\z)"#)
         let range = NSRange(text.startIndex..<text.endIndex, in: text)
         let matches = expression.matches(in: text, range: range)
@@ -72,7 +73,7 @@ public enum MangaNumberedPageResponse {
             }
             return Entry(id: id, text: String(text[textRange]), kind: blocks[id].textKind ?? .dialogue)
         }
-        return try MangaPageResponse.decode(JSONEncoder().encode(Response(translations: entries)), blocks: blocks, selectedIDs: selectedIDs)
+        return try MangaPageResponse.decode(JSONEncoder().encode(Response(translations: entries)), blocks: blocks, selectedIDs: selectedIDs, sourceLanguage: sourceLanguage)
     }
     private struct Entry: Encodable { let id: Int; let text: String; let kind: MangaTextKind }
     private struct Response: Encodable { let translations: [Entry] }

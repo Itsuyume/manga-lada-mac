@@ -25,7 +25,8 @@ public enum MangaReadingOrder {
 }
 
 public enum MangaPageResponse {
-    public static func decode(_ data: Data, blocks: [TextBlock], selectedIDs: Set<UUID>? = nil) throws -> [TextBlock] {
+    public static func decode(_ data: Data, blocks: [TextBlock], selectedIDs: Set<UUID>? = nil,
+                              sourceLanguage: LanguageCode = .japanese) throws -> [TextBlock] {
         if let selectedIDs, !selectedIDs.isSubset(of: Set(blocks.map(\.id))) {
             throw TranslationError.invalidPageResponse("선택한 영역이 현재 페이지에 없습니다.")
         }
@@ -62,7 +63,8 @@ public enum MangaPageResponse {
                 }
             }
             let hasKorean = TextLanguageDetector.containsKorean(text)
-            let sourceHasText = TextLanguageDetector.containsJapanese(block.originalText) || TextLanguageDetector.containsEnglish(block.originalText)
+            // Only the page's own language demands Korean output: a Latin-only "OK" on a Japanese page may stay as drawn.
+            let sourceHasText = TextLanguageDetector.containsSourceText(block.originalText, language: sourceLanguage)
             let nonverbal = TextLanguageDetector.isNonverbalTranslation(text, source: block.originalText)
             guard !text.isEmpty, (!sourceHasText || nonverbal || hasKorean), !TextLanguageDetector.containsJapanese(text) else {
                 throw TranslationError.invalidPageResponse("영역 \(index)에 한국어 번역이 없습니다. 원문: \(block.originalText) / 모델 응답: \(text)")

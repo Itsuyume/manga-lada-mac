@@ -54,8 +54,12 @@ public struct VisionOCRService: Sendable {
 
     /// Preserve normalized coordinates while giving small English lettering enough pixels.
     private static func enlargedEnglishImage(_ url: URL) throws -> CGImage? {
-        guard let source = CGImageSourceCreateWithURL(url as CFURL, nil),
-              let image = CGImageSourceCreateThumbnailAtIndex(source, 0, [
+        guard let source = CGImageSourceCreateWithURL(url as CFURL, nil) else { throw OCRServiceError.imageDecodeFailed }
+        // Large pages are read at full resolution by Vision; check the header before decoding any pixels.
+        if let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
+           let width = properties[kCGImagePropertyPixelWidth] as? Int, let height = properties[kCGImagePropertyPixelHeight] as? Int,
+           max(width, height) >= 1_000 { return nil }
+        guard let image = CGImageSourceCreateThumbnailAtIndex(source, 0, [
                   kCGImageSourceCreateThumbnailFromImageAlways: true,
                   kCGImageSourceCreateThumbnailWithTransform: true,
                   kCGImageSourceThumbnailMaxPixelSize: 1_200

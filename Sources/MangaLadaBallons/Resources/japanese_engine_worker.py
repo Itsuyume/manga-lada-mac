@@ -86,9 +86,10 @@ class JapaneseEngine:
         mask, detected = recover_balloons(image, mask, detected, self.detector.detect, request.get("blocks"),
                                          connected_lettering=backend != "manga")
         if language == "en":
+            from english_regions import unmatched_detections
             blocks = self.read_english_page(image, detected, request)
             return {"blocks": blocks, "elapsed": time.monotonic() - began,
-                    "unreadableDetections": len(detected) if not request["opticalCandidates"] else 0}
+                    "unreadableDetections": unmatched_detections(detected, request["opticalCandidates"], width, height)}
         from balloon_lobes import detect_lobes, retain_cached_regions, source_rectangle
         lobes = detect_lobes(image, mask, detected)
         detected = lobes.blocks

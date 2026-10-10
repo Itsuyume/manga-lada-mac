@@ -55,6 +55,18 @@ class StrokeInpaintingChecks(unittest.TestCase):
         self.assertFalse(pending[:, 140:].any())
         self.assertGreater(result[30, 151, 0], 215)
 
+    def test_pending_wide_glyph_does_not_bleed_into_an_adjacent_thin_stroke(self):
+        source = np.full((80, 120, 3), 255, np.uint8)
+        mask = np.zeros(source.shape[:2], np.uint8)
+        mask[20:60, 20:50] = 255  # wide glyph, left for LaMa
+        mask[20:60, 51:55] = 255  # thin stroke one pixel away
+        source[mask > 0] = 0
+        result, pending = self.repair(source, mask)
+        self.assertTrue(np.array_equal(pending[20:60, 20:50], mask[20:60, 20:50]), "The wide glyph lost its LaMa mask")
+        self.assertTrue(np.array_equal(result[20:60, 20:50], source[20:60, 20:50]), "Pending ink was repaired locally")
+        self.assertFalse(pending[20:60, 51:55].any())
+        self.assertGreater(int(result[20:60, 51:55].min()), 245, "Unrepaired neighbouring ink bled into the thin stroke")
+
     def test_empty_mask_and_invalid_contracts(self):
         source = np.full((40, 60, 3), 240, np.uint8)
         mask = np.zeros(source.shape[:2], np.uint8)

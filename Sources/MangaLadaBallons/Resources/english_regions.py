@@ -30,7 +30,7 @@ def _validate_observations(observations: list[dict]) -> None:
     for line in observations:
         validate_box(line["box"])
         if line["id"] in identifiers or not line["originalText"].strip():
-            raise ValueError("Duplicate or empty English OCR line")
+            raise ValueError("영어 OCR 줄이 비어 있거나 중복되었습니다.")
         identifiers.add(line["id"])
 
 
@@ -152,10 +152,30 @@ def _same_space(group, shape, bounds, box):
     return bounds == group["bounds"] or bounds is None or group["bounds"] is None
 
 
+def unmatched_detections(detected, observations: list[dict], width: int, height: int) -> int:
+    """Detector regions that no native OCR line covers stay untouched; the count only warns the reviewer.
+
+    A line counts as covering a region when at least 30% of the smaller box overlaps, so a
+    neighbouring line that merely grazes a missed balloon does not hide it.
+    """
+    _validate_observations(observations)
+    missing = 0
+    for target in detected:
+        x1, y1, x2, y2 = target.xyxy
+        bounds = {"x": x1 / width, "y": y1 / height, "width": (x2 - x1) / width, "height": (y2 - y1) / height}
+        if bounds["width"] <= 0 or bounds["height"] <= 0:
+            continue
+        area = bounds["width"] * bounds["height"]
+        if not any(intersection_area(bounds, line["box"]) >= min(area, line["box"]["width"] * line["box"]["height"]) * .3
+                   for line in observations):
+            missing += 1
+    return missing
+
+
 def read_regions(regions: list[dict], observations: list[dict]) -> list[dict]:
     _validate_observations(observations)
     if len(regions) > 40:
-        raise ValueError("Too many proposed English regions")
+        raise ValueError("한 번에 지정할 수 있는 영어 영역은 40곳까지입니다.")
     recognized = []
     for region in regions:
         bounds = region.get("userDefinedBounds") or region["box"]
@@ -167,7 +187,7 @@ def read_regions(regions: list[dict], observations: list[dict]) -> list[dict]:
             if overlap >= box["width"] * box["height"] * .9:
                 lines.append(line)
             elif overlap > box["width"] * box["height"] * .15:
-                raise ValueError("English selection cuts across a recognized line")
+                raise ValueError("지정한 영역이 영어 글줄의 일부만 자릅니다. 글줄 전체가 들어가도록 영역을 넓혀주세요.")
         updated = deepcopy(region)
         updated.pop("recognitionAlternatives", None)
         updated["originalText"] = " ".join(line["originalText"].strip() for line in _ordered(lines))

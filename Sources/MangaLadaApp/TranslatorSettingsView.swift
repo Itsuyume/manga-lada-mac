@@ -17,8 +17,12 @@ struct TranslatorSettingsView: View {
             Text("번역과 글자 배치").font(.system(size: 20, weight: .semibold))
             Form {
                 Section {
-                    Picker("원문 언어", selection: $configuration.sourceLanguage) {
-                        ForEach(LanguageCode.comicSourceLanguages, id: \.self) { Text($0.localizedName).tag($0) }
+                    Picker("원문 언어", selection: sourceModeBinding) {
+                        ForEach(SourceLanguageMode.allCases, id: \.self) { Text($0.localizedName).tag($0) }
+                    }
+                    if configuration.sourceLanguageMode == .automatic {
+                        Text("페이지마다 일본어·영어를 자동으로 판별합니다. 이미 처리한 페이지는 저장된 언어를 그대로 사용하며, 글자가 거의 없는 페이지는 일본어로 처리합니다.")
+                            .font(.system(size: 11)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                     }
                     Picker("번역 방식", selection: $configuration.provider) {
                         Text("로컬 · API 요금 없음").tag(TranslationProvider.ollama)
@@ -71,7 +75,7 @@ struct TranslatorSettingsView: View {
         }.padding(24).frame(width: 570)
     }
     @ViewBuilder private var recognitionSettings: some View {
-        if configuration.sourceLanguage == .japanese {
+        if configuration.sourceLanguageMode.allowsJapanese {
             Picker("일본어 글자 인식", selection: $configuration.japaneseOCR) {
                 ForEach(JapaneseOCRBackend.allCases, id: \.self) { Text($0.displayName).tag($0) }
             }
@@ -83,11 +87,18 @@ struct TranslatorSettingsView: View {
             Toggle("효과음 추가 인식 · 느림 / 실험 단계", isOn: $configuration.enhanceSoundEffects)
             Text("기본은 검출된 말풍선·문구를 먼저 번역합니다. 복잡한 효과음과 표지는 검수가 필요합니다.")
                 .font(.system(size: 11)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-        } else {
+        }
+        if configuration.sourceLanguageMode.allowsEnglish {
             Text("영어 글자 인식 · Mac 기본 OCR").font(.system(size: 13, weight: .medium))
             Text("왼쪽부터 읽고 말풍선별로 번역합니다. 추가 OCR 모델 없이 영어 대사와 효과음을 읽으며, 글꼴·영역 편집·저장은 같은 기능을 사용합니다. 복잡한 장식 글자는 검수가 필요합니다.")
                 .font(.system(size: 11)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
         }
+    }
+    private var sourceModeBinding: Binding<SourceLanguageMode> {
+        Binding(get: { configuration.sourceLanguageMode }, set: { mode in
+            configuration.sourceLanguageMode = mode
+            configuration.sourceLanguage = mode.fixedLanguage ?? .japanese
+        })
     }
     private var effectStyleBinding: Binding<String> {
         Binding(get: { typography.effectStyleID ?? "automatic" }, set: { typography.effectStyleID = $0 })

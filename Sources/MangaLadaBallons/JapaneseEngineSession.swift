@@ -24,7 +24,7 @@ public actor JapaneseEngineSession {
                                                ocrBackend: ocrBackend, rereadExisting: rereadExisting,
                                                sourceLanguage: sourceLanguage), idleTimeout: idleTimeout)
         let warnings = response.unreadableDetections > 0
-            ? ["영어 문구를 읽지 못해 원본을 보존했습니다. 검출 후보 \(response.unreadableDetections)곳은 그림 장식일 수도 있습니다. 글자가 있다면 영역을 지정해 확인해주세요."] : nil
+            ? ["글자로 검출됐지만 영어 OCR이 읽지 못한 \(response.unreadableDetections)곳은 원본을 그대로 두었습니다. 그림 장식일 수도 있으니, 글자가 있다면 영역을 지정해 확인해주세요."] : nil
         return PageTranslation(imageURL: source, imageFingerprint: runID, sourceLanguage: sourceLanguage, targetLanguage: .korean,
                                blocks: response.blocks, recognitionWarnings: warnings)
     }
@@ -56,8 +56,9 @@ public actor JapaneseEngineSession {
             let response = try JSONDecoder().decode(Response.self, from: data)
             if let error = response.error { throw JapaneseEngineSessionError.processing(error) }
             guard let blocks = response.blocks else { throw JapaneseEngineSessionError.invalidResponse }
-            let unresolved = response.unreadableDetections ?? 0 // Older workers did not report detection disagreements.
-            guard unresolved >= 0, unresolved == 0 || blocks.isEmpty else { throw JapaneseEngineSessionError.invalidResponse }
+            // Older workers did not report detection disagreements. A partly read page may also leave detections unread.
+            let unresolved = response.unreadableDetections ?? 0
+            guard unresolved >= 0 else { throw JapaneseEngineSessionError.invalidResponse }
             scheduleIdleShutdown(after: idleTimeout)
             return RecognitionResponse(blocks: blocks, unreadableDetections: unresolved)
         } catch {

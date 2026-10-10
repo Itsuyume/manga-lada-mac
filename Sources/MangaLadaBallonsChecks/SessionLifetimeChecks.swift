@@ -100,7 +100,12 @@ enum SessionLifetimeChecks {
         try require(unresolved.blocks.isEmpty && unresolved.recognitionWarnings?.count == 1, "Unresolved detection lost its review warning.")
         let restored = try JSONDecoder().decode(PageTranslation.self, from: JSONEncoder().encode(unresolved))
         try require(restored == unresolved, "A saved recognition warning did not round-trip.")
-        for name in ["negative", "conflict", "missing"] {
+        // A partly read page keeps its read text and still warns about the detections OCR missed.
+        let partial = try await session.recognizeAndClean(source: root.appendingPathComponent("partial.png"), runID: "partial",
+                                                          priorBlocks: [block("Hello")], sourceLanguage: .english)
+        try require(partial.blocks.map(\.originalText) == ["Hello"] && partial.recognitionWarnings?.count == 1,
+                     "A partly read page hid its unread detections.")
+        for name in ["negative", "missing"] {
             do {
                 _ = try await session.recognizeAndClean(source: root.appendingPathComponent(name + ".png"), runID: name,
                                                        priorBlocks: [block(name)], sourceLanguage: .english)
@@ -149,7 +154,7 @@ enum SessionLifetimeChecks {
         response = {"blocks": regions or []}
         if text == "unresolved": response["unreadableDetections"] = 2
         if text == "negative": response["unreadableDetections"] = -1
-        if text == "conflict": response = {"blocks": request["blocks"], "unreadableDetections": 1}
+        if text == "partial": response = {"blocks": request["blocks"], "unreadableDetections": 1}
         if text == "missing": response = {}
         print("{" if text == "invalid" else json.dumps(response), flush=True)
     """#

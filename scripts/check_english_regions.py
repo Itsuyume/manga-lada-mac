@@ -13,7 +13,7 @@ sys.path.insert(0, str(resources))
 import cv2
 import numpy as np
 from balloon_geometry import BalloonGeometry
-from english_regions import recognize_blocks, read_regions, observed_ink
+from english_regions import recognize_blocks, read_regions, observed_ink, unmatched_detections
 from japanese_engine_worker import JapaneseEngine
 
 
@@ -136,6 +136,23 @@ class EnglishRegionsChecks(unittest.TestCase):
         self.assertIsNotNone(result[0]["balloonShape"])
         self.assertGreater(result[0]["balloonShape"]["bounds"]["width"], .5)
         self.assertTrue(np.array_equal(before, image))
+
+    def test_partially_read_pages_still_report_missed_detections(self):
+        width, height = 800, 600
+        read = line("Hello!", .1, .1)
+        covered = SimpleNamespace(xyxy=[70, 50, 270, 100])
+        missed = SimpleNamespace(xyxy=[500, 300, 700, 420])
+        grazed = SimpleNamespace(xyxy=[255, 55, 400, 160])
+        empty = SimpleNamespace(xyxy=[10, 10, 10, 40])
+        self.assertEqual(unmatched_detections([], [], width, height), 0)
+        self.assertEqual(unmatched_detections([covered, missed], [], width, height), 2)
+        self.assertEqual(unmatched_detections([covered], [read], width, height), 0)
+        self.assertEqual(unmatched_detections([covered, missed, empty], [read], width, height), 1,
+                         "A page with one read line hid its unread balloon")
+        self.assertEqual(unmatched_detections([grazed], [read], width, height), 1,
+                         "A line grazing a missed balloon counted as reading it")
+        with self.assertRaises(ValueError):
+            unmatched_detections([missed], [read, read], width, height)
 
     def test_blank_page_and_detected_unreadable_text_take_distinct_paths(self):
         # No models need to be constructed for this worker response. Exercise

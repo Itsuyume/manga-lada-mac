@@ -37,7 +37,7 @@ public struct GeminiPageTranslator: MangaPageTranslating {
         let response = try JSONDecoder().decode(Response.self, from: data)
         guard let content = response.candidates.first?.content else { throw TranslationError.missingTranslatedText }
         let text = content.parts.map(\.text).joined()
-        return try MangaPageResponse.decode(ModelJSON.data(from: text), blocks: blocks, selectedIDs: selectedIDs)
+        return try MangaPageResponse.decode(ModelJSON.data(from: text), blocks: blocks, selectedIDs: selectedIDs, sourceLanguage: sourceLanguage)
     }
 
     private struct Part: Codable { let text: String }

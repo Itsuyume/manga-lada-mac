@@ -32,8 +32,17 @@ def prepare_thin_strokes(base: np.ndarray, mask: np.ndarray) -> tuple[np.ndarray
     selected = eligible[labels]
     if not selected.any():
         return result, pending
-    holes = selected.astype(np.uint8) * 255
-    candidate = cv2.inpaint(base, holes, 3, cv2.INPAINT_TELEA)
-    result[selected] = candidate[selected]
+    # Every approved pixel is unknown to Telea, not only the thin holes: a wide
+    # glyph left for LaMa must not bleed its ink into a neighbouring thin stroke.
+    # Telea reads a three-pixel neighbourhood, so a small margin around the
+    # selected holes sees every pixel that can influence them.
+    rows, columns = np.nonzero(selected)
+    margin = 8
+    top, bottom = max(0, rows.min() - margin), min(height, rows.max() + margin + 1)
+    left, right = max(0, columns.min() - margin), min(width, columns.max() + margin + 1)
+    window = np.s_[top:bottom, left:right]
+    candidate = cv2.inpaint(np.ascontiguousarray(base[window]), np.ascontiguousarray(mask[window]), 3, cv2.INPAINT_TELEA)
+    chosen = selected[window]
+    result[window][chosen] = candidate[chosen]
     pending[selected] = 0
     return result, pending
