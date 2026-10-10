@@ -30,12 +30,13 @@ class JapaneseEngine:
         import cv2
         import torch
         from ballontranslator.modules.textdetector.detector_ctd import ComicTextDetector
-        from ballontranslator.modules.ocr.ocr_manga import MangaOCR
         from ballontranslator.modules.inpaint.inpaint_default import LamaLarge
         from ballontranslator.utils.config import pcfg
 
         torch.set_num_threads(4)
         device = "mps" if torch.backends.mps.is_available() else "cpu"
+        self.device = device
+        self._ocr = None
         pcfg.module.filter_mask_by_bboxes = True
         self.cv2 = cv2
         self.detector = ComicTextDetector(device="cpu", detect_size=1024)
@@ -47,21 +48,33 @@ class JapaneseEngine:
             self.detail_detector.params = deepcopy(self.detail_detector.params)
         if self.detector.device != "cpu" or self.detector.detect_size != 1024:
             raise RuntimeError("Coarse detector configuration was changed by another model")
-        self.ocr = MangaOCR(device=device)
         self.painter = LamaLarge(device=device, inpaint_size=1536, precision="fp32")
         # The library's white-background shortcut mistakes outlined text for empty balloons.
         self.painter.check_need_inpaint = False
 
+    @property
+    def ocr(self):
+        if self._ocr is None:
+            from ballontranslator.modules.ocr.ocr_manga import MangaOCR
+            self._ocr = MangaOCR(device=self.device)
+        return self._ocr
+
     def process(self, request: dict) -> dict:
         began = time.monotonic()
         from region_ocr import validate_backend
-        backend = validate_backend(request.get("ocrBackend", "manga"))
+        language = request.get("sourceLanguage", "ja")
+        if language not in ("ja", "en"):
+            raise ValueError("Unsupported comic source language")
+        backend = validate_backend(request.get("ocrBackend", "manga")) if language == "ja" else "manga"
         image = self.cv2.imread(request["source"], self.cv2.IMREAD_COLOR)
         if image is None:
             raise ValueError("Cannot decode source image")
         if "letteringOnly" in request:
             return {"lettering": self.read_lettering_only(image, request["letteringOnly"])}
         if request.get("regions") is not None:
+            if language == "en":
+                from english_regions import read_regions
+                return {"blocks": read_regions(request["regions"], request["opticalCandidates"])}
             return {"blocks": self.read_proposed_regions(image, request["regions"], backend)}
         height, width = image.shape[:2]
         mask, detected = self.detector.detect(image)
@@ -72,6 +85,11 @@ class JapaneseEngine:
         from balloon_recovery import recover_balloons
         mask, detected = recover_balloons(image, mask, detected, self.detector.detect, request.get("blocks"),
                                          connected_lettering=backend != "manga")
+        if language == "en":
+            from english_regions import unmatched_detections
+            blocks = self.read_english_page(image, detected, request)
+            return {"blocks": blocks, "elapsed": time.monotonic() - began,
+                    "unreadableDetections": unmatched_detections(detected, request["opticalCandidates"], width, height)}
         from balloon_lobes import detect_lobes, retain_cached_regions, source_rectangle
         lobes = detect_lobes(image, mask, detected)
         detected = lobes.blocks
@@ -114,22 +132,49 @@ class JapaneseEngine:
         separate_shared_balloons(blocks)
         punctuation_mask, punctuation_boxes = self.add_sentence_punctuation(image, blocks)
         mask = self.cv2.bitwise_or(mask, punctuation_mask)
+        self.save_clean_page(image, mask, blocks, detected, optical_boxes + punctuation_boxes + lettering_boxes,
+                             geometry, Path(request["destination"]))
+        return {"blocks": blocks, "elapsed": time.monotonic() - began}
+
+    def read_english_page(self, image, detected, request: dict) -> list[dict]:
+        from english_regions import recognize_blocks, observed_ink
+        from balloon_geometry import BalloonGeometry
+        from balloon_partition import separate_shared_balloons
+        observations = request["opticalCandidates"]
+        if not observations:
+            self.write_clean_page(image, Path(request["destination"]))
+            return []
+        mask, boxes = observed_ink(image, observations)
+        geometry = BalloonGeometry(image, text_mask=mask.copy(), exclude_text_from_contours=True)
+        blocks = recognize_blocks(image, detected, observations, geometry, request.get("blocks"))
+        separate_shared_balloons(blocks)
+        confirmed_balloons = [block for block in blocks if block["balloonShape"] is not None]
+        self.save_clean_page(image, mask, confirmed_balloons, detected, boxes, geometry, Path(request["destination"]))
+        return blocks
+
+    def save_clean_page(self, image, mask, blocks, detected, extra_boxes, geometry, destination: Path) -> None:
+        height, width = image.shape[:2]
         mask = self.expand_outline_mask(image, mask, detected)
         from balloon_erase_mask import protect_balloon_outlines
         mask = protect_balloon_outlines(mask, blocks, geometry)
-        paint_blocks = self.inpainting_blocks(detected, width, height) + self.inpainting_regions(optical_boxes + punctuation_boxes + lettering_boxes)
+        paint_blocks = self.inpainting_blocks(detected, width, height) + self.inpainting_regions(extra_boxes)
         from flat_background import prepare_flat_backgrounds
         prepared, pending = prepare_flat_backgrounds(image, image, mask, [block.xyxy for block in paint_blocks])
-        unresolved = [block for block in paint_blocks if pending[block.xyxy[1]:block.xyxy[3], block.xyxy[0]:block.xyxy[2]].any()]
-        result = self.painter.inpaint(prepared, pending.copy(), unresolved, check_need_inpaint=False) if unresolved else prepared.copy()
+        from stroke_inpainting import prepare_thin_strokes
+        prepared, pending = prepare_thin_strokes(prepared, pending)
+        from inpaint_mask import reconstruction_mask, reconstruction_bounds
+        context = reconstruction_mask(pending)
+        unresolved = self.inpainting_regions(reconstruction_bounds(context))
+        result = self.painter.inpaint(prepared, context.copy(), unresolved, check_need_inpaint=False) if unresolved else prepared.copy()
         result[pending == 0] = prepared[pending == 0]
-        destination = Path(request["destination"])
+        self.write_clean_page(result, destination)
+
+    def write_clean_page(self, result, destination: Path) -> None:
         destination.parent.mkdir(parents=True, exist_ok=True)
         temporary = destination.with_name("recognized.partial.png")
         if not self.cv2.imwrite(str(temporary), result):
             raise OSError("Cannot save clean page")
         os.replace(temporary, destination)
-        return {"blocks": blocks, "elapsed": time.monotonic() - began}
 
     def read_lettering_only(self, image, mode: str) -> list[dict]:
         from lettering_regions import inspect_lettering_regions, inspect_detected_lettering
@@ -311,7 +356,7 @@ class JapaneseEngine:
         """
         import cv2
         import numpy as np
-        from erase_supplemental_text import outlined_glyph_mask
+        from erase_supplemental_text import outlined_glyph_mask, complete_confirmed_glyph_mask
         if mask.dtype != np.uint8 or mask.shape != image.shape[:2]:
             raise ValueError("Outline mask dimensions or pixel type differ from the page")
         height, width = image.shape[:2]
@@ -324,6 +369,7 @@ class JapaneseEngine:
                 raise ValueError("Outline search requires a positive finite font size")
             pad = max(3, int(block._detected_font_size * .22))
             x1, y1, x2, y2 = max(0, x1 - pad), max(0, y1 - pad), min(width, x2 + pad), min(height, y2 + pad)
+            completed[y1:y2, x1:x2] |= complete_confirmed_glyph_mask(image[y1:y2, x1:x2], mask[y1:y2, x1:x2])
             outlined = outlined_glyph_mask(image[y1:y2, x1:x2], mask[y1:y2, x1:x2])
             if outlined is None:
                 continue

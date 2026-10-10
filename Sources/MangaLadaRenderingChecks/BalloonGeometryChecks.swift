@@ -34,6 +34,36 @@ extension MangaLadaRenderingChecks {
             try require(false, "Oversized text was silently cropped.")
         } catch TranslatedImageRenderError.textDoesNotFit { }
         try require(NSImage(contentsOf: root.appendingPathComponent("source.png")) != nil, "Source was lost during layout checks.")
+        try checkBalloonSizeAdaptsToReadingSpace()
+    }
+
+    @MainActor
+    private static func checkBalloonSizeAdaptsToReadingSpace() throws {
+        // Use explicit pixels: lockFocus doubles this fixture on a Retina screen
+        // and would push both automatic sizes against the same 96-pixel limit.
+        let bitmap = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: 1600, pixelsHigh: 1000, bitsPerSample: 8,
+                                      samplesPerPixel: 4, hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0)!
+        NSGraphicsContext.saveGraphicsState(); NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: bitmap)
+        NSColor.white.setFill(); NSRect(x: 0, y: 0, width: 1600, height: 1000).fill(); NSGraphicsContext.restoreGraphicsState()
+        let image = NSImage(size: NSSize(width: 1600, height: 1000)); image.addRepresentation(bitmap)
+        let boxes = [TextBox(x: 0.05, y: 0.15, width: 0.19, height: 0.24), TextBox(x: 0.45, y: 0.05, width: 0.48, height: 0.8)]
+        let text = "끝났어?"
+        let blocks = boxes.map { TextBlock(box: $0, originalText: "Have you finished?", translatedText: text,
+                                         detectedFontSize: 20, balloonShape: ellipse($0)) }
+        let english = TranslatedImageRenderer(sourceLanguage: .english)
+        let rendered = try english.render(image: image, blocks: blocks, backgroundStyle: .none)
+        let pixels = boxes.map { darkPixelBounds(image: rendered, normalizedArea: CGRect(x: $0.x, y: $0.y, width: $0.width, height: $0.height)) }
+        try require(pixels.allSatisfy { $0 != nil }, "Adaptive dialogue became blank")
+        try require(pixels[1]!.height > pixels[0]!.height * 1.3, "Large balloon retained the tiny page-level font: \(pixels)")
+        // Japanese pages keep the page-level size that their existing outputs were tuned with.
+        let japanese = try TranslatedImageRenderer().render(image: image, blocks: blocks, backgroundStyle: .none)
+        let japanesePixels = boxes.map { darkPixelBounds(image: japanese, normalizedArea: CGRect(x: $0.x, y: $0.y, width: $0.width, height: $0.height)) }
+        try require(japanesePixels.allSatisfy { $0 != nil } && abs(japanesePixels[1]!.height - japanesePixels[0]!.height) <= 2,
+                    "English balloon sizing changed Japanese dialogue: \(japanesePixels)")
+        var manual = blocks[1]; manual.fontScale = 0.8
+        let reduced = try english.render(image: image, blocks: [manual], backgroundStyle: .none)
+        let reducedBounds = darkPixelBounds(image: reduced, normalizedArea: CGRect(x: boxes[1].x, y: boxes[1].y, width: boxes[1].width, height: boxes[1].height))!
+        try require(reducedBounds.height < pixels[1]!.height, "Adaptive size ignored the user's manual size control")
     }
 
     private static func ellipse(_ box: TextBox) -> BalloonShape {

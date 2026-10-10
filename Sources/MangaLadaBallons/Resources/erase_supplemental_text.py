@@ -6,6 +6,7 @@ import sys
 
 import cv2
 import numpy as np
+from text_ink import foreground_mask
 
 
 def run() -> None:
@@ -23,7 +24,11 @@ def run() -> None:
     mask, boxes = glyph_mask(source, regions, bounded=request["bounded"])
     from flat_background import prepare_flat_backgrounds
     prepared, pending = prepare_flat_backgrounds(source, image, mask, boxes)
-    unresolved = [box for box in boxes if pending[box[1]:box[3], box[0]:box[2]].any()]
+    from stroke_inpainting import prepare_thin_strokes
+    prepared, pending = prepare_thin_strokes(prepared, pending)
+    from inpaint_mask import reconstruction_mask, reconstruction_bounds
+    context = reconstruction_mask(pending)
+    unresolved = reconstruction_bounds(context)
     result, method = prepared.copy(), "measured solid background"
     if unresolved:
         import torch
@@ -32,10 +37,9 @@ def run() -> None:
         device = "mps" if torch.backends.mps.is_available() else "cpu"
         painter = LamaLarge(device=device, inpaint_size=1536, precision="fp32")
         painter.check_need_inpaint = False
-        result = painter.inpaint(prepared, pending.copy(), [TextBlock(xyxy=box) for box in unresolved])
+        result = painter.inpaint(prepared, context.copy(), [TextBlock(xyxy=box) for box in unresolved])
         method = f"LaMa/{device}"
-    if request["bounded"]:
-        result[pending == 0] = prepared[pending == 0]
+    result[pending == 0] = prepared[pending == 0]
     restored = (mask > 0) & (pending == 0)
     result[restored] = prepared[restored]
     temporary = clean_path.with_name("supplemental-clean.partial.png")
@@ -45,7 +49,10 @@ def run() -> None:
     print(f"Erased {len(regions)} supplemental regions using {method}")
 
 
-def glyph_mask(image: np.ndarray, regions: list[dict], bounded: bool = False) -> tuple[np.ndarray, list[list[int]]]:
+def glyph_mask(image: np.ndarray, regions: list[dict], bounded: bool = False,
+               minimum_component_area: int = 4) -> tuple[np.ndarray, list[list[int]]]:
+    if not isinstance(minimum_component_area, int) or minimum_component_area < 1:
+        raise ValueError("Minimum glyph component area must be a positive integer")
     height, width = image.shape[:2]
     mask = np.zeros((height, width), dtype=np.uint8)
     boxes = []
@@ -67,11 +74,11 @@ def glyph_mask(image: np.ndarray, regions: list[dict], bounded: bool = False) ->
                 mask[top:bottom, left:right] = np.maximum(mask[top:bottom, left:right], local)
                 boxes.append([left, top, right, bottom])
                 continue
-            border = np.concatenate((crop[0], crop[-1], crop[:, 0], crop[:, -1]))
-            polarity = cv2.THRESH_BINARY if np.median(border) < 127 else cv2.THRESH_BINARY_INV
-            _, binary = cv2.threshold(crop, 0, 255, polarity | cv2.THRESH_OTSU)
+            # A nearby panel edge can cover half the crop perimeter. Measure
+            # the selected area so that border ink cannot invert foreground.
+            binary = foreground_mask(crop)
             _, labels, stats, _ = cv2.connectedComponentsWithStats(binary, 8)
-            selected = [i for i in range(1, len(stats)) if stats[i, 4] >= 4
+            selected = [i for i in range(1, len(stats)) if stats[i, 4] >= minimum_component_area
                         and stats[i, 0] > 1 and stats[i, 1] > 1
                         and stats[i, 0] + stats[i, 2] < crop.shape[1] - 1
                         and stats[i, 1] + stats[i, 3] < crop.shape[0] - 1
@@ -87,8 +94,7 @@ def glyph_mask(image: np.ndarray, regions: list[dict], bounded: bool = False) ->
         x2, y2 = min(width, int(seed_x + seed_w + margin_x)), min(height, int(seed_y + seed_h + margin_y))
         crop = gray[y1:y2, x1:x2]
         border = np.concatenate((crop[0], crop[-1], crop[:, 0], crop[:, -1]))
-        polarity = cv2.THRESH_BINARY if np.median(border) < 127 else cv2.THRESH_BINARY_INV
-        _, binary = cv2.threshold(crop, 0, 255, polarity | cv2.THRESH_OTSU)
+        binary = foreground_mask(crop, float(np.median(border)))
         _, labels, stats, _ = cv2.connectedComponentsWithStats(binary, 8)
         seed = (seed_x - x1, seed_y - y1, seed_x + seed_w - x1, seed_y + seed_h - y1)
         candidates = [i for i in range(1, len(stats)) if stats[i, 4] >= 4
@@ -146,6 +152,36 @@ def outlined_glyph_mask(crop: np.ndarray, ink_mask: np.ndarray | None = None):
     if outlined < 2 or np.count_nonzero(mask) > gray.size * .35:
         return None
     return mask
+
+
+def complete_confirmed_glyph_mask(crop: np.ndarray, ink_mask: np.ndarray) -> np.ndarray:
+    """Recover a glyph's faint edges only when existing ink confirms that component.
+
+    Contrast alone cannot authorize a new glyph or a panel line. Components
+    touching the search crop are excluded; the source balloon protection remains
+    the final boundary before painting. Input pixels and evidence are read-only.
+    """
+    if ink_mask.dtype != np.uint8 or ink_mask.shape != crop.shape[:2]:
+        raise ValueError("Confirmed glyph evidence does not match its source crop")
+    completed = ink_mask.copy()
+    if not ink_mask.any():
+        return completed
+    gray = cv2.cvtColor(crop, cv2.COLOR_BGR2GRAY)
+    background = np.median(gray)
+    contrast = np.abs(gray.astype(float) - background)
+    foreground = contrast >= 12
+    _, labels, stats, _ = cv2.connectedComponentsWithStats(foreground.astype(np.uint8), 8)
+    support = np.bincount(labels[ink_mask > 0], minlength=len(stats))
+    height, width = gray.shape
+    selected = [i for i in range(1, len(stats)) if stats[i, 4] >= 3
+                and support[i] >= max(3, stats[i, 4] * .2)
+                and stats[i, 0] > 0 and stats[i, 1] > 0
+                and stats[i, 0] + stats[i, 2] < width and stats[i, 1] + stats[i, 3] < height
+                and stats[i, 2] < width * .9 and stats[i, 3] < height * .9]
+    core = np.isin(labels, selected).astype(np.uint8) * 255
+    fringe = (cv2.dilate(core, np.ones((3, 3), np.uint8)) > 0) & (contrast >= 3)
+    completed[fringe & (ink_mask == 0)] = 255
+    return completed
 
 
 def component_bounds(stats: np.ndarray, selected: list[int]) -> tuple[int, int, int, int]:

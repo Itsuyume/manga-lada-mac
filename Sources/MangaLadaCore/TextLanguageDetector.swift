@@ -7,6 +7,16 @@ public enum TextLanguageDetector {
     public static func containsKorean(_ text: String) -> Bool {
         text.unicodeScalars.contains { (0xAC00...0xD7A3).contains($0.value) || (0x3130...0x318F).contains($0.value) }
     }
+    public static func containsEnglish(_ text: String) -> Bool {
+        text.range(of: #"\p{Latin}"#, options: .regularExpression) != nil
+    }
+    public static func containsSourceText(_ text: String, language: LanguageCode) -> Bool {
+        switch language {
+        case .japanese: containsJapanese(text)
+        case .english: containsEnglish(text)
+        case .korean: containsKorean(text)
+        }
+    }
     public static func containsJapanese(_ text: String) -> Bool {
         // ICU script extensions also include shared marks such as U+301C.
         // Remove known punctuation before checking letters; NFKC covers halfwidth kana.

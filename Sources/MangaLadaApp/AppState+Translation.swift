@@ -21,8 +21,8 @@ extension AppState {
     private func translate(indices: [Int], force: Bool, session: UUID) async {
         defer { if sessionID == session { isBusy = false; processingIndex = nil; job = nil } }
         do {
-            statusMessage = "로컬 일본어·효과음 인식 모델 확인 중…"
-            if configuration.enhanceSoundEffects { try await runtime.ensureReady(model: OllamaConfiguration.visionModel) }
+            statusMessage = "원문(\(configuration.sourceLanguageMode.localizedName)) 글자·효과음 인식 준비 중…"
+            if configuration.sourceLanguageMode.allowsJapanese, configuration.enhanceSoundEffects { try await runtime.ensureReady(model: OllamaConfiguration.visionModel) }
             if configuration.provider == .ollama { statusMessage = "로컬 모델 확인 중…"; try await runtime.ensureReady(model: configuration.ollama.model) }
             for index in indices {
                 try Task.checkCancellation(); guard sessionID == session else { return }

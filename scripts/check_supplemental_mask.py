@@ -8,6 +8,7 @@ import cv2
 sys.dont_write_bytecode = True
 
 source = Path(__file__).resolve().parent.parent / "Sources/MangaLadaBallons/Resources/erase_supplemental_text.py"
+sys.path.insert(0, str(source.parent))
 spec = importlib.util.spec_from_file_location("mask_adapter", source)
 module = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(module)

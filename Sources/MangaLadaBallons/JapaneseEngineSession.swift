@@ -15,23 +15,31 @@ public actor JapaneseEngineSession {
                                   opticalCandidates: [TextBlock] = [],
                                   ocrBackend: JapaneseOCRBackend = .manga,
                                   rereadExisting: Bool = false,
+                                  sourceLanguage: LanguageCode = .japanese,
                                   idleTimeout: Duration = OllamaConfiguration.Retention.balanced.duration) async throws -> PageTranslation {
         let lexicon = try JapaneseSoundEffectLexicon.bundled()
-        let blocks = try await exchange(Request(source: source.path, destination: engine.inpaintedImageURL(runID: runID).path,
+        let response = try await exchange(Request(source: source.path, destination: engine.inpaintedImageURL(runID: runID).path,
                                                blocks: priorBlocks, regions: nil, soundEffectSources: lexicon.sourceForms,
                                                soundEffectPatterns: lexicon.recognitionPatterns, opticalCandidates: opticalCandidates,
-                                               ocrBackend: ocrBackend, rereadExisting: rereadExisting), idleTimeout: idleTimeout)
-        return PageTranslation(imageURL: source, imageFingerprint: runID, sourceLanguage: .japanese, targetLanguage: .korean, blocks: blocks)
+                                               ocrBackend: ocrBackend, rereadExisting: rereadExisting,
+                                               sourceLanguage: sourceLanguage), idleTimeout: idleTimeout)
+        let warnings = response.unreadableDetections > 0
+            ? ["글자로 검출됐지만 영어 OCR이 읽지 못한 \(response.unreadableDetections)곳은 원본을 그대로 두었습니다. 그림 장식일 수도 있으니, 글자가 있다면 영역을 지정해 확인해주세요."] : nil
+        return PageTranslation(imageURL: source, imageFingerprint: runID, sourceLanguage: sourceLanguage, targetLanguage: .korean,
+                               blocks: response.blocks, recognitionWarnings: warnings)
     }
     public func verifyProposedRegions(source: URL, regions: [TextBlock],
                                       ocrBackend: JapaneseOCRBackend = .manga,
+                                      sourceLanguage: LanguageCode = .japanese, opticalCandidates: [TextBlock] = [],
                                       idleTimeout: Duration = OllamaConfiguration.Retention.balanced.duration) async throws -> [TextBlock] {
         guard !regions.isEmpty else { return [] }
-        return try await exchange(Request(source: source.path, destination: nil, blocks: nil, regions: regions,
-                                          soundEffectSources: nil, soundEffectPatterns: nil, opticalCandidates: nil,
-                                          ocrBackend: ocrBackend, rereadExisting: false), idleTimeout: idleTimeout)
+        let response = try await exchange(Request(source: source.path, destination: nil, blocks: nil, regions: regions,
+                                          soundEffectSources: nil, soundEffectPatterns: nil, opticalCandidates: opticalCandidates,
+                                          ocrBackend: ocrBackend, rereadExisting: false,
+                                          sourceLanguage: sourceLanguage), idleTimeout: idleTimeout)
+        return response.blocks
     }
-    private func exchange(_ value: Request, idleTimeout: Duration) async throws -> [TextBlock] {
+    private func exchange(_ value: Request, idleTimeout: Duration) async throws -> RecognitionResponse {
         guard !processing else { throw JapaneseEngineSessionError.busy }
         try Task.checkCancellation()
         let request = try JSONEncoder().encode(value)
@@ -48,8 +56,11 @@ public actor JapaneseEngineSession {
             let response = try JSONDecoder().decode(Response.self, from: data)
             if let error = response.error { throw JapaneseEngineSessionError.processing(error) }
             guard let blocks = response.blocks else { throw JapaneseEngineSessionError.invalidResponse }
+            // Older workers did not report detection disagreements. A partly read page may also leave detections unread.
+            let unresolved = response.unreadableDetections ?? 0
+            guard unresolved >= 0 else { throw JapaneseEngineSessionError.invalidResponse }
             scheduleIdleShutdown(after: idleTimeout)
-            return blocks
+            return RecognitionResponse(blocks: blocks, unreadableDetections: unresolved)
         } catch {
             worker.terminate(); connection = nil
             if Task.isCancelled { throw CancellationError() }
@@ -82,6 +93,8 @@ public actor JapaneseEngineSession {
         let opticalCandidates: [TextBlock]?
         let ocrBackend: JapaneseOCRBackend
         let rereadExisting: Bool
+        let sourceLanguage: LanguageCode
     }
-    private struct Response: Decodable { let blocks: [TextBlock]?; let error: String? }
+    private struct Response: Decodable { let blocks: [TextBlock]?; let error: String?; let unreadableDetections: Int? }
+    private struct RecognitionResponse: Sendable { let blocks: [TextBlock]; let unreadableDetections: Int }
 }

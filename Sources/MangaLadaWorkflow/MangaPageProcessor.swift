@@ -12,7 +12,8 @@ public struct ProcessedMangaPage: Sendable {
     public var warnings: [String] = []
     public var reviewWarnings: [String] {
         let uncertain = translation.blocks.filter { $0.recognitionAlternatives != nil && $0.keepsOriginal != true }.count
-        return warnings + (uncertain == 0 ? [] : ["글자를 확정하지 못한 \(uncertain)곳은 원본을 유지했습니다. 검수창에서 원문 후보를 확인해주세요."])
+        return (translation.recognitionWarnings ?? []) + warnings
+            + (uncertain == 0 ? [] : ["글자를 확정하지 못한 \(uncertain)곳은 원본을 유지했습니다. 검수창에서 원문 후보를 확인해주세요."])
     }
     public var primaryTranslation: PageTranslation?
 }
@@ -37,16 +38,18 @@ public final class MangaPageProcessor {
                         typography: MangaTypography, previousContext: String = "", bookTitle: String = "", force: Bool = false,
                         status: @escaping @Sendable (String) async -> Void = { _ in }) async throws -> ProcessedMangaPage {
         try Task.checkCancellation()
-        let draft = try await preparePage(imageURL: imageURL, configuration: configuration, previousContext: previousContext,
+        let resolved = try await PageLanguageResolver(cache: cache).resolve(configuration, imageURL: imageURL,
+            previousContext: previousContext, bookTitle: bookTitle, status: status)
+        let draft = try await preparePage(imageURL: imageURL, configuration: resolved, previousContext: previousContext,
                                           bookTitle: bookTitle, force: force, status: status)
         let result: ProcessedMangaPage
         do {
             result = try PageImageRendering.render(translation: draft.translation, cleanImageURL: draft.cleanImageURL,
                 destinationURL: destinationURL, typography: typography, wasCached: draft.wasCached)
         } catch { throw MangaPageFailure(draft: draft, cause: error) }
-        guard configuration.enhanceSoundEffects else { return result }
+        guard resolved.sourceLanguage == .japanese, resolved.enhanceSoundEffects else { return result }
         do {
-            return try await SupplementalPageTranslation(engine: engine, recognitionSession: recognitionSession, cache: cache, pipeline: textTranslator).apply(to: result, configuration: configuration,
+            return try await SupplementalPageTranslation(engine: engine, recognitionSession: recognitionSession, cache: cache, pipeline: textTranslator).apply(to: result, configuration: resolved,
                 typography: typography, previousContext: previousContext, force: force, status: status)
         } catch is CancellationError { throw CancellationError() }
         catch {
@@ -60,6 +63,7 @@ public final class MangaPageProcessor {
 
     private func preparePage(imageURL: URL, configuration: LocalTranslatorConfiguration, previousContext: String, bookTitle: String,
                              force: Bool, status: @escaping @Sendable (String) async -> Void) async throws -> MangaPageDraft {
+        try configuration.sourceLanguage.validateComicSource()
         let keys = try JapanesePageKeys(imageURL: imageURL, configuration: configuration, context: previousContext, title: bookTitle)
         let cleanURL = engine.inpaintedImageURL(runID: keys.recognition)
         let storedCurrent = try cache.load(fingerprint: keys.translation)
@@ -75,11 +79,12 @@ public final class MangaPageProcessor {
             return MangaPageDraft(translation: translated, cleanImageURL: selected, wasCached: true)
         }
         var recognized = try await recognition(imageURL: imageURL, key: keys.recognition, previousKeys: keys.previousRecognition, cleanURL: cleanURL,
-                                               reusableOCRKey: keys.recognitionBeforeCleanupUpdate,
-                                               retention: configuration.ollama.retention, ocrBackend: configuration.japaneseOCR, status: status)
-        recognized.blocks = JapaneseSpeechGrouping.resolve(recognized.blocks)
+                                               reusableOCRKeys: keys.reusableRecognition,
+                                               retention: configuration.ollama.retention, ocrBackend: configuration.japaneseOCR,
+                                               sourceLanguage: configuration.sourceLanguage, status: status)
+        if configuration.sourceLanguage == .japanese { recognized.blocks = JapaneseSpeechGrouping.resolve(recognized.blocks) }
         var storedPrior = try storedCurrent ?? previousTranslation(keys.previous)
-        if storedCurrent == nil, configuration.japaneseOCR.usesLetteringOCR,
+        if configuration.sourceLanguage == .japanese, storedCurrent == nil, configuration.japaneseOCR.usesLetteringOCR,
            let oldOCR = try previousTranslation(keys.previousRecognition), var stored = storedPrior {
             stored.blocks = RecognitionCacheMigration.recordSourceEdits(in: stored.blocks, recognized: oldOCR.blocks)
             storedPrior = stored
@@ -94,15 +99,17 @@ public final class MangaPageProcessor {
             recognized.blocks.removeAll { ImageRegionSelection.containsCenter(bounds, of: $0.box) }
             recognized.blocks.append(updated)
         }
-        recognized.blocks = MangaReadingOrder.sorted(recognized.blocks)
-        for index in recognized.blocks.indices where recognized.blocks[index].textKind == .title && !recognized.blocks[index].preservesOriginalArtwork {
+        recognized.blocks = MangaReadingOrder.sorted(recognized.blocks, sourceLanguage: configuration.sourceLanguage)
+        for index in recognized.blocks.indices where configuration.sourceLanguage == .japanese
+            && recognized.blocks[index].textKind == .title && !recognized.blocks[index].preservesOriginalArtwork {
             recognized.blocks[index].originalText = JapaneseTitleResolver.resolve(optical: recognized.blocks[index].originalText, bookTitle: bookTitle)
         }
         try Task.checkCancellation()
         let migrated = storedPrior.flatMap { RecognitionCacheMigration.reuse($0, for: recognized.blocks, preservingOriginalOnly: force,
-                                                                            requiresMatchingSource: configuration.japaneseOCR.usesLetteringOCR) }
+                                                                            requiresMatchingSource: configuration.sourceLanguage == .japanese && configuration.japaneseOCR.usesLetteringOCR) }
         let baseline = PageTranslation(imageURL: imageURL, imageFingerprint: keys.translation,
-            sourceLanguage: .japanese, targetLanguage: .korean, blocks: migrated ?? recognized.blocks)
+            sourceLanguage: configuration.sourceLanguage, targetLanguage: .korean, blocks: migrated ?? recognized.blocks,
+            recognitionWarnings: recognized.recognitionWarnings)
         let selectedClean = try await manualCleanImage(for: baseline, sourceCleanURL: cleanURL)
         let blocks: [TextBlock]
         if let migrated, migrated.allSatisfy({ $0.keepsOriginal == true || (!force && !$0.translatedText.isEmpty) }) {
@@ -113,7 +120,7 @@ public final class MangaPageProcessor {
                 $0.keepsOriginal == true || (!force && !$0.translatedText.isEmpty)
             }.map { ($0.id, $0) })
             do {
-                let translated = try await textTranslator.translate(baseline.blocks, configuration: configuration,
+                let translated = try await textTranslator.forSourceLanguage(configuration.sourceLanguage).translate(baseline.blocks, configuration: configuration,
                     previousContext: previousContext, refreshMaskedContext: force)
                 blocks = translated.map { reviewed[$0.id] ?? $0 }
             } catch {
@@ -123,8 +130,9 @@ public final class MangaPageProcessor {
         }
         try Task.checkCancellation()
         let translation = PageTranslation(imageURL: imageURL, imageFingerprint: keys.translation,
-                                          sourceLanguage: .japanese, targetLanguage: .korean,
-                                          blocks: RecognitionCacheMigration.verifyPunctuation(in: blocks, recognized: recognized.blocks))
+                                          sourceLanguage: configuration.sourceLanguage, targetLanguage: .korean,
+                                          blocks: RecognitionCacheMigration.verifyPunctuation(in: blocks, recognized: recognized.blocks),
+                                          recognitionWarnings: recognized.recognitionWarnings)
         try cache.save(translation)
         await status("말풍선·효과음에 글자 맞추는 중")
         return MangaPageDraft(translation: translation, cleanImageURL: selectedClean, wasCached: false)
@@ -147,10 +155,12 @@ public final class MangaPageProcessor {
                                 configuration: LocalTranslatorConfiguration, typography: MangaTypography, bookTitle: String = "",
                                 status: @escaping @Sendable (String) async -> Void = { _ in }) async throws -> ProcessedMangaPage {
         guard ImageRegionSelection.validates(box), box.width >= 0.001, box.height >= 0.001 else { throw ManualRegionError.invalidBounds }
-        let draft = try await preparePage(imageURL: imageURL, configuration: configuration, previousContext: "", bookTitle: bookTitle,
+        let resolved = try await PageLanguageResolver(cache: cache).resolve(configuration, imageURL: imageURL,
+            previousContext: "", bookTitle: bookTitle, status: status)
+        let draft = try await preparePage(imageURL: imageURL, configuration: resolved, previousContext: "", bookTitle: bookTitle,
                                            force: false, status: status)
         return try await ManualRegionTranslation(engine: engine, session: recognitionSession, cache: cache, pipeline: textTranslator).apply(
-            to: draft, box: box, kind: kind, destinationURL: destinationURL, configuration: configuration, typography: typography, status: status)
+            to: draft, box: box, kind: kind, destinationURL: destinationURL, configuration: resolved, typography: typography, status: status)
     }
 
     public func applyEdits(to result: ProcessedMangaPage, translation: PageTranslation,
@@ -200,12 +210,23 @@ public final class MangaPageProcessor {
     }
 
     private func recognition(imageURL: URL, key: String, previousKeys: [String], cleanURL: URL,
-                             reusableOCRKey: String,
+                             reusableOCRKeys: [String],
                              retention: OllamaConfiguration.Retention,
                              ocrBackend: JapaneseOCRBackend,
+                             sourceLanguage: LanguageCode,
                              status: @escaping @Sendable (String) async -> Void) async throws -> PageTranslation {
         if let stored = try cache.load(fingerprint: key), FileManager.default.fileExists(atPath: cleanURL.path) { return stored }
         let prior = try previousTranslation(previousKeys)
+        if sourceLanguage == .english {
+            await status("영어 글자·말풍선 검출 · 원문 제거 중")
+            let observations = try await VisionOCRService().recognizeText(in: imageURL, sourceLanguage: .english)
+                .filter { TextLanguageDetector.containsEnglish($0.originalText) || TextLanguageDetector.isPunctuationOnly($0.originalText) }
+            var result = try await recognitionSession.recognizeAndClean(source: imageURL, runID: key,
+                priorBlocks: prior?.blocks, opticalCandidates: observations, sourceLanguage: .english, idleTimeout: retention.duration)
+            result.blocks = EnglishSoundEffects.inferKinds(result.blocks)
+            try cache.save(result)
+            return result
+        }
         let lexicon = try JapaneseSoundEffectLexicon.bundled()
         await status("일본어 글자·효과음 위치 대조 중")
         let observations = try await VisionOCRService().recognizeText(in: imageURL, recognitionLanguages: ["ja-JP"], effectLexicon: lexicon)
@@ -217,7 +238,7 @@ public final class MangaPageProcessor {
         }
         var result = try await recognitionSession.recognizeAndClean(source: imageURL, runID: key, priorBlocks: prior?.blocks,
             opticalCandidates: observations, ocrBackend: ocrBackend,
-            rereadExisting: ocrBackend.usesLetteringOCR && prior?.imageFingerprint != reusableOCRKey,
+            rereadExisting: ocrBackend.usesLetteringOCR && !reusableOCRKeys.contains(prior?.imageFingerprint ?? ""),
             idleTimeout: retention.duration)
         try Task.checkCancellation()
         if result.blocks.contains(where: { JapaneseHorizontalOCR.canRefine($0) }) {

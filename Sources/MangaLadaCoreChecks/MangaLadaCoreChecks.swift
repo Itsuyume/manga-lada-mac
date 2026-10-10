@@ -14,6 +14,7 @@ struct MangaLadaCoreChecks {
         try ModelRetentionChecks.run()
         try MaskedTextTranslationChecks.run()
         try await NetworkBoundaryChecks.run()
+        try await EnglishLanguageChecks.run()
         try checkImageScannerKeepsOnlySupportedImagesAndSortsNaturally()
         try checkImageScannerFindsNestedImagesNaturally()
         try checkArchiveExtractorExtractsZipForRecursiveScanning()

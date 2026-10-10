@@ -101,6 +101,7 @@ public struct TextBlock: Codable, Equatable, Identifiable, Sendable {
 }
 
 public struct PageTranslation: Codable, Equatable, Sendable {
+    public var recognitionWarnings: [String]?
     public var imageURL: URL
     public var imageFingerprint: String
     public var sourceLanguage: LanguageCode
@@ -120,7 +121,7 @@ public struct PageTranslation: Codable, Equatable, Sendable {
         sourceLanguage: LanguageCode,
         targetLanguage: LanguageCode,
         createdAt: Date = Date(),
-        blocks: [TextBlock]
+        blocks: [TextBlock], recognitionWarnings: [String]? = nil
     ) {
         self.imageURL = imageURL
         self.imageFingerprint = imageFingerprint
@@ -128,6 +129,7 @@ public struct PageTranslation: Codable, Equatable, Sendable {
         self.targetLanguage = targetLanguage
         self.createdAt = createdAt
         self.blocks = blocks
+        self.recognitionWarnings = recognitionWarnings
     }
 }
 
@@ -144,6 +146,20 @@ public enum LanguageCode: String, Codable, CaseIterable, Equatable, Sendable {
     case japanese = "ja"
     case korean = "ko"
     case english = "en"
+
+    public static let comicSourceLanguages: [Self] = [.japanese, .english]
+    public func validateComicSource() throws {
+        guard Self.comicSourceLanguages.contains(self) else {
+            throw TranslationError.missingConfiguration("원문 언어는 일본어 또는 영어를 선택해주세요.")
+        }
+    }
+    public var localizedName: String {
+        switch self {
+        case .japanese: "일본어"
+        case .english: "영어"
+        case .korean: "한국어"
+        }
+    }
 
     public var displayName: String {
         switch self {

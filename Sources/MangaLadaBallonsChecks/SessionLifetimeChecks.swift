@@ -16,6 +16,7 @@ enum SessionLifetimeChecks {
         do {
             try await checkReuseAndExpiry(session, root: root)
             try await checkActiveAndFailedRequests(session, root: root)
+            try await checkRecognitionWarnings(session, root: root)
             await session.stop()
             try FileManager.default.removeItem(at: root)
         } catch {
@@ -23,7 +24,7 @@ enum SessionLifetimeChecks {
             try? FileManager.default.removeItem(at: root)
             throw error
         }
-        print("OCR session lifetime passed: empty input, PID reuse, deadline renewal, automatic exit/restart, active work, cancellation, invalid response and explicit stop")
+        print("OCR session lifetime passed: empty input, PID reuse, deadline renewal, automatic exit/restart, active work, cancellation, invalid response, recognition warnings and explicit stop")
     }
 
     private static func checkReuseAndExpiry(_ session: JapaneseEngineSession, root: URL) async throws {
@@ -91,6 +92,30 @@ enum SessionLifetimeChecks {
     private static func block(_ text: String) -> TextBlock {
         TextBlock(box: .init(x: 0.1, y: 0.1, width: 0.2, height: 0.2), originalText: text)
     }
+
+    private static func checkRecognitionWarnings(_ session: JapaneseEngineSession, root: URL) async throws {
+        let blank = try await session.recognizeAndClean(source: root.appendingPathComponent("blank.png"), runID: "blank", sourceLanguage: .english)
+        try require(blank.blocks.isEmpty && blank.recognitionWarnings == nil, "A legacy textless response acquired a warning.")
+        let unresolved = try await session.recognizeAndClean(source: root.appendingPathComponent("unresolved.png"), runID: "unresolved", sourceLanguage: .english)
+        try require(unresolved.blocks.isEmpty && unresolved.recognitionWarnings?.count == 1, "Unresolved detection lost its review warning.")
+        let restored = try JSONDecoder().decode(PageTranslation.self, from: JSONEncoder().encode(unresolved))
+        try require(restored == unresolved, "A saved recognition warning did not round-trip.")
+        // A partly read page keeps its read text and still warns about the detections OCR missed.
+        let partial = try await session.recognizeAndClean(source: root.appendingPathComponent("partial.png"), runID: "partial",
+                                                          priorBlocks: [block("Hello")], sourceLanguage: .english)
+        try require(partial.blocks.map(\.originalText) == ["Hello"] && partial.recognitionWarnings?.count == 1,
+                     "A partly read page hid its unread detections.")
+        for name in ["negative", "missing"] {
+            do {
+                _ = try await session.recognizeAndClean(source: root.appendingPathComponent(name + ".png"), runID: name,
+                                                       priorBlocks: [block(name)], sourceLanguage: .english)
+                throw CheckError.failed("Invalid recognition response accepted: \(name)")
+            } catch let error as CheckError { throw error }
+            catch { }
+            let pid = try state(root).pid
+            try await waitUntil("Invalid recognition response left the worker alive.") { !alive(pid) }
+        }
+    }
     private static func state(_ root: URL) throws -> WorkerState {
         try JSONDecoder().decode(WorkerState.self, from: Data(contentsOf: root.appendingPathComponent("state.json")))
     }
@@ -118,14 +143,19 @@ enum SessionLifetimeChecks {
     count = 0
     for line in sys.stdin:
         request = json.loads(line)
-        regions = request["regions"]
-        text = regions[0]["originalText"]
+        regions = request.get("regions")
+        text = regions[0]["originalText"] if regions else Path(request["source"]).stem
         count += 1
         temporary = root / "state.partial.json"
         temporary.write_text(json.dumps({"pid": os.getpid(), "count": count, "text": text}))
         os.replace(temporary, root / "state.json")
         if text in ("wait", "cancel"):
             time.sleep(1.2)
-        print("{" if text == "invalid" else json.dumps({"blocks": regions}), flush=True)
+        response = {"blocks": regions or []}
+        if text == "unresolved": response["unreadableDetections"] = 2
+        if text == "negative": response["unreadableDetections"] = -1
+        if text == "partial": response = {"blocks": request["blocks"], "unreadableDetections": 1}
+        if text == "missing": response = {}
+        print("{" if text == "invalid" else json.dumps(response), flush=True)
     """#
 }

@@ -8,11 +8,17 @@ public struct LocalTranslatorConfiguration: Equatable, Sendable {
     public var enhanceSoundEffects: Bool
     public var interpretMaskedText: Bool
     public var japaneseOCR: JapaneseOCRBackend
+    /// The concrete language of the page being processed. In automatic mode the processor
+    /// resolves it per page; elsewhere it equals the fixed mode.
+    public var sourceLanguage: LanguageCode
+    public var sourceLanguageMode: SourceLanguageMode
 
+    /// `sourceLanguageMode` nil keeps a programmatic caller's explicit `sourceLanguage` fixed.
     public init(provider: TranslationProvider = .ollama, maxConcurrentRequests: Int = 1,
                 ollama: OllamaConfiguration = OllamaConfiguration(), gemini: GeminiConfiguration = GeminiConfiguration(),
                 enhanceSoundEffects: Bool = false, interpretMaskedText: Bool = false,
-                japaneseOCR: JapaneseOCRBackend = .manga) {
+                japaneseOCR: JapaneseOCRBackend = .manga, sourceLanguage: LanguageCode = .japanese,
+                sourceLanguageMode: SourceLanguageMode? = nil) {
         self.provider = provider
         self.maxConcurrentRequests = min(max(maxConcurrentRequests, 1), 8)
         self.ollama = ollama
@@ -20,6 +26,8 @@ public struct LocalTranslatorConfiguration: Equatable, Sendable {
         self.enhanceSoundEffects = enhanceSoundEffects
         self.interpretMaskedText = interpretMaskedText
         self.japaneseOCR = japaneseOCR
+        self.sourceLanguageMode = sourceLanguageMode ?? SourceLanguageMode(fixed: sourceLanguage)
+        self.sourceLanguage = self.sourceLanguageMode.fixedLanguage ?? sourceLanguage
     }
 
     public static func load(configURL: URL, environment: [String: String] = ProcessInfo.processInfo.environment) throws -> Self {
@@ -27,6 +35,10 @@ public struct LocalTranslatorConfiguration: Equatable, Sendable {
         if FileManager.default.fileExists(atPath: configURL.path) {
             file = try JSONDecoder().decode(ConfigurationFile.self, from: Data(contentsOf: configURL))
         } else { file = nil }
+        try (file?.sourceLanguage ?? .japanese).validateComicSource()
+        // 0.2.48 stored only a fixed language: an explicit English choice stays English,
+        // the old Japanese default becomes automatic detection.
+        let mode = file?.sourceLanguageMode ?? (file?.sourceLanguage == .english ? .english : .automatic)
         return Self(
             provider: file?.provider ?? .ollama,
             maxConcurrentRequests: environment["MANGA_LADA_MAX_CONCURRENT_TRANSLATIONS"].flatMap(Int.init) ?? file?.maxConcurrentRequests ?? 1,
@@ -35,14 +47,19 @@ public struct LocalTranslatorConfiguration: Equatable, Sendable {
             gemini: GeminiConfiguration(model: file?.geminiModel ?? GeminiConfiguration.defaultModel, apiKey: environment["GEMINI_API_KEY"] ?? ""),
             enhanceSoundEffects: file?.enhanceSoundEffects ?? false,
             interpretMaskedText: file?.interpretMaskedText ?? true,
-            japaneseOCR: file?.japaneseOCR ?? .manga
+            japaneseOCR: file?.japaneseOCR ?? .manga,
+            sourceLanguage: mode.fixedLanguage ?? .japanese,
+            sourceLanguageMode: mode
         )
     }
 
     public func save(to url: URL) throws {
+        try sourceLanguage.validateComicSource()
         let file = ConfigurationFile(provider: provider, maxConcurrentRequests: maxConcurrentRequests,
                                      ollamaModel: ollama.model, geminiModel: gemini.model, enhanceSoundEffects: enhanceSoundEffects,
-                                     ollamaKeepAlive: ollama.retention, interpretMaskedText: interpretMaskedText, japaneseOCR: japaneseOCR)
+                                     ollamaKeepAlive: ollama.retention, interpretMaskedText: interpretMaskedText,
+                                     japaneseOCR: japaneseOCR, sourceLanguage: sourceLanguageMode.fixedLanguage ?? .japanese,
+                                     sourceLanguageMode: sourceLanguageMode)
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
@@ -55,7 +72,7 @@ public struct LocalTranslatorConfiguration: Equatable, Sendable {
     }
 
     public var usesPreviousPageContext: Bool {
-        provider == .geminiFlashLite || (provider == .ollama && !ollama.isTranslationSpecialist)
+        provider == .geminiFlashLite || (provider == .ollama && (sourceLanguage == .english || !ollama.isTranslationSpecialist))
     }
 
     public func requiresRetranslation(comparedTo previous: Self) -> Bool {
@@ -64,6 +81,13 @@ public struct LocalTranslatorConfiguration: Equatable, Sendable {
         comparable.ollama.retention = previous.ollama.retention
         comparable.interpretMaskedText = previous.interpretMaskedText
         comparable.japaneseOCR = previous.japaneseOCR
+        // The concrete language is resolved per page; only the chosen mode is a setting. Entering or
+        // leaving automatic mode keeps each processed page in the language it was cached with, so
+        // only a switch between two fixed languages discards the current results.
+        comparable.sourceLanguage = previous.sourceLanguage
+        if comparable.sourceLanguageMode == .automatic || previous.sourceLanguageMode == .automatic {
+            comparable.sourceLanguageMode = previous.sourceLanguageMode
+        }
         return comparable != previous
     }
 
@@ -76,6 +100,8 @@ public struct LocalTranslatorConfiguration: Equatable, Sendable {
         let ollamaKeepAlive: OllamaConfiguration.Retention?
         let interpretMaskedText: Bool?
         let japaneseOCR: JapaneseOCRBackend?
+        let sourceLanguage: LanguageCode?
+        let sourceLanguageMode: SourceLanguageMode?
     }
 }
 

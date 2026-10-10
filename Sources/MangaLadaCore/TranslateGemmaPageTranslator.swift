@@ -4,23 +4,30 @@ public struct TranslateGemmaPageTranslator: MangaPageTranslating {
     private let configuration: OllamaConfiguration
     private let session: URLSession
     private let selectedIDs: Set<UUID>?
-    public init(configuration: OllamaConfiguration = OllamaConfiguration(), session: URLSession = .shared, selectedIDs: Set<UUID>? = nil) {
+    private let sourceLanguage: LanguageCode
+    public init(configuration: OllamaConfiguration = OllamaConfiguration(), session: URLSession = .shared, selectedIDs: Set<UUID>? = nil,
+                sourceLanguage: LanguageCode = .japanese) {
         self.configuration = configuration; self.session = session; self.selectedIDs = selectedIDs
+        self.sourceLanguage = sourceLanguage
     }
     public func translatePage(_ blocks: [TextBlock], previousContext: String = "") async throws -> [TextBlock] {
         guard !blocks.isEmpty else { return [] }
-        let numbered = blocks.enumerated().map { "[R\($0.offset)] \(MaskedTextTranslation.modelText($0.element.originalText).replacingOccurrences(of: "\n", with: " "))" }.joined(separator: "\n")
-        let masking = MaskedTextTranslation.instruction(for: blocks.map(\.originalText))
-        let effects = try MangaTranslationPrompt.soundEffectGuidance(blocks: blocks)
+        let numbered = blocks.enumerated().map {
+            let text = sourceLanguage == .japanese ? MaskedTextTranslation.modelText($0.element.originalText) : $0.element.originalText
+            return "[R\($0.offset)] \(text.replacingOccurrences(of: "\n", with: " "))"
+        }.joined(separator: "\n")
+        let masking = sourceLanguage == .japanese ? MaskedTextTranslation.instruction(for: blocks.map(\.originalText)) : ""
+        let effects = sourceLanguage == .japanese ? try MangaTranslationPrompt.soundEffectGuidance(blocks: blocks)
+            : "Translate comic effects by their sound/motion as natural Korean onomatopoeia; preserve repetition."
         let context = "Previous page (context only, do not translate):\n" + previousContext.suffix(3_000)
         let prompt = """
-        You are a professional Japanese (ja) to Korean (ko) translator. Your goal is to accurately convey the meaning and nuances of the original Japanese text while adhering to Korean grammar, vocabulary, and cultural sensitivities.
+        You are a professional \(sourceLanguage.displayName) (\(sourceLanguage.rawValue)) to Korean (ko) translator. Accurately convey the meaning and nuances of the original text in natural Korean.
         Produce only the Korean translation, without any additional explanations or commentary. Preserve every [R0], [R1] identifier exactly, with one translated region per identifier. These manga regions include dialogue, narration and sound effects. Preserve speaker tone and render all names and honorifics in Korean script.
         \(masking)
-        \(MangaTranslationPrompt.dialogueGuidance(blocks: blocks))
+        \(MangaTranslationPrompt.dialogueGuidance(blocks: blocks, sourceLanguage: sourceLanguage))
         \(context)
         \(effects)
-        Please translate the following Japanese text into Korean:
+        Please translate the following \(sourceLanguage.displayName) text into Korean:
 
         \(numbered)
         """
@@ -28,18 +35,19 @@ public struct TranslateGemmaPageTranslator: MangaPageTranslating {
         var instruction = prompt
         for attempt in 0..<2 {
             try Task.checkCancellation()
-            let response = try await client.text(user: instruction, outputTokens: blocks.count * 100)
-            do { return try MangaNumberedPageResponse.decode(response, blocks: blocks, selectedIDs: selectedIDs) }
+            let outputTokens = max(1024, blocks.reduce(0) { $0 + $1.originalText.count * 3 + 96 })
+            let response = try await client.text(user: instruction, outputTokens: outputTokens)
+            do { return try MangaNumberedPageResponse.decode(response, blocks: blocks, selectedIDs: selectedIDs, sourceLanguage: sourceLanguage) }
             catch TranslationError.invalidPageResponse(let detail) {
                 guard attempt == 0 else { throw TranslationError.invalidPageResponse(detail) }
                 instruction = """
-                You are a professional Japanese (ja) to Korean (ko) translator. Output only Korean text after every numbered [R0], [R1] marker. Never repeat the Japanese original, including inside quotations or parentheses. Render every name and honorific in Korean script. Translate each numbered region exactly once.
+                You are a professional \(sourceLanguage.displayName) (\(sourceLanguage.rawValue)) to Korean (ko) translator. Output only Korean text after every numbered [R0], [R1] marker. Never repeat the original, including inside quotations or parentheses. Render every name in Korean script. Translate each numbered region exactly once.
                 \(masking)
-                \(MangaTranslationPrompt.dialogueGuidance(blocks: blocks))
+                \(MangaTranslationPrompt.dialogueGuidance(blocks: blocks, sourceLanguage: sourceLanguage))
                 \(context)
                 \(effects)
                 The previous response failed validation: \(detail)
-                Please translate the following Japanese text into Korean:
+                Please translate the following \(sourceLanguage.displayName) text into Korean:
 
                 \(numbered)
                 """
@@ -50,7 +58,8 @@ public struct TranslateGemmaPageTranslator: MangaPageTranslating {
 }
 
 public enum MangaNumberedPageResponse {
-    public static func decode(_ text: String, blocks: [TextBlock], selectedIDs: Set<UUID>? = nil) throws -> [TextBlock] {
+    public static func decode(_ text: String, blocks: [TextBlock], selectedIDs: Set<UUID>? = nil,
+                              sourceLanguage: LanguageCode = .japanese) throws -> [TextBlock] {
         let expression = try NSRegularExpression(pattern: #"\[R(\d+)\]\s*([\s\S]*?)(?=\[R\d+\]|\z)"#)
         let range = NSRange(text.startIndex..<text.endIndex, in: text)
         let matches = expression.matches(in: text, range: range)
@@ -64,7 +73,7 @@ public enum MangaNumberedPageResponse {
             }
             return Entry(id: id, text: String(text[textRange]), kind: blocks[id].textKind ?? .dialogue)
         }
-        return try MangaPageResponse.decode(JSONEncoder().encode(Response(translations: entries)), blocks: blocks, selectedIDs: selectedIDs)
+        return try MangaPageResponse.decode(JSONEncoder().encode(Response(translations: entries)), blocks: blocks, selectedIDs: selectedIDs, sourceLanguage: sourceLanguage)
     }
     private struct Entry: Encodable { let id: Int; let text: String; let kind: MangaTextKind }
     private struct Response: Encodable { let translations: [Entry] }

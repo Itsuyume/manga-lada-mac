@@ -8,7 +8,8 @@ struct MangaLadaVisionChecks {
     static func main() async throws {
         let service = VisionOCRService()
         if CommandLine.arguments.count > 1 {
-            let blocks = try await service.recognizeText(in: URL(fileURLWithPath: CommandLine.arguments[1]), sourceLanguage: .japanese)
+            let language: LanguageCode = CommandLine.arguments.contains("--source=en") ? .english : .japanese
+            let blocks = try await service.recognizeText(in: URL(fileURLWithPath: CommandLine.arguments[1]), sourceLanguage: language)
             print(String(decoding: try JSONEncoder().encode(blocks), as: UTF8.self))
             return
         }

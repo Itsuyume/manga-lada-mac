@@ -17,6 +17,13 @@ struct TranslatorSettingsView: View {
             Text("번역과 글자 배치").font(.system(size: 20, weight: .semibold))
             Form {
                 Section {
+                    Picker("원문 언어", selection: sourceModeBinding) {
+                        ForEach(SourceLanguageMode.allCases, id: \.self) { Text($0.localizedName).tag($0) }
+                    }
+                    if configuration.sourceLanguageMode == .automatic {
+                        Text("페이지마다 일본어·영어를 자동으로 판별합니다. 이미 처리한 페이지는 저장된 언어를 그대로 사용하며, 글자가 거의 없는 페이지는 일본어로 처리합니다.")
+                            .font(.system(size: 11)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                    }
                     Picker("번역 방식", selection: $configuration.provider) {
                         Text("로컬 · API 요금 없음").tag(TranslationProvider.ollama)
                         Text("Gemini Flash-Lite · 저가 API").tag(TranslationProvider.geminiFlashLite)
@@ -28,22 +35,12 @@ struct TranslatorSettingsView: View {
                     } else {
                         TextField("저가 모델", text: $configuration.gemini.model)
                         SecureField("API 키", text: $configuration.gemini.apiKey)
-                        Text("OCR·원문 제거·효과음 인식은 로컬입니다. 번역할 일본어 문구만 API로 전송하며 키는 Mac 키체인에 저장합니다.")
+                        Text("OCR·원문 제거·효과음 인식은 로컬입니다. 번역할 원문 문구만 API로 전송하며 키는 Mac 키체인에 저장합니다.")
                             .font(.system(size: 11)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                     }
                 }
                 Section {
-                    Picker("일본어 글자 인식", selection: $configuration.japaneseOCR) {
-                        ForEach(JapaneseOCRBackend.allCases, id: \.self) { Text($0.displayName).tag($0) }
-                    }
-                    Text("Hayai는 약 629MB이며, 추가 검출에는 38MB 검출 모델과 48MB 획 분할 모델이 더 필요합니다. 새 인식부터 적용하며, 서로 다르게 읽힌 글자는 원본을 유지합니다.")
-                        .font(.system(size: 11)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-                    Toggle("가린 단어 문맥 해석 · 로컬 Qwen", isOn: $configuration.interpretMaskedText)
-                    Text("뜻이 불분명한 가림말만 Qwen 3.5 9B로 해석합니다. 같은 문구와 문맥은 작은 캐시에 저장합니다. 추정 결과는 검수창에 표시하며 기존 번역은 자동으로 바꾸지 않습니다.")
-                        .font(.system(size: 11)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-                    Toggle("효과음 추가 인식 · 느림 / 실험 단계", isOn: $configuration.enhanceSoundEffects)
-                    Text("기본은 검출된 말풍선·문구를 먼저 번역합니다. 복잡한 효과음과 표지는 검수가 필요합니다.")
-                        .font(.system(size: 11)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                    recognitionSettings
                     Picker("말풍선 글꼴", selection: $typography.dialogueFontName) { ForEach(fonts, id: \.self) { Text(fontLabel($0)).tag($0) } }
                     Picker("효과음 스타일", selection: effectStyleBinding) {
                         Text("원문에 맞춰 자동 추천").tag("automatic")
@@ -76,6 +73,32 @@ struct TranslatorSettingsView: View {
                     .disabled(state.isBusy || (configuration.provider == .ollama && configuration.ollama.model.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty))
             }
         }.padding(24).frame(width: 570)
+    }
+    @ViewBuilder private var recognitionSettings: some View {
+        if configuration.sourceLanguageMode.allowsJapanese {
+            Picker("일본어 글자 인식", selection: $configuration.japaneseOCR) {
+                ForEach(JapaneseOCRBackend.allCases, id: \.self) { Text($0.displayName).tag($0) }
+            }
+            Text("Hayai는 약 629MB이며, 추가 검출에는 38MB 검출 모델과 48MB 획 분할 모델이 더 필요합니다. 새 인식부터 적용하며, 서로 다르게 읽힌 글자는 원본을 유지합니다.")
+                .font(.system(size: 11)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            Toggle("가린 단어 문맥 해석 · 로컬 Qwen", isOn: $configuration.interpretMaskedText)
+            Text("뜻이 불분명한 가림말만 Qwen 3.5 9B로 해석합니다. 같은 문구와 문맥은 작은 캐시에 저장합니다. 추정 결과는 검수창에 표시하며 기존 번역은 자동으로 바꾸지 않습니다.")
+                .font(.system(size: 11)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            Toggle("효과음 추가 인식 · 느림 / 실험 단계", isOn: $configuration.enhanceSoundEffects)
+            Text("기본은 검출된 말풍선·문구를 먼저 번역합니다. 복잡한 효과음과 표지는 검수가 필요합니다.")
+                .font(.system(size: 11)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+        }
+        if configuration.sourceLanguageMode.allowsEnglish {
+            Text("영어 글자 인식 · Mac 기본 OCR").font(.system(size: 13, weight: .medium))
+            Text("왼쪽부터 읽고 말풍선별로 번역합니다. 추가 OCR 모델 없이 영어 대사와 효과음을 읽으며, 글꼴·영역 편집·저장은 같은 기능을 사용합니다. 복잡한 장식 글자는 검수가 필요합니다.")
+                .font(.system(size: 11)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+        }
+    }
+    private var sourceModeBinding: Binding<SourceLanguageMode> {
+        Binding(get: { configuration.sourceLanguageMode }, set: { mode in
+            configuration.sourceLanguageMode = mode
+            configuration.sourceLanguage = mode.fixedLanguage ?? .japanese
+        })
     }
     private var effectStyleBinding: Binding<String> {
         Binding(get: { typography.effectStyleID ?? "automatic" }, set: { typography.effectStyleID = $0 })

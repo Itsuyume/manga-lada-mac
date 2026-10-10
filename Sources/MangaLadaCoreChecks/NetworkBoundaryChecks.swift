@@ -353,6 +353,8 @@ enum NetworkBoundaryChecks {
     struct GemmaProbe: Decodable {
         let model: String; let messages: [UserMessage]; let format: String?; let think: Bool?
         let keep_alive: String
+        let options: Options
+        struct Options: Decodable { let num_predict: Int; let num_ctx: Int }
         struct UserMessage: Decodable { let role: String; let content: String }
     }
     private struct RetentionProbe: Decodable { let model: String; let keep_alive: String }

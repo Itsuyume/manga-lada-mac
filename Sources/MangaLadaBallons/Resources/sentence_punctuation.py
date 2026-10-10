@@ -5,6 +5,7 @@ import math
 import cv2
 import numpy as np
 import text_region_geometry as geometry
+from text_ink import foreground_mask
 
 
 @dataclass(frozen=True)
@@ -86,17 +87,10 @@ def end_band(block: dict, width: int, height: int) -> tuple[tuple, tuple]:
     return (left, top, right, bottom), band
 
 
-def ink_mask(crop: np.ndarray) -> np.ndarray:
-    if crop.size == 0:
-        return np.zeros_like(crop)
-    polarity = cv2.THRESH_BINARY if np.median(crop) < 127 else cv2.THRESH_BINARY_INV
-    return cv2.threshold(crop, 0, 255, polarity | cv2.THRESH_OTSU)[1]
-
-
 def last_line_band(gray: np.ndarray, text: tuple, font: float, vertical: bool) -> tuple | None:
     """Separate columns/rows by measured whitespace; Japanese columns read right to left."""
     left, top, right, bottom = text
-    binary = ink_mask(gray[top:bottom, left:right])
+    binary = foreground_mask(gray[top:bottom, left:right])
     occupied = np.flatnonzero(np.any(binary > 0, axis=0 if vertical else 1))
     if not occupied.size:
         return None
@@ -114,7 +108,7 @@ def last_line_band(gray: np.ndarray, text: tuple, font: float, vertical: bool) -
 
 def terminates_line(gray: np.ndarray, ring: tuple, band: tuple, font: float, vertical: bool) -> bool:
     left, top, right, bottom = band
-    binary = ink_mask(gray[top:bottom, left:right])
+    binary = foreground_mask(gray[top:bottom, left:right])
     projection = np.any(binary > 0, axis=1 if vertical else 0)
     start = ring[1] - top if vertical else ring[0] - left
     end = ring[3] - top if vertical else ring[2] - left
@@ -129,7 +123,7 @@ def ring_boxes(gray: np.ndarray, band: tuple, font: float) -> list[tuple[int, in
     crop = gray[top:bottom, left:right]
     if min(crop.shape, default=0) < 9:
         return []
-    binary = ink_mask(crop)
+    binary = foreground_mask(crop)
     contours, hierarchy = cv2.findContours(binary, cv2.RETR_CCOMP, cv2.CHAIN_APPROX_SIMPLE)
     if hierarchy is None:
         return []

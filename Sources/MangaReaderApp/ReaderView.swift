@@ -62,7 +62,10 @@ private struct ReaderBody: View {
     @ObservedObject var reading: ReadingSettings
     var body: some View {
         HStack(spacing: 0) {
-            if reading.showThumbnails { ThumbnailSidebar(pages: state.pages.map(\.url), index: state.index, select: state.select); Divider() }
+            if reading.showThumbnails {
+                ThumbnailSidebar(pages: state.pages.map(\.url), index: state.index, select: state.select).id(state.imageRevision)
+                Divider()
+            }
             if state.pages.isEmpty {
                 ComicDropPrompt(symbol: "book.pages", title: "만화를 펼쳐보세요",
                                 message: "파일이나 폴더를 여기로 끌어다 놓거나 열기를 누르세요.",
@@ -70,7 +73,8 @@ private struct ReaderBody: View {
                                 openFile: { state.chooseBook() }, openFolder: { state.chooseBook(folderOnly: true) })
             } else {
                 VStack(spacing: 0) {
-                    ComicPageCanvas(pages: state.pages.map(\.url), index: state.index, settings: reading, onSelect: state.select)
+                    ComicPageCanvas(pages: state.pages.map(\.url), index: state.index, settings: reading,
+                                    revision: state.imageRevision, onSelect: state.select)
                     ReadingControls(settings: reading, index: state.index, total: state.pages.count, navigate: state.select)
                         .padding(.vertical, 8).frame(maxWidth: .infinity).background(MangaUI.canvas)
                 }

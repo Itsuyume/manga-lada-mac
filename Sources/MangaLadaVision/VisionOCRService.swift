@@ -1,4 +1,5 @@
 import Foundation
+import ImageIO
 import MangaLadaCore
 import Vision
 
@@ -17,7 +18,12 @@ public struct VisionOCRService: Sendable {
             request.recognitionLanguages = recognitionLanguages
             request.minimumTextHeight = 0.01
 
-            let handler = VNImageRequestHandler(url: imageURL)
+            let handler: VNImageRequestHandler
+            if recognitionLanguages == ["en-US"], let image = try Self.enlargedEnglishImage(imageURL) {
+                handler = VNImageRequestHandler(cgImage: image)
+            } else {
+                handler = VNImageRequestHandler(url: imageURL)
+            }
             try handler.perform([request])
 
             let observations = request.results ?? []
@@ -45,4 +51,33 @@ public struct VisionOCRService: Sendable {
             }
         }.value
     }
+
+    /// Preserve normalized coordinates while giving small English lettering enough pixels.
+    private static func enlargedEnglishImage(_ url: URL) throws -> CGImage? {
+        guard let source = CGImageSourceCreateWithURL(url as CFURL, nil) else { throw OCRServiceError.imageDecodeFailed }
+        // Large pages are read at full resolution by Vision; check the header before decoding any pixels.
+        if let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
+           let width = properties[kCGImagePropertyPixelWidth] as? Int, let height = properties[kCGImagePropertyPixelHeight] as? Int,
+           max(width, height) >= 1_000 { return nil }
+        guard let image = CGImageSourceCreateThumbnailAtIndex(source, 0, [
+                  kCGImageSourceCreateThumbnailFromImageAlways: true,
+                  kCGImageSourceCreateThumbnailWithTransform: true,
+                  kCGImageSourceThumbnailMaxPixelSize: 1_200
+              ] as CFDictionary) else { throw OCRServiceError.imageDecodeFailed }
+        let longest = max(image.width, image.height)
+        guard longest < 1_000 else { return nil }
+        let scale = min(3, 1_200.0 / Double(longest))
+        guard let context = CGContext(data: nil, width: Int(Double(image.width) * scale), height: Int(Double(image.height) * scale),
+                                      bitsPerComponent: 8, bytesPerRow: 0, space: CGColorSpaceCreateDeviceRGB(),
+                                      bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue) else { throw OCRServiceError.imageDecodeFailed }
+        context.interpolationQuality = .high
+        context.draw(image, in: CGRect(x: 0, y: 0, width: context.width, height: context.height))
+        guard let enlarged = context.makeImage() else { throw OCRServiceError.imageDecodeFailed }
+        return enlarged
+    }
+}
+
+public enum OCRServiceError: LocalizedError {
+    case imageDecodeFailed
+    public var errorDescription: String? { "글자 인식을 위해 이미지를 읽지 못했습니다." }
 }
