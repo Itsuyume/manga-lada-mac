@@ -53,7 +53,11 @@ public enum TranslatedImageRenderError: LocalizedError, Equatable {
 @MainActor
 public struct TranslatedImageRenderer {
     let typography: MangaTypography
-    public init(typography: MangaTypography = MangaTypography()) { self.typography = typography }
+    /// English dialogue is sized to its balloon; Japanese pages keep the established page-level size.
+    let sourceLanguage: LanguageCode
+    public init(typography: MangaTypography = MangaTypography(), sourceLanguage: LanguageCode = .japanese) {
+        self.typography = typography; self.sourceLanguage = sourceLanguage
+    }
 
     public func writePNG(
         sourceImageURL: URL,
@@ -89,7 +93,8 @@ public struct TranslatedImageRenderer {
             original = loaded
         }
 
-        let output = try render(
+        // The saved page states its own language; a caller's default renderer cannot resize it.
+        let output = try TranslatedImageRenderer(typography: typography, sourceLanguage: translation.sourceLanguage).render(
             image: image,
             blocks: drawableBlocks,
             fontScale: fontScale,

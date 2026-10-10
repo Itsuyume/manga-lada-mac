@@ -38,16 +38,18 @@ public final class MangaPageProcessor {
                         typography: MangaTypography, previousContext: String = "", bookTitle: String = "", force: Bool = false,
                         status: @escaping @Sendable (String) async -> Void = { _ in }) async throws -> ProcessedMangaPage {
         try Task.checkCancellation()
-        let draft = try await preparePage(imageURL: imageURL, configuration: configuration, previousContext: previousContext,
+        let resolved = try await PageLanguageResolver(cache: cache).resolve(configuration, imageURL: imageURL,
+            previousContext: previousContext, bookTitle: bookTitle, status: status)
+        let draft = try await preparePage(imageURL: imageURL, configuration: resolved, previousContext: previousContext,
                                           bookTitle: bookTitle, force: force, status: status)
         let result: ProcessedMangaPage
         do {
             result = try PageImageRendering.render(translation: draft.translation, cleanImageURL: draft.cleanImageURL,
                 destinationURL: destinationURL, typography: typography, wasCached: draft.wasCached)
         } catch { throw MangaPageFailure(draft: draft, cause: error) }
-        guard configuration.sourceLanguage == .japanese, configuration.enhanceSoundEffects else { return result }
+        guard resolved.sourceLanguage == .japanese, resolved.enhanceSoundEffects else { return result }
         do {
-            return try await SupplementalPageTranslation(engine: engine, recognitionSession: recognitionSession, cache: cache, pipeline: textTranslator).apply(to: result, configuration: configuration,
+            return try await SupplementalPageTranslation(engine: engine, recognitionSession: recognitionSession, cache: cache, pipeline: textTranslator).apply(to: result, configuration: resolved,
                 typography: typography, previousContext: previousContext, force: force, status: status)
         } catch is CancellationError { throw CancellationError() }
         catch {
@@ -153,10 +155,12 @@ public final class MangaPageProcessor {
                                 configuration: LocalTranslatorConfiguration, typography: MangaTypography, bookTitle: String = "",
                                 status: @escaping @Sendable (String) async -> Void = { _ in }) async throws -> ProcessedMangaPage {
         guard ImageRegionSelection.validates(box), box.width >= 0.001, box.height >= 0.001 else { throw ManualRegionError.invalidBounds }
-        let draft = try await preparePage(imageURL: imageURL, configuration: configuration, previousContext: "", bookTitle: bookTitle,
+        let resolved = try await PageLanguageResolver(cache: cache).resolve(configuration, imageURL: imageURL,
+            previousContext: "", bookTitle: bookTitle, status: status)
+        let draft = try await preparePage(imageURL: imageURL, configuration: resolved, previousContext: "", bookTitle: bookTitle,
                                            force: false, status: status)
         return try await ManualRegionTranslation(engine: engine, session: recognitionSession, cache: cache, pipeline: textTranslator).apply(
-            to: draft, box: box, kind: kind, destinationURL: destinationURL, configuration: configuration, typography: typography, status: status)
+            to: draft, box: box, kind: kind, destinationURL: destinationURL, configuration: resolved, typography: typography, status: status)
     }
 
     public func applyEdits(to result: ProcessedMangaPage, translation: PageTranslation,

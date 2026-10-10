@@ -16,8 +16,9 @@ extension TranslatedImageRenderer {
         if let style = try LetteringStylePolicy.selected(styled, typography: typography, source: sourceLettering) {
             selectedTypography.dialogueFontName = style.fontName
         }
-        let renderer = TranslatedImageRenderer(typography: selectedTypography)
-        let balloonSize = DialogueTypesettingRules.balloonFontSize(text: text, shape: shape, imageSize: imageSize, pageFontSize: pageFontSize)
+        let renderer = TranslatedImageRenderer(typography: selectedTypography, sourceLanguage: sourceLanguage)
+        let balloonSize = sourceLanguage == .english
+            ? DialogueTypesettingRules.balloonFontSize(text: text, shape: shape, imageSize: imageSize, pageFontSize: pageFontSize) : pageFontSize
         let desiredSize = expressive ? max(balloonSize, (block.detectedFontSize ?? pageFontSize) * 0.75) : balloonSize
         let layout = try renderer.balloonLayout(block: block, text: text, shape: shape, imageSize: imageSize,
                                                 desiredSize: desiredSize, scale: fontScale)

@@ -4,9 +4,11 @@ import MangaLadaCore
 enum EnglishLanguageChecks {
     static func run() async throws {
         try checkSettings()
+        try checkAutomaticDetection()
         try checkOrderAndEffects()
         try await checkProvidersAndSelection()
         try await checkLongParagraphAndRetry()
+        try await checkNameHints()
         print("English support passed: legacy/settings validation, reading order, effect negatives/repetition, all providers, selected IDs/metadata and Korean response validation")
     }
 
@@ -30,6 +32,43 @@ enum EnglishLanguageChecks {
         catch TranslationError.missingConfiguration { }
     }
 
+    private static func checkAutomaticDetection() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let file = root.appendingPathComponent("settings.json")
+        try check(try LocalTranslatorConfiguration.load(configURL: file, environment: [:]).sourceLanguageMode == .automatic,
+                  "New installs did not default to automatic detection")
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        for (legacy, mode) in [("ja", SourceLanguageMode.automatic), ("en", .english)] {
+            try Data(#"{"sourceLanguage":"\#(legacy)"}"#.utf8).write(to: file)
+            let loaded = try LocalTranslatorConfiguration.load(configURL: file, environment: [:])
+            try check(loaded.sourceLanguageMode == mode && loaded.sourceLanguage == (mode.fixedLanguage ?? .japanese),
+                      "0.2.48 language setting migrated wrongly: \(legacy)")
+        }
+        let automatic = LocalTranslatorConfiguration(sourceLanguageMode: .automatic)
+        try automatic.save(to: file)
+        try check(try LocalTranslatorConfiguration.load(configURL: file, environment: [:]) == automatic, "Automatic mode did not round-trip")
+        try check(!automatic.requiresRetranslation(comparedTo: LocalTranslatorConfiguration())
+                  && !LocalTranslatorConfiguration(sourceLanguage: .english).requiresRetranslation(comparedTo: automatic),
+                  "Entering or leaving automatic mode discarded pages that keep their cached language")
+        var resolvedPage = automatic; resolvedPage.sourceLanguage = .english
+        try check(!resolvedPage.requiresRetranslation(comparedTo: automatic), "A page's detected language looked like a settings change")
+        let pinned = automatic.fixed(to: .english)
+        try check(pinned.sourceLanguageMode == .english && pinned.sourceLanguage == .english && pinned.cacheKey == automatic.cacheKey,
+                  "Fixing a processed page's language changed its cache identity")
+        let cases: [([String], LanguageCode?)] = [
+            ([], nil), (["", "  ", "!!", "123"], nil), (["OK"], nil), (["あ"], nil),
+            (["ちょっと待って", "OK"], .japanese), (["何だと!?"], .japanese),
+            (["Wait, what are you doing here?"], .english), (["HEY", "LISTEN"], .english),
+            (["Café déjà vu"], .english), (["WAIT! 待って"], .japanese), (["ｶﾞｶﾞｶﾞ"], .japanese)
+        ]
+        for (texts, expected) in cases {
+            // `.korean` is never a comic source, so it marks the "not enough evidence" fallback.
+            try check(TextLanguageDetector.detectSourceLanguage(in: texts, fallback: .korean) == expected ?? .korean,
+                      "Language detection failed: \(texts)")
+        }
+    }
+
     private static func checkOrderAndEffects() throws {
         let left = TextBlock(box: TextBox(x: 0.1, y: 0.1, width: 0.2, height: 0.1), originalText: "HELLO")
         let right = TextBlock(box: TextBox(x: 0.6, y: 0.1, width: 0.2, height: 0.1), originalText: "WORLD")
@@ -47,7 +86,7 @@ enum EnglishLanguageChecks {
         effect.userDefinedTextKind = nil; effect.textKind = .caption
         try check(EnglishSoundEffects.inferKinds([effect]) == [effect], "Caption overwritten")
         do {
-            _ = try MangaNumberedPageResponse.decode("[R0] HELLO", blocks: [left])
+            _ = try MangaNumberedPageResponse.decode("[R0] HELLO", blocks: [left], sourceLanguage: .english)
             throw BoundaryCheckError.failed("Untranslated English accepted")
         } catch TranslationError.invalidPageResponse { }
     }
@@ -90,6 +129,22 @@ enum EnglishLanguageChecks {
 
     private static func reply(_ text: String) throws -> (Int, Data) {
         (200, try JSONEncoder().encode(NetworkBoundaryChecks.ChatReply(message: .init(role: "assistant", content: text))))
+    }
+
+    private static func checkNameHints() async throws {
+        let config = URLSessionConfiguration.ephemeral; config.protocolClasses = [FixtureProtocol.self]
+        let session = URLSession(configuration: config)
+        defer { session.invalidateAndCancel() }
+        let named = TextBlock(box: TextBox(x: 0.1, y: 0.1, width: 0.6, height: 0.2),
+                              originalText: "Did Alice Walker come? Silver Moon Spring is far.")
+        FixtureProtocol.state.install { request in
+            let prompt = try JSONDecoder().decode(NetworkBoundaryChecks.GemmaProbe.self, from: NetworkBoundaryChecks.body(request)).messages[0].content
+            try check(prompt.contains("'Alice Walker' is a capitalized name") && prompt.contains("'Silver Moon Spring' is a capitalized name")
+                      && !prompt.contains("'Did Alice Walker'"), "A sentence-initial word joined a name hint")
+            return try reply("[R0] 앨리스 워커가 왔어? 실버 문 스프링은 멀어.")
+        }
+        let translated = try await TranslateGemmaPageTranslator(session: session, sourceLanguage: .english).translatePage([named])
+        try check(translated[0].originalText == named.originalText, "Name hints changed the source text")
     }
 
     private static func checkLongParagraphAndRetry() async throws {

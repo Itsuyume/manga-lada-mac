@@ -41,8 +41,7 @@ extension AppState {
         guard !isBusy, !isLoading, !selectedIDs.isEmpty, let baseline = currentReviewBaseline else { return }
         guard reviewErrors[currentIndex] == nil else { _ = requireAppliedReviews(at: [currentIndex]); return }
         let page = currentIndex, id = sessionID
-        var requestConfiguration = configuration
-        requestConfiguration.sourceLanguage = translation.sourceLanguage
+        var requestConfiguration = configuration.fixed(to: translation.sourceLanguage)
         if interpretMasks { requestConfiguration.interpretMaskedText = true }
         let configuration = requestConfiguration
         let onlyMasked = translation.sourceLanguage == .japanese && configuration.interpretMaskedText && translation.blocks.filter { selectedIDs.contains($0.id) }
@@ -79,6 +78,8 @@ extension AppState {
         catch { errorMessage = error.localizedDescription; return }
         let index = currentIndex, id = sessionID
         let kind = selectedRegionKind
+        let knownLanguage = (results[index]?.translation ?? pendingPages[index]?.translation)?.sourceLanguage
+        let regionConfiguration = knownLanguage.map { configuration.fixed(to: $0) } ?? configuration
         isBusy = true; processingIndex = index
         job = Task { [self] in
             defer { if sessionID == id { isBusy = false; processingIndex = nil; job = nil } }
@@ -86,7 +87,7 @@ extension AppState {
                 if configuration.provider == .ollama { try await runtime.ensureReady(model: configuration.ollama.model) }
                 guard let book = outputBook else { return }
                 let result = try await processor.translateRegion(imageURL: pages[index].url, destinationURL: book.pageURL(at: index),
-                    box: box, kind: kind, configuration: configuration, typography: typography, bookTitle: title) { [weak self] message in
+                    box: box, kind: kind, configuration: regionConfiguration, typography: typography, bookTitle: title) { [weak self] message in
                     await MainActor.run { if self?.sessionID == id { self?.statusMessage = message } }
                 }
                 guard sessionID == id else { return }

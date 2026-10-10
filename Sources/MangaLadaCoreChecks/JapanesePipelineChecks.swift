@@ -26,6 +26,14 @@ enum JapanesePipelineChecks {
             } catch TranslationError.invalidPageResponse { }
         }
         try check(try MangaPageResponse.decode(Data(#"{"translations":[]}"#.utf8), blocks: []).isEmpty, "Empty page failed.")
+        let latinSign = [TextBlock(box: blocks[0].box, originalText: "OK")]
+        let keptSign = Data(#"{"translations":[{"id":0,"text":"OK","kind":"dialogue"}]}"#.utf8)
+        try check(try MangaPageResponse.decode(keptSign, blocks: latinSign)[0].translatedText == "OK",
+                  "A Latin-only sign on a Japanese page was rejected as untranslated.")
+        do {
+            _ = try MangaPageResponse.decode(keptSign, blocks: latinSign, sourceLanguage: .english)
+            throw JapaneseCheckError.failed("Untranslated English dialogue was accepted.")
+        } catch TranslationError.invalidPageResponse { }
         let interruption = [TextBlock(box: blocks[0].box, originalText: "．．．っ！")]
         try check(try MangaNumberedPageResponse.decode("[R0] ...!", blocks: interruption)[0].translatedText == "...!", "Standalone breath/interruption punctuation was rejected as untranslated dialogue.")
         let local = LocalTranslatorConfiguration()

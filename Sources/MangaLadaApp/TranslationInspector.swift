@@ -7,6 +7,10 @@ struct TranslationInspector: View {
     @ObservedObject var state: AppState
     private var draft: PageTranslation? { state.currentReview }
     private var isPending: Bool { state.pendingPages[state.currentIndex] != nil }
+    /// A pending page has no saved result yet, but its recognition warnings still need review.
+    private var pageWarnings: [String] {
+        state.currentResult?.reviewWarnings ?? state.pendingPages[state.currentIndex]?.translation.recognitionWarnings ?? []
+    }
     private var editingDisabled: Bool { state.isBusy || state.isLoading || state.reviewErrors[state.currentIndex] != nil }
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -17,7 +21,7 @@ struct TranslationInspector: View {
                          : "번호를 누르면 문구가 펼쳐집니다. 틀린 번역은 ‘번역 삭제 · 원본 유지’로 되돌린 뒤 ‘수정 적용’을 누르세요.")
                         .font(.system(size: 10)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                 }
-                ForEach(state.currentResult?.reviewWarnings ?? [], id: \.self) { warning in
+                ForEach(pageWarnings, id: \.self) { warning in
                     Label(warning, systemImage: "exclamationmark.triangle").font(.system(size: 11)).foregroundStyle(.orange)
                         .fixedSize(horizontal: false, vertical: true).textSelection(.enabled)
                 }
@@ -99,6 +103,14 @@ struct TranslationInspector: View {
     private var header: some View {
         HStack(spacing: 10) {
             Text("번역 검수").font(.system(size: 13, weight: .semibold))
+            if let language = draft?.sourceLanguage {
+                // Automatic mode decides per page; show which path this page actually took.
+                Text("\(language.localizedName) 원문").font(.system(size: 10, weight: .medium)).foregroundStyle(.secondary)
+                    .padding(.horizontal, 7).padding(.vertical, 2).background(Color.primary.opacity(0.07), in: Capsule())
+                    .help(state.configuration.sourceLanguageMode == .automatic
+                          ? "자동 감지로 이 페이지를 \(language.localizedName) 원문으로 처리했습니다. 다르면 설정에서 원문 언어를 고정한 뒤 이 페이지를 다시 번역하세요."
+                          : "설정에서 지정한 원문 언어입니다.")
+            }
             Spacer()
             Text("\(state.currentIndex + 1)쪽" + (draft.map { " · \($0.blocks.count)개 문구" } ?? "")).foregroundStyle(.secondary)
             Button("번역 검수 닫기", systemImage: "xmark") { state.showInspector = false }

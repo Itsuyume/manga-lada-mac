@@ -23,7 +23,7 @@ public struct OllamaPageTranslator: MangaPageTranslating {
         return try await OllamaChatClient(configuration: configuration, session: session).validated(
             system: MangaTranslationPrompt.system(for: sourceLanguage),
             user: MangaTranslationPrompt.user(blocks: blocks, previousContext: previousContext, sourceLanguage: sourceLanguage),
-            schema: .page(count: blocks.count), outputTokens: blocks.count * 160) { try MangaPageResponse.decode($0, blocks: blocks, selectedIDs: selectedIDs) }
+            schema: .page(count: blocks.count), outputTokens: blocks.count * 160) { try MangaPageResponse.decode($0, blocks: blocks, selectedIDs: selectedIDs, sourceLanguage: sourceLanguage) }
     }
 }
 

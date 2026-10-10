@@ -50,12 +50,18 @@ extension MangaLadaRenderingChecks {
         let text = "끝났어?"
         let blocks = boxes.map { TextBlock(box: $0, originalText: "Have you finished?", translatedText: text,
                                          detectedFontSize: 20, balloonShape: ellipse($0)) }
-        let rendered = try TranslatedImageRenderer().render(image: image, blocks: blocks, backgroundStyle: .none)
+        let english = TranslatedImageRenderer(sourceLanguage: .english)
+        let rendered = try english.render(image: image, blocks: blocks, backgroundStyle: .none)
         let pixels = boxes.map { darkPixelBounds(image: rendered, normalizedArea: CGRect(x: $0.x, y: $0.y, width: $0.width, height: $0.height)) }
         try require(pixels.allSatisfy { $0 != nil }, "Adaptive dialogue became blank")
         try require(pixels[1]!.height > pixels[0]!.height * 1.3, "Large balloon retained the tiny page-level font: \(pixels)")
+        // Japanese pages keep the page-level size that their existing outputs were tuned with.
+        let japanese = try TranslatedImageRenderer().render(image: image, blocks: blocks, backgroundStyle: .none)
+        let japanesePixels = boxes.map { darkPixelBounds(image: japanese, normalizedArea: CGRect(x: $0.x, y: $0.y, width: $0.width, height: $0.height)) }
+        try require(japanesePixels.allSatisfy { $0 != nil } && abs(japanesePixels[1]!.height - japanesePixels[0]!.height) <= 2,
+                    "English balloon sizing changed Japanese dialogue: \(japanesePixels)")
         var manual = blocks[1]; manual.fontScale = 0.8
-        let reduced = try TranslatedImageRenderer().render(image: image, blocks: [manual], backgroundStyle: .none)
+        let reduced = try english.render(image: image, blocks: [manual], backgroundStyle: .none)
         let reducedBounds = darkPixelBounds(image: reduced, normalizedArea: CGRect(x: boxes[1].x, y: boxes[1].y, width: boxes[1].width, height: boxes[1].height))!
         try require(reducedBounds.height < pixels[1]!.height, "Adaptive size ignored the user's manual size control")
     }
