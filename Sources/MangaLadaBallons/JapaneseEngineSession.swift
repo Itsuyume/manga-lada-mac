@@ -18,24 +18,28 @@ public actor JapaneseEngineSession {
                                   sourceLanguage: LanguageCode = .japanese,
                                   idleTimeout: Duration = OllamaConfiguration.Retention.balanced.duration) async throws -> PageTranslation {
         let lexicon = try JapaneseSoundEffectLexicon.bundled()
-        let blocks = try await exchange(Request(source: source.path, destination: engine.inpaintedImageURL(runID: runID).path,
+        let response = try await exchange(Request(source: source.path, destination: engine.inpaintedImageURL(runID: runID).path,
                                                blocks: priorBlocks, regions: nil, soundEffectSources: lexicon.sourceForms,
                                                soundEffectPatterns: lexicon.recognitionPatterns, opticalCandidates: opticalCandidates,
                                                ocrBackend: ocrBackend, rereadExisting: rereadExisting,
                                                sourceLanguage: sourceLanguage), idleTimeout: idleTimeout)
-        return PageTranslation(imageURL: source, imageFingerprint: runID, sourceLanguage: sourceLanguage, targetLanguage: .korean, blocks: blocks)
+        let warnings = response.unreadableDetections > 0
+            ? ["영어 문구를 읽지 못해 원본을 보존했습니다. 검출 후보 \(response.unreadableDetections)곳은 그림 장식일 수도 있습니다. 글자가 있다면 영역을 지정해 확인해주세요."] : nil
+        return PageTranslation(imageURL: source, imageFingerprint: runID, sourceLanguage: sourceLanguage, targetLanguage: .korean,
+                               blocks: response.blocks, recognitionWarnings: warnings)
     }
     public func verifyProposedRegions(source: URL, regions: [TextBlock],
                                       ocrBackend: JapaneseOCRBackend = .manga,
                                       sourceLanguage: LanguageCode = .japanese, opticalCandidates: [TextBlock] = [],
                                       idleTimeout: Duration = OllamaConfiguration.Retention.balanced.duration) async throws -> [TextBlock] {
         guard !regions.isEmpty else { return [] }
-        return try await exchange(Request(source: source.path, destination: nil, blocks: nil, regions: regions,
+        let response = try await exchange(Request(source: source.path, destination: nil, blocks: nil, regions: regions,
                                           soundEffectSources: nil, soundEffectPatterns: nil, opticalCandidates: opticalCandidates,
                                           ocrBackend: ocrBackend, rereadExisting: false,
                                           sourceLanguage: sourceLanguage), idleTimeout: idleTimeout)
+        return response.blocks
     }
-    private func exchange(_ value: Request, idleTimeout: Duration) async throws -> [TextBlock] {
+    private func exchange(_ value: Request, idleTimeout: Duration) async throws -> RecognitionResponse {
         guard !processing else { throw JapaneseEngineSessionError.busy }
         try Task.checkCancellation()
         let request = try JSONEncoder().encode(value)
@@ -52,8 +56,10 @@ public actor JapaneseEngineSession {
             let response = try JSONDecoder().decode(Response.self, from: data)
             if let error = response.error { throw JapaneseEngineSessionError.processing(error) }
             guard let blocks = response.blocks else { throw JapaneseEngineSessionError.invalidResponse }
+            let unresolved = response.unreadableDetections ?? 0 // Older workers did not report detection disagreements.
+            guard unresolved >= 0, unresolved == 0 || blocks.isEmpty else { throw JapaneseEngineSessionError.invalidResponse }
             scheduleIdleShutdown(after: idleTimeout)
-            return blocks
+            return RecognitionResponse(blocks: blocks, unreadableDetections: unresolved)
         } catch {
             worker.terminate(); connection = nil
             if Task.isCancelled { throw CancellationError() }
@@ -88,5 +94,6 @@ public actor JapaneseEngineSession {
         let rereadExisting: Bool
         let sourceLanguage: LanguageCode
     }
-    private struct Response: Decodable { let blocks: [TextBlock]?; let error: String? }
+    private struct Response: Decodable { let blocks: [TextBlock]?; let error: String?; let unreadableDetections: Int? }
+    private struct RecognitionResponse: Sendable { let blocks: [TextBlock]; let unreadableDetections: Int }
 }

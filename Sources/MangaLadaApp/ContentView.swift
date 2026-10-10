@@ -72,6 +72,7 @@ private struct TranslatorBody: View {
     private var thumbnailBadges: [Int: ThumbnailBadge] {
         var badges: [Int: ThumbnailBadge] = [:]
         for index in state.completed { badges[index] = .completed }
+        for (index, result) in state.results where !result.reviewWarnings.isEmpty { badges[index] = .needsReview }
         for index in state.failures.keys { badges[index] = .failed }
         // A failed page with recognized text is reviewable; that is the actionable state.
         for index in state.pendingPages.keys { badges[index] = .needsReview }

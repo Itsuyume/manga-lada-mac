@@ -49,9 +49,9 @@ def _shape(line, detected, geometry, width, height):
     return _reading_shape(box, geometry), None
 
 
-def _reading_shape(box, geometry):
+def _reading_shape(box, geometry, font=None):
     """A drawing-filled panel is not a balloon even when its paper is mostly white."""
-    font = box["height"] * geometry.height
+    font = box["height"] * geometry.height if font is None else font
     enclosure = geometry.enclosure(box, font)
     if enclosure is None:
         return None
@@ -87,7 +87,15 @@ def _same_paragraph(group, line, image, mask):
     patch = image[top:bottom, left:right]
     if not patch.size:
         return False
-    unknown = patch.min(axis=2) < 150
+    # Darkness alone is not an obstacle: captions often sit on dark or
+    # translucent panels. A contrasted stroke across the gap is an obstacle.
+    context_top, context_bottom = round(a["y"] * h), round((b["y"] + b["height"]) * h)
+    context = image[context_top:context_bottom, left:right]
+    excluded = mask[context_top:context_bottom, left:right] if mask is not None else np.zeros(context.shape[:2], np.uint8)
+    background = source_background(context, excluded)
+    if background is None:
+        return False
+    unknown = np.abs(patch.astype(float) - background).max(axis=2) > 45
     if mask is not None:
         unknown &= mask[top:bottom, left:right] == 0
     return np.count_nonzero(unknown) < patch.shape[0] * patch.shape[1] * .05
@@ -100,18 +108,19 @@ def recognize_blocks(image, detected, observations: list[dict], geometry, prior_
     for line in _ordered(observations):
         shape, bounds = _shape(line, detected, geometry, width, height)
         matching = [group for group in groups if _same_paragraph(group, line, image, geometry.text_mask)
-                    and _same_space(group, shape, bounds)]
+                    and _same_space(group, shape, bounds, line["box"])]
         if len(matching) == 1:
             matching[0]["lines"].append(line)
-            if shape is None:
-                matching[0]["shape"] = None
+            if matching[0]["shape"] is None:
+                matching[0]["shape"] = shape
         else:
             groups.append({"shape": shape, "bounds": bounds, "lines": [line]})
     blocks = []
     for group in groups:
         lines = _ordered(group["lines"])
-        shape = group["shape"]
         box = _joined_box(lines)
+        font = min(line["box"]["height"] for line in lines) * height
+        shape = _reading_shape(box, geometry, font) or group["shape"]
         text = " ".join(line["originalText"].strip() for line in lines)
         prior = [entry for entry in prior_blocks or [] if entry["box"] == box and entry["originalText"] == text]
         # A cleanup refresh must keep the IDs that own manual review edits.
@@ -120,7 +129,7 @@ def recognize_blocks(image, detected, observations: list[dict], geometry, prior_
         block = {"id": identifier, "box": box,
                  "originalText": text, "translatedText": "",
                  "confidence": min(line["confidence"] for line in lines), "sourceIsVertical": False,
-                 "detectedFontSize": min(line["box"]["height"] for line in lines) * height,
+                 "detectedFontSize": font,
                  "rotationDegrees": 0, "balloonShape": shape}
         if shape is not None:
             block["textKind"] = "caption" if rectangular_enclosure(shape) else "dialogue"
@@ -128,7 +137,7 @@ def recognize_blocks(image, detected, observations: list[dict], geometry, prior_
     return blocks
 
 
-def _same_space(group, shape, bounds):
+def _same_space(group, shape, bounds, box):
     if shape is not None and group["shape"] is not None:
         a, b = shape["bounds"], group["shape"]["bounds"]
         # Native cap-height varies by line. Colour-contour closing therefore
@@ -136,6 +145,10 @@ def _same_space(group, shape, bounds):
         # keeps its stricter contract. The paragraph test still requires a
         # clear gap and aligned lines before accepting this contour agreement.
         return shared_contour(shape, group["shape"]) or intersection_area(a, b) >= max(a["width"] * a["height"], b["width"] * b["height"]) * .85
+    known = group["shape"] or shape
+    if known is not None:
+        combined = _joined_box(group["lines"] + [{"box": box}])
+        return intersection_area(known["bounds"], combined) >= combined["width"] * combined["height"] * .98
     return bounds == group["bounds"] or bounds is None or group["bounds"] is None
 
 

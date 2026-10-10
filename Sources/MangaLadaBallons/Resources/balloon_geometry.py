@@ -23,7 +23,7 @@ class BalloonGeometry:
     def contour_kernel_size(font_size: float) -> int:
         return 9 if font_size >= 45 else 5
 
-    def __init__(self, source: np.ndarray, text_mask: np.ndarray | None = None):
+    def __init__(self, source: np.ndarray, text_mask: np.ndarray | None = None, *, exclude_text_from_contours: bool = False):
         self.source = source
         self.height, self.width = source.shape[:2]
         if text_mask is not None and text_mask.shape != source.shape[:2]:
@@ -32,6 +32,12 @@ class BalloonGeometry:
         gray = cv2.cvtColor(source, cv2.COLOR_BGR2GRAY)
         self.ink = (gray < 180).astype(np.uint8) * 255
         self.edges = cv2.Canny(gray, 40, 100)
+        # Native English observations already establish the ink. Closing those
+        # glyphs with a nearby outline can cut whole words out of the interior.
+        # Exclusion affects contour discovery only, never source pixels or erasure.
+        if exclude_text_from_contours and text_mask is not None:
+            self.ink[text_mask > 0] = 0
+            self.edges[text_mask > 0] = 0
         self.contours = {}
 
     def shape(self, box: dict, font_size: float) -> dict | None:

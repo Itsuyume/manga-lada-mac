@@ -87,7 +87,8 @@ class JapaneseEngine:
                                          connected_lettering=backend != "manga")
         if language == "en":
             blocks = self.read_english_page(image, detected, request)
-            return {"blocks": blocks, "elapsed": time.monotonic() - began}
+            return {"blocks": blocks, "elapsed": time.monotonic() - began,
+                    "unreadableDetections": len(detected) if not request["opticalCandidates"] else 0}
         from balloon_lobes import detect_lobes, retain_cached_regions, source_rectangle
         lobes = detect_lobes(image, mask, detected)
         detected = lobes.blocks
@@ -140,9 +141,10 @@ class JapaneseEngine:
         from balloon_partition import separate_shared_balloons
         observations = request["opticalCandidates"]
         if not observations:
-            raise ValueError("No English text was recognized on this page")
+            self.write_clean_page(image, Path(request["destination"]))
+            return []
         mask, boxes = observed_ink(image, observations)
-        geometry = BalloonGeometry(image, text_mask=mask.copy())
+        geometry = BalloonGeometry(image, text_mask=mask.copy(), exclude_text_from_contours=True)
         blocks = recognize_blocks(image, detected, observations, geometry, request.get("blocks"))
         separate_shared_balloons(blocks)
         confirmed_balloons = [block for block in blocks if block["balloonShape"] is not None]
@@ -164,6 +166,9 @@ class JapaneseEngine:
         unresolved = self.inpainting_regions(reconstruction_bounds(context))
         result = self.painter.inpaint(prepared, context.copy(), unresolved, check_need_inpaint=False) if unresolved else prepared.copy()
         result[pending == 0] = prepared[pending == 0]
+        self.write_clean_page(result, destination)
+
+    def write_clean_page(self, result, destination: Path) -> None:
         destination.parent.mkdir(parents=True, exist_ok=True)
         temporary = destination.with_name("recognized.partial.png")
         if not self.cv2.imwrite(str(temporary), result):

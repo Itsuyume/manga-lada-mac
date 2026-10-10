@@ -61,7 +61,7 @@ public struct LocalTranslatorConfiguration: Equatable, Sendable {
     }
 
     public var usesPreviousPageContext: Bool {
-        provider == .geminiFlashLite || (provider == .ollama && !ollama.isTranslationSpecialist)
+        provider == .geminiFlashLite || (provider == .ollama && (sourceLanguage == .english || !ollama.isTranslationSpecialist))
     }
 
     public func requiresRetranslation(comparedTo previous: Self) -> Bool {

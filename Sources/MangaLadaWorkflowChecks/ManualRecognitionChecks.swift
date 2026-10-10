@@ -51,10 +51,13 @@ enum ManualRecognitionChecks {
         let irrelevantJapaneseOCR = try JapanesePageKeys(imageURL: source, configuration: settings, context: "", title: "book")
         guard english.recognition != japanese.recognition, english.translation != japanese.translation,
               english.previous.isEmpty && english.previousRecognition.contains(english.recognitionBeforeCleanupUpdate),
-              english.previousRecognition.count == 2 && !english.previousRecognition.contains(english.recognition),
+              english.previousRecognition.count == 3 && english.reusableRecognition.isEmpty && !english.previousRecognition.contains(english.recognition),
               english.translation == irrelevantJapaneseOCR.translation && english.recognition == irrelevantJapaneseOCR.recognition else {
             throw Failure.acceptedInvalidInput
         }
+        let contextual = try JapanesePageKeys(imageURL: source, configuration: settings, context: "The ruler speaks casually.", title: "book")
+        guard contextual.translation != english.translation, contextual.recognition == english.recognition,
+              contextual.previous.contains(english.translation) else { throw Failure.acceptedInvalidInput }
     }
 
     private static func rejects(_ recognized: [TextBlock], for proposals: [TextBlock]) throws {

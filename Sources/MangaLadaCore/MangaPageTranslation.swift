@@ -93,7 +93,12 @@ enum MangaTranslationPrompt {
     """
     static func dialogueGuidance(blocks: [TextBlock], sourceLanguage: LanguageCode = .japanese) -> String {
         if sourceLanguage == .english {
-            return "English dialogue: preserve each speaker's tone, contractions, idioms, and sentence fragments. Use natural Korean; do not invent honorifics or relationships. Keep each region's own words under its identifier. Narration stays narration. A polite request differs from a casual reply."
+            return """
+            English dialogue: use spoken, natural Korean rather than formal written prose. Preserve each region's register independently; a neighboring speaker's polite reply does not make everyone polite. Casual questions, teasing, scolding and direct orders use 반말, not automatic -요/-습니다. Explicit deference (Your Majesty, my Queen, permission, this servant) uses respectful Korean. A superior asking whether their orders were carried out speaks directly; do not turn 'what I told you to do' into 'what I asked you to tell someone else'. Do not infer register from age or gender.
+            Idioms keep their meaning: 'dirty thoughts' means 음흉한/야한 생각, not merely 나쁜 생각. Fragments belong to their connected sentence, but each region keeps its own words under its identifier. Narration stays narration.
+            Capitalized multiword place names are proper names, not quantities or everyday descriptions. Use an established Korean name from previous context when available; otherwise transliterate the name into Hangul. For example, a named place 'Silver Moon Spring' stays 실버 문 스프링, never 은빛 달의 샘; a name's number is not a quantity. Use Korean script only, including names in parentheses: no English or Chinese characters.
+            \(EnglishComicNames.guidance(blocks: blocks))
+            """
         }
         let hints = blocks.enumerated().compactMap { index, block -> String? in
             if block.textKind == .caption { return "R\(index): narration/caption; preserve fragments and noun phrases." }

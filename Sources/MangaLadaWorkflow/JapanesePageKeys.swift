@@ -18,9 +18,11 @@ package struct JapanesePageKeys {
         if configuration.sourceLanguage == .english {
             translation = "\(image)-en-v2-balloons-\(configuration.cacheKey)-\(newContext)"
             recognitionBeforeCleanupUpdate = "\(image)-en-ocr-v2-balloons-ink-v1"
-            recognition = "\(image)-en-ocr-v2-balloons-ink-v3"
-            reusableRecognition = ["\(image)-en-ocr-v2-balloons-ink-v2", recognitionBeforeCleanupUpdate]
-            previousRecognition = reusableRecognition; previous = []
+            recognition = "\(image)-en-ocr-v3-balloons-ink-v3"
+            reusableRecognition = []
+            previousRecognition = ["\(image)-en-ocr-v2-balloons-ink-v3", "\(image)-en-ocr-v2-balloons-ink-v2", recognitionBeforeCleanupUpdate]
+            let titleContext = fingerprints.make(for: Data(title.utf8)).prefix(12)
+            previous = newContext == titleContext ? [] : ["\(image)-en-v2-balloons-\(configuration.cacheKey)-\(titleContext)"]
             return
         }
         let prefix = "\(image)-jp-"

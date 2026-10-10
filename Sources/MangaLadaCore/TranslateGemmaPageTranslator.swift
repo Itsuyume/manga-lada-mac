@@ -35,7 +35,8 @@ public struct TranslateGemmaPageTranslator: MangaPageTranslating {
         var instruction = prompt
         for attempt in 0..<2 {
             try Task.checkCancellation()
-            let response = try await client.text(user: instruction, outputTokens: blocks.count * 100)
+            let outputTokens = max(1024, blocks.reduce(0) { $0 + $1.originalText.count * 3 + 96 })
+            let response = try await client.text(user: instruction, outputTokens: outputTokens)
             do { return try MangaNumberedPageResponse.decode(response, blocks: blocks, selectedIDs: selectedIDs) }
             catch TranslationError.invalidPageResponse(let detail) {
                 guard attempt == 0 else { throw TranslationError.invalidPageResponse(detail) }

@@ -16,7 +16,7 @@ bundle_app() {
   cp "$BIN_DIR/$executable" "$app_dir/Contents/MacOS/$executable"
   for resource in "$BIN_DIR"/*.bundle; do
     if [[ "$executable" == "MangaLada" && -d "$resource" ]]; then
-      ditto "$resource" "$app_dir/Contents/Resources/$(basename "$resource")"
+      ditto --noextattr --norsrc "$resource" "$app_dir/Contents/Resources/$(basename "$resource")"
     fi
   done
   if [[ "$executable" == "MangaLada" ]]; then
@@ -62,12 +62,12 @@ PLIST
   codesign --verify --deep --strict "$app_dir"
   mkdir -p "$ROOT_DIR/dist"
   rm -rf "$ROOT_DIR/dist/$name.app"
-  ditto "$app_dir" "$ROOT_DIR/dist/$name.app"
+  ditto --noextattr --norsrc "$app_dir" "$ROOT_DIR/dist/$name.app"
   # Synced output folders can attach Finder metadata during the final copy.
   xattr -cr "$ROOT_DIR/dist/$name.app"
   codesign --verify --deep --strict "$ROOT_DIR/dist/$name.app"
   echo "$ROOT_DIR/dist/$name.app"
 }
 
-bundle_app "Manga translator" "MangaLada" "local.mangalada.mac" "translator" "0.2.47" "55"
+bundle_app "Manga translator" "MangaLada" "local.mangalada.mac" "translator" "0.2.48" "56"
 bundle_app "Manga Reader" "MangaReader" "local.mangareader.mac" "reader" "0.2.47" "55"

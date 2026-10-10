@@ -101,6 +101,7 @@ public struct TextBlock: Codable, Equatable, Identifiable, Sendable {
 }
 
 public struct PageTranslation: Codable, Equatable, Sendable {
+    public var recognitionWarnings: [String]?
     public var imageURL: URL
     public var imageFingerprint: String
     public var sourceLanguage: LanguageCode
@@ -120,7 +121,7 @@ public struct PageTranslation: Codable, Equatable, Sendable {
         sourceLanguage: LanguageCode,
         targetLanguage: LanguageCode,
         createdAt: Date = Date(),
-        blocks: [TextBlock]
+        blocks: [TextBlock], recognitionWarnings: [String]? = nil
     ) {
         self.imageURL = imageURL
         self.imageFingerprint = imageFingerprint
@@ -128,6 +129,7 @@ public struct PageTranslation: Codable, Equatable, Sendable {
         self.targetLanguage = targetLanguage
         self.createdAt = createdAt
         self.blocks = blocks
+        self.recognitionWarnings = recognitionWarnings
     }
 }
 

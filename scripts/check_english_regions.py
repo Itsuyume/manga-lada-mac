@@ -3,6 +3,7 @@ from copy import deepcopy
 from pathlib import Path
 from types import SimpleNamespace
 import sys
+import tempfile
 import unittest
 import uuid
 
@@ -13,6 +14,7 @@ import cv2
 import numpy as np
 from balloon_geometry import BalloonGeometry
 from english_regions import recognize_blocks, read_regions, observed_ink
+from japanese_engine_worker import JapaneseEngine
 
 
 def line(text, x, y, width=.22, height=.045):
@@ -103,6 +105,58 @@ class EnglishRegionsChecks(unittest.TestCase):
         mask, _ = observed_ink(image, observations)
         self.assertEqual(mask[33, 28], 255, "A recognized period survived cleanup")
         self.assertFalse(mask[:, 40:42].any(), "Nearby frame became punctuation")
+
+    def test_dark_paragraph_joins_without_crossing_a_frame(self):
+        image = np.full((600, 800, 3), 65, np.uint8)
+        entries = [line("FIRST SENTENCE", .1, .1, .65), line("CONTINUES HERE", .1, .16, .6), line("AND ENDS HERE", .1, .22, .6)]
+        for entry in entries:
+            cv2.putText(image, entry["originalText"], (80, int(entry["box"]["y"] * 600) + 23),
+                        cv2.FONT_HERSHEY_SIMPLEX, .75, (255,) * 3, 2)
+        mask, _ = observed_ink(image, entries)
+        geometry = BalloonGeometry(image, text_mask=mask, exclude_text_from_contours=True)
+        result = recognize_blocks(image, [], entries, geometry)
+        self.assertEqual([entry["originalText"] for entry in result], ["FIRST SENTENCE CONTINUES HERE AND ENDS HERE"])
+        cv2.line(image, (80, 92), (600, 92), (255,) * 3, 3)
+        separated = recognize_blocks(image, [], entries, BalloonGeometry(image, text_mask=mask, exclude_text_from_contours=True))
+        self.assertEqual([entry["originalText"] for entry in separated], ["FIRST SENTENCE", "CONTINUES HERE AND ENDS HERE"])
+
+    def test_glyph_exclusion_preserves_the_multiline_enclosure_and_source(self):
+        image = np.full((600, 800, 3), 160, np.uint8)
+        cv2.ellipse(image, (430, 235), (270, 110), 0, 0, 360, (255,) * 3, -1)
+        cv2.ellipse(image, (430, 235), (270, 110), 0, 0, 360, (0,) * 3, 3)
+        entries = [line("A NEAR EDGE WORD", .30, .24, .35, .05), line("AND ITS SENTENCE", .30, .30, .35, .05), line("STAYS TOGETHER", .30, .36, .35, .05)]
+        for entry in entries:
+            cv2.putText(image, entry["originalText"], (240, int(entry["box"]["y"] * 600) + 26),
+                        cv2.FONT_HERSHEY_SIMPLEX, .75, (0,) * 3, 2)
+        before = image.copy()
+        mask, _ = observed_ink(image, entries)
+        geometry = BalloonGeometry(image, text_mask=mask, exclude_text_from_contours=True)
+        result = recognize_blocks(image, [], entries, geometry)
+        self.assertEqual(len(result), 1)
+        self.assertIsNotNone(result[0]["balloonShape"])
+        self.assertGreater(result[0]["balloonShape"]["bounds"]["width"], .5)
+        self.assertTrue(np.array_equal(before, image))
+
+    def test_blank_page_and_detected_unreadable_text_take_distinct_paths(self):
+        # No models need to be constructed for this worker response. Exercise
+        # its actual atomic writer instead of mocking internal processing.
+        boundary = JapaneseEngine.__new__(JapaneseEngine)
+        boundary.cv2 = cv2
+        image = np.full((100, 200, 3), 120, np.uint8)
+        with tempfile.TemporaryDirectory() as directory:
+            destination = Path(directory) / "blank.png"
+            request = {"opticalCandidates": [], "destination": str(destination)}
+            result = boundary.read_english_page(image, [], request)
+            self.assertEqual(result, [])
+            self.assertTrue(np.array_equal(cv2.imread(str(destination)), image))
+            saved = destination.read_bytes()
+            unresolved = boundary.read_english_page(image, [SimpleNamespace(xyxy=[20, 20, 100, 60])], request)
+            self.assertEqual(unresolved, [], "Unreadable text acquired invented regions")
+            self.assertEqual(destination.read_bytes(), saved, "Abstention changed the source pixels")
+            self.assertFalse((destination.parent / "recognized.partial.png").exists())
+            request["destination"] = str(destination / "invalid.png")
+            with self.assertRaises(OSError):
+                boundary.read_english_page(image, [], request)
 
 
 if __name__ == "__main__":

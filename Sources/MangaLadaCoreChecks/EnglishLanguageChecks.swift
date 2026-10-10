@@ -6,6 +6,7 @@ enum EnglishLanguageChecks {
         try checkSettings()
         try checkOrderAndEffects()
         try await checkProvidersAndSelection()
+        try await checkLongParagraphAndRetry()
         print("English support passed: legacy/settings validation, reading order, effect negatives/repetition, all providers, selected IDs/metadata and Korean response validation")
     }
 
@@ -15,6 +16,7 @@ enum EnglishLanguageChecks {
         let file = root.appendingPathComponent("settings.json")
         try check(try LocalTranslatorConfiguration.load(configURL: file, environment: [:]).sourceLanguage == .japanese, "Legacy default changed")
         var english = LocalTranslatorConfiguration(sourceLanguage: .english)
+        try check(english.usesPreviousPageContext, "English specialist discarded book context")
         try english.save(to: file)
         try check(try LocalTranslatorConfiguration.load(configURL: file, environment: [:]) == english, "English settings did not round-trip")
         try check(english.requiresRetranslation(comparedTo: LocalTranslatorConfiguration()), "Language change did not refresh the page")
@@ -88,6 +90,30 @@ enum EnglishLanguageChecks {
 
     private static func reply(_ text: String) throws -> (Int, Data) {
         (200, try JSONEncoder().encode(NetworkBoundaryChecks.ChatReply(message: .init(role: "assistant", content: text))))
+    }
+
+    private static func checkLongParagraphAndRetry() async throws {
+        let config = URLSessionConfiguration.ephemeral; config.protocolClasses = [FixtureProtocol.self]
+        let session = URLSession(configuration: config)
+        defer { session.invalidateAndCancel() }
+        let source = String(repeating: "A long narration continues with its own meaning. ", count: 30)
+        let block = TextBlock(box: TextBox(x: 0.1, y: 0.1, width: 0.8, height: 0.4), originalText: source, textKind: .caption)
+        FixtureProtocol.state.install { request in
+            let body = try JSONDecoder().decode(NetworkBoundaryChecks.GemmaProbe.self, from: NetworkBoundaryChecks.body(request))
+            try check(body.options.num_predict >= source.count * 2, "A single long region retained the tiny region-count output budget")
+            try check(body.messages[0].content.contains("The ruler speaks casually; the attendant is deferential."), "Book context was dropped")
+            if FixtureProtocol.state.count == 1 { return try reply("[R0] 은빛 호수(銀湖)") }
+            return try reply("[R0] 은빛 호수에 관한 긴 나레이션.")
+        }
+        let translator = TranslateGemmaPageTranslator(session: session, sourceLanguage: .english)
+        let translated = try await translator.translatePage([block], previousContext: "The ruler speaks casually; the attendant is deferential.")
+        try check(FixtureProtocol.state.count == 2 && translated[0].translatedText == "은빛 호수에 관한 긴 나레이션.", "Invalid mixed-script result was not retried and validated")
+        try check(translated[0].id == block.id && translated[0].box == block.box && translated[0].originalText == source,
+                  "Length/retry policy changed source identity or geometry")
+        FixtureProtocol.state.install { _ in try reply("[R0] unchanged English") }
+        do { _ = try await translator.translatePage([block]); throw BoundaryCheckError.failed("Repeated invalid translation was silently saved") }
+        catch TranslationError.invalidPageResponse { }
+        try check(FixtureProtocol.state.count == 2, "Invalid output was retried indefinitely")
     }
     private static func check(_ condition: Bool, _ message: String) throws { try NetworkBoundaryChecks.check(condition, message) }
 }

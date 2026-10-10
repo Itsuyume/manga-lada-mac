@@ -12,7 +12,8 @@ public struct ProcessedMangaPage: Sendable {
     public var warnings: [String] = []
     public var reviewWarnings: [String] {
         let uncertain = translation.blocks.filter { $0.recognitionAlternatives != nil && $0.keepsOriginal != true }.count
-        return warnings + (uncertain == 0 ? [] : ["글자를 확정하지 못한 \(uncertain)곳은 원본을 유지했습니다. 검수창에서 원문 후보를 확인해주세요."])
+        return (translation.recognitionWarnings ?? []) + warnings
+            + (uncertain == 0 ? [] : ["글자를 확정하지 못한 \(uncertain)곳은 원본을 유지했습니다. 검수창에서 원문 후보를 확인해주세요."])
     }
     public var primaryTranslation: PageTranslation?
 }
@@ -105,7 +106,8 @@ public final class MangaPageProcessor {
         let migrated = storedPrior.flatMap { RecognitionCacheMigration.reuse($0, for: recognized.blocks, preservingOriginalOnly: force,
                                                                             requiresMatchingSource: configuration.sourceLanguage == .japanese && configuration.japaneseOCR.usesLetteringOCR) }
         let baseline = PageTranslation(imageURL: imageURL, imageFingerprint: keys.translation,
-            sourceLanguage: configuration.sourceLanguage, targetLanguage: .korean, blocks: migrated ?? recognized.blocks)
+            sourceLanguage: configuration.sourceLanguage, targetLanguage: .korean, blocks: migrated ?? recognized.blocks,
+            recognitionWarnings: recognized.recognitionWarnings)
         let selectedClean = try await manualCleanImage(for: baseline, sourceCleanURL: cleanURL)
         let blocks: [TextBlock]
         if let migrated, migrated.allSatisfy({ $0.keepsOriginal == true || (!force && !$0.translatedText.isEmpty) }) {
@@ -127,7 +129,8 @@ public final class MangaPageProcessor {
         try Task.checkCancellation()
         let translation = PageTranslation(imageURL: imageURL, imageFingerprint: keys.translation,
                                           sourceLanguage: configuration.sourceLanguage, targetLanguage: .korean,
-                                          blocks: RecognitionCacheMigration.verifyPunctuation(in: blocks, recognized: recognized.blocks))
+                                          blocks: RecognitionCacheMigration.verifyPunctuation(in: blocks, recognized: recognized.blocks),
+                                          recognitionWarnings: recognized.recognitionWarnings)
         try cache.save(translation)
         await status("말풍선·효과음에 글자 맞추는 중")
         return MangaPageDraft(translation: translation, cleanImageURL: selectedClean, wasCached: false)
