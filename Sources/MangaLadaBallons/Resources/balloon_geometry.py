@@ -51,13 +51,14 @@ class BalloonGeometry:
     def enclosure(self, box: dict, font_size: float) -> tuple | None:
         """Keep every lobe in a pixel mask until source columns have been separated."""
         x, y, w, h = (box[key] * scale for key, scale in (("x", self.width), ("y", self.height), ("width", self.width), ("height", self.height)))
-        if w < 1 or h < 1:
+        if not np.isfinite((x, y, w, h, font_size)).all() or w < 1 or h < 1:
             return None
         text_points = self.text_points(x, y, w, h)
-        patch = self.source[max(0, int(y)):min(self.height, int(y + h)), max(0, int(x)):min(self.width, int(x + w))]
+        left, top = max(0, int(x)), max(0, int(y))
+        patch = self.source[top:min(self.height, int(y + h)), left:min(self.width, int(x + w))]
         if patch.size == 0:
             return None
-        glyphs = self.glyphs(int(x), int(y), patch.shape[1], patch.shape[0])
+        glyphs = self.glyphs(left, top, patch.shape[1], patch.shape[0])
         background = source_background(patch, glyphs)
         if background is None:
             return None

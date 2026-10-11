@@ -11,6 +11,9 @@ from erase_supplemental_text import glyph_mask, complete_confirmed_glyph_mask
 from text_region_geometry import intersection_area, validate_box, rectangular_enclosure
 
 
+PAGE_EDGE_MARGIN = 4
+
+
 def _ordered(lines: list[dict]) -> list[dict]:
     return sorted(lines, key=lambda line: (line["box"]["y"], line["box"]["x"]))
 
@@ -198,20 +201,31 @@ def read_regions(regions: list[dict], observations: list[dict]) -> list[dict]:
 def observed_ink(image, observations: list[dict]):
     _validate_observations(observations)
     height, width = image.shape[:2]
+    # The bounded selector rejects strokes touching its crop edge (panel borders).
+    # At the page edge the crop cannot grow, so a line drawn against the edge of a
+    # split strip would be rejected; a background-coloured margin restores room.
+    pad = PAGE_EDGE_MARGIN
+    ring = np.concatenate((image[0], image[-1], image[:, 0], image[:, -1])).reshape(-1, image.shape[2])
+    fill = tuple(int(value) for value in np.median(ring, axis=0))
+    padded = cv2.copyMakeBorder(image, pad, pad, pad, pad, cv2.BORDER_CONSTANT, value=fill)
+    padded_height, padded_width = padded.shape[:2]
     regions = []
     for line in observations:
         left, top, right, bottom = source_rectangle(line["box"], width, height)
         # Native OCR boxes touch cap-height glyphs. Give the existing bounded
         # stroke selector background samples without granting a filled rectangle.
         padding = max(3, int((bottom - top) * .25))
-        left, top = max(0, left - padding), max(0, top - padding)
-        right, bottom = min(width, right + padding), min(height, bottom + padding)
-        regions.append({"x": left / width, "y": top / height,
-                        "width": (right - left) / width, "height": (bottom - top) / height})
+        left, top = max(0, left - padding + pad), max(0, top - padding + pad)
+        right = min(padded_width, right + padding + pad)
+        bottom = min(padded_height, bottom + padding + pad)
+        regions.append({"x": left / padded_width, "y": top / padded_height,
+                        "width": (right - left) / padded_width, "height": (bottom - top) / padded_height})
     # Native line evidence includes one-pixel periods/dots in small scans.
     # Keep the Japanese/manual selector's stricter default component size.
-    mask, boxes = glyph_mask(image, regions, bounded=True, minimum_component_area=1)
+    mask, boxes = glyph_mask(padded, regions, bounded=True, minimum_component_area=1)
     completed = mask.copy()
     for left, top, right, bottom in boxes:
-        completed[top:bottom, left:right] |= complete_confirmed_glyph_mask(image[top:bottom, left:right], mask[top:bottom, left:right])
-    return completed, boxes
+        completed[top:bottom, left:right] |= complete_confirmed_glyph_mask(padded[top:bottom, left:right], mask[top:bottom, left:right])
+    page_boxes = [[max(0, left - pad), max(0, top - pad), min(width, right - pad), min(height, bottom - pad)]
+                  for left, top, right, bottom in boxes]
+    return np.ascontiguousarray(completed[pad:pad + height, pad:pad + width]), page_boxes
