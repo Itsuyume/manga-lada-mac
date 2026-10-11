@@ -91,18 +91,23 @@ extension AppState {
                     await MainActor.run { if self?.sessionID == id { self?.statusMessage = message } }
                 }
                 guard sessionID == id else { return }
-                recordResult(result, at: index); failures.removeValue(forKey: index); imageRevision += 1
-                if currentIndex == index {
-                    isSelectingRegion = false; selectedRegion = nil; mode = .translated
-                    focusBlock(result.translation.blocks.first { ImageRegionSelection.containsCenter(box, of: $0.box) }?.id)
-                }
-                if var updated = outputBook {
-                    updated.manifest.completedPages = completed.sorted(); updated.manifest.failures = failures
-                    try bookStore.save(updated); outputBook = updated
-                }
-                statusMessage = "지정한 영역을 번역하고 페이지를 저장했습니다."
+                try recordRegionResult(result, box: box, at: index)
             } catch is CancellationError { statusMessage = "영역 번역을 중단했습니다. 기존 결과는 유지됩니다." }
             catch { errorMessage = error.localizedDescription; statusMessage = "지정 영역 처리 실패 · 영역을 조절해주세요." }
         }
+    }
+
+    /// Results always go to their own page; selection UI only resets when the user is still there.
+    private func recordRegionResult(_ result: ProcessedMangaPage, box: TextBox, at index: Int) throws {
+        recordResult(result, at: index); failures.removeValue(forKey: index); imageRevision += 1
+        if currentIndex == index {
+            isSelectingRegion = false; selectedRegion = nil; mode = .translated
+            focusBlock(result.translation.blocks.first { ImageRegionSelection.containsCenter(box, of: $0.box) }?.id)
+        }
+        if var updated = outputBook {
+            updated.manifest.completedPages = completed.sorted(); updated.manifest.failures = failures
+            try bookStore.save(updated); outputBook = updated
+        }
+        statusMessage = "지정한 영역을 번역하고 페이지를 저장했습니다."
     }
 }
