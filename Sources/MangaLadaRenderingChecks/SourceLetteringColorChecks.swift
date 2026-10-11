@@ -155,8 +155,13 @@ extension MangaLadaRenderingChecks {
         let output = try renderer.render(image: clean, blocks: [block], backgroundStyle: .none)
         try saveColourFixture(output, at: root.appendingPathComponent("explicit-balloon-rows.png"))
         let pixels = try imagePixels(output), before = try imagePixels(clean)
-        let rows = (0..<320).map { y in (100..<430).contains { x in pixels[y * 500 + x] != before[y * 500 + x] } }
-        let bands = rows.enumerated().filter { $0.element && ($0.offset == 0 || !rows[$0.offset - 1]) }.count
+        var bands = 0, previousHasInk = false
+        for y in 0..<320 {
+            var hasInk = false
+            for x in 100..<430 where pixels[y * 500 + x] != before[y * 500 + x] { hasInk = true; break }
+            if hasInk && !previousHasInk { bands += 1 }
+            previousHasInk = hasInk
+        }
         try require(bands == 2, "Saved balloon PNG ignored the two explicit dialogue lines.")
     }
 }
