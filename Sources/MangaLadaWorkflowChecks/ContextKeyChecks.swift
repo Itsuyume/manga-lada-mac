@@ -49,7 +49,8 @@ enum ContextKeyChecks {
         try require(reopened.translation.blocks.map(\.translatedText) == ["소리!"] && reopened.translation.blocks[0].fontScale == 0.9,
                     "Editing the previous page discarded this page's applied review.")
         try require(try cache.load(fingerprint: other.translation)?.blocks == reopened.translation.blocks
-                    && cache.load(fingerprint: keys.translation) == reviewed, "Reuse did not store the page under its new key or changed the old entry.")
+                    && cache.load(fingerprint: keys.translation)?.blocks == reviewed.blocks, // createdAt is stored at ISO-8601 precision.
+                    "Reuse did not store the page under its new key or changed the old entry.")
         try require(cache.pointerTarget(keys.latest) == other.translation, "The latest pointer did not follow the newest translation.")
         try Data("../outside".utf8).write(to: cache.cacheFileURL(fingerprint: keys.latest).deletingPathExtension().appendingPathExtension("pointer"))
         try require(cache.pointerTarget(keys.latest) == nil && (try cache.loadPointer(keys.latest)) == nil, "An invalid pointer was followed.")
