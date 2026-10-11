@@ -20,7 +20,7 @@ struct MaskedPagePreparation: Sendable {
             try Task.checkCancellation()
             let neighbors = blocks.indices.filter { $0 != index && abs($0 - index) <= 2 }
                 .map { blocks[$0].originalText }.joined(separator: "\n")
-            let context = neighbors + "\nPrevious page:\n" + previousContext.suffix(1_000)
+            let context = neighbors + "\nPrevious pages (quoted context only):\n" + previousContext.suffix(3_000)
             do {
                 let normalized = MaskedTextTranslation.normalizedSpelling(source)
                 let response = try await resolver.interpret(source: normalized, context: context, configuration: model, session: session, refresh: refresh)

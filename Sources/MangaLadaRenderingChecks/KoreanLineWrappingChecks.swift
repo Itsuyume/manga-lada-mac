@@ -18,6 +18,18 @@ extension MangaLadaRenderingChecks {
         }
         let natural = KoreanLineWrapper.balanced(text, widths: [60, 60], allowWordBreaks: true, measure: measure)
         try require(natural == ["고마워,", "할아버지..."], "Unnecessary word breaks replaced natural wrapping.")
+        for text in ["고마워,\n할아버지...", "고마워,\r\n할아버지..."] {
+            for splitWords in [false, true] {
+                try require(KoreanLineWrapper.balanced(text, widths: [60, 90], allowWordBreaks: splitWords, measure: measure)
+                            == ["고마워,", "할아버지..."], "Explicit user line breaks were rebalanced.")
+            }
+        }
+        try require(KoreanLineWrapper.balanced("안녕\n\n친구", widths: [50, 50, 50], allowWordBreaks: true, measure: measure)
+                    == ["안녕", "", "친구"], "Intentional empty line disappeared.")
+        for widths: [CGFloat] in [[90], [90, 20], [90, 0], [90, .infinity], [90, .nan]] {
+            try require(KoreanLineWrapper.balanced("고마워,\n할아버지...", widths: widths, allowWordBreaks: true, measure: measure).isEmpty,
+                        "Explicit layout was silently rewrapped or used invalid rows.")
+        }
         print("Curved wrapping checks passed: empty/invalid rows, narrower middle row, no lost text, no single-letter fragments, natural word breaks")
     }
 }

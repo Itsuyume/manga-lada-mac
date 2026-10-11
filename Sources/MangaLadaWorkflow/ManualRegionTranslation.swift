@@ -13,6 +13,7 @@ package struct ManualRegionTranslation {
 
     func apply(to draft: MangaPageDraft, box: TextBox, kind: MangaTextKind, destinationURL: URL,
                configuration: LocalTranslatorConfiguration, typography: MangaTypography,
+               previousContext: String = "",
                status: @escaping @Sendable (String) async -> Void) async throws -> ProcessedMangaPage {
         let language = draft.translation.sourceLanguage
         await status("지정 영역 · \(language.localizedName) 인식 중")
@@ -42,7 +43,8 @@ package struct ManualRegionTranslation {
         let selectedIDs = Set(recognized.map(\.id)), replacedIDs = Set(replaced.map(\.id))
         let context = MangaReadingOrder.sorted(draft.translation.blocks.filter { !replacedIDs.contains($0.id) } + recognized, sourceLanguage: language)
         var translation = draft.translation
-        translation.blocks = try await pipeline.forSourceLanguage(language).translateSelected(selectedIDs, in: context, configuration: configuration)
+        translation.blocks = try await pipeline.forSourceLanguage(language).translateSelected(selectedIDs, in: context,
+            configuration: configuration, previousContext: previousContext)
         try Task.checkCancellation()
         let translated = translation.blocks.filter { selectedIDs.contains($0.id) }
         let cleanURL = engine.inpaintedImageURL(runID: translation.imageFingerprint + "-manual")

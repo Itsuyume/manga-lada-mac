@@ -9,6 +9,7 @@ struct MangaLadaCoreChecks {
         try SoundEffectTranslationChecks.run()
         try JapaneseHorizontalOCRChecks.run()
         try ReadingBehaviorChecks.run()
+        try TranslationContextChecks.run()
         try SelectionGeometryChecks.run()
         try TranslationReviewChecks.run()
         try ModelRetentionChecks.run()
