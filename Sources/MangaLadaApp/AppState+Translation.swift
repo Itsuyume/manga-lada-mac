@@ -32,6 +32,7 @@ extension AppState {
             let warnings = results.values.filter { !$0.reviewWarnings.isEmpty || $0.translation.blocks.contains { $0.maskedTextInterpretation != nil } }.count
             statusMessage = failures.isEmpty ? "번역 저장 완료 · \(completed.count)/\(pages.count)페이지" : "처리 완료 · 성공 \(completed.count) · 실패 \(failures.count)"
             if warnings > 0 { statusMessage += " · 검수 안내 \(warnings)페이지" }
+            if isBookComplete { statusMessage += " · ⌘S 전체 저장" }
         } catch is CancellationError { if sessionID == session { statusMessage = "중단됨 · 완성한 \(results.count)페이지는 저장되어 있습니다." } }
         catch { if sessionID == session { statusMessage = "번역을 시작하지 못했습니다."; errorMessage = error.localizedDescription } }
     }

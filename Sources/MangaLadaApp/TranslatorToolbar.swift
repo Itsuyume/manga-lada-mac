@@ -63,12 +63,17 @@ struct TranslatorActions: View {
     }
     private var saveMenu: some View {
         Menu {
+            Button("전체 저장…", systemImage: "square.and.arrow.down.on.square") { state.exportBook() }
+                .disabled(!state.canExportBook).help("모든 페이지 번역이 끝나면 Finder에서 위치를 골라 한 번에 저장합니다.")
+            Divider()
             Button("완성본 저장 폴더 지정…") { state.chooseOutputFolder() }.disabled(state.isBusy)
             Button("결과 폴더 보기") { state.revealOutput() }
             Divider()
             Button("현재 PNG 저장…") { state.exportCurrentPNG() }.disabled(state.currentResult == nil)
             Button("완성본 CBZ 저장…") { state.exportCBZ() }.disabled(state.results.count != state.pages.count || state.results.isEmpty || state.isBusy || !state.failures.isEmpty)
-        } label: { Label("저장", systemImage: "square.and.arrow.down") }.fixedSize()
+        } label: { Label("저장", systemImage: "square.and.arrow.down") } primaryAction: {
+            if state.canExportBook { state.exportBook() } else { state.revealOutput() }
+        }.fixedSize().help(state.canExportBook ? "전체 저장 · ⌘S" : "저장 메뉴 · 번역이 모두 끝나면 전체 저장할 수 있습니다.")
     }
     private var allPagesComplete: Bool { !state.pages.isEmpty && state.results.count == state.pages.count && state.failures.isEmpty }
     private var translationButtonTitle: String {
