@@ -47,9 +47,18 @@ public final class MangaPageProcessor {
             result = try PageImageRendering.render(translation: draft.translation, cleanImageURL: draft.cleanImageURL,
                 destinationURL: destinationURL, typography: typography, wasCached: draft.wasCached)
         } catch { throw MangaPageFailure(draft: draft, cause: error) }
-        guard resolved.sourceLanguage == .japanese, resolved.enhanceSoundEffects else { return result }
+        return try await supplementingEffects(of: result, configuration: resolved, typography: typography,
+                                              previousContext: previousContext, force: force, status: status)
+    }
+
+    /// The optional effects pass runs on every path that saves a page, so a drag-region translation
+    /// never drops the effects an earlier full pass added.
+    private func supplementingEffects(of result: ProcessedMangaPage, configuration: LocalTranslatorConfiguration, typography: MangaTypography,
+                                      previousContext: String, force: Bool,
+                                      status: @escaping @Sendable (String) async -> Void) async throws -> ProcessedMangaPage {
+        guard configuration.sourceLanguage == .japanese, configuration.enhanceSoundEffects else { return result }
         do {
-            return try await SupplementalPageTranslation(engine: engine, recognitionSession: recognitionSession, cache: cache, pipeline: textTranslator).apply(to: result, configuration: resolved,
+            return try await SupplementalPageTranslation(engine: engine, recognitionSession: recognitionSession, cache: cache, pipeline: textTranslator).apply(to: result, configuration: configuration,
                 typography: typography, previousContext: previousContext, force: force, status: status)
         } catch is CancellationError { throw CancellationError() }
         catch {
@@ -69,6 +78,7 @@ public final class MangaPageProcessor {
         let storedCurrent = try cache.load(fingerprint: keys.translation)
         if !force, var translated = storedCurrent, FileManager.default.fileExists(atPath: cleanURL.path) {
             await status("캐시에서 불러와 글자 배치 중")
+            try cache.savePointer(keys.latest, to: keys.translation)
             translated.imageURL = imageURL
             if RecognitionCacheMigration.hasUnverifiedPunctuation(in: translated.blocks) {
                 let recognized = try cache.load(fingerprint: keys.recognition)
@@ -83,7 +93,9 @@ public final class MangaPageProcessor {
                                                retention: configuration.ollama.retention, ocrBackend: configuration.japaneseOCR,
                                                sourceLanguage: configuration.sourceLanguage, status: status)
         if configuration.sourceLanguage == .japanese { recognized.blocks = JapaneseSpeechGrouping.resolve(recognized.blocks) }
-        var storedPrior = try storedCurrent ?? previousTranslation(keys.previous)
+        // A changed previous page or translation order changes the context key; the pointer still finds
+        // this page's reviewed translation so applied edits are reused instead of re-translated.
+        var storedPrior = try storedCurrent ?? cache.loadPointer(keys.latest) ?? previousTranslation(keys.previous)
         if configuration.sourceLanguage == .japanese, storedCurrent == nil, configuration.japaneseOCR.usesLetteringOCR,
            let oldOCR = try previousTranslation(keys.previousRecognition), var stored = storedPrior {
             stored.blocks = RecognitionCacheMigration.recordSourceEdits(in: stored.blocks, recognized: oldOCR.blocks)
@@ -116,6 +128,9 @@ public final class MangaPageProcessor {
             await status("기존 번역 문구 재사용 · 말풍선 배치 계산 중"); blocks = migrated
         } else {
             await status("\(configuration.provider.displayName) · 페이지 문맥 번역 중")
+            // A page that fails here can still be completed by review under this key; point to it only
+            // when no earlier translation of the page exists, so a failed retry never hides that one.
+            try claimLatestPointer(keys)
             let reviewed = Dictionary(uniqueKeysWithValues: (migrated ?? []).filter {
                 $0.keepsOriginal == true || (!force && !$0.translatedText.isEmpty)
             }.map { ($0.id, $0) })
@@ -134,8 +149,13 @@ public final class MangaPageProcessor {
                                           blocks: RecognitionCacheMigration.verifyPunctuation(in: blocks, recognized: recognized.blocks),
                                           recognitionWarnings: recognized.recognitionWarnings)
         try cache.save(translation)
+        try cache.savePointer(keys.latest, to: keys.translation)
         await status("말풍선·효과음에 글자 맞추는 중")
         return MangaPageDraft(translation: translation, cleanImageURL: selectedClean, wasCached: false)
+    }
+    private func claimLatestPointer(_ keys: JapanesePageKeys) throws {
+        let current = cache.pointerTarget(keys.latest).map { FileManager.default.fileExists(atPath: cache.cacheFileURL(fingerprint: $0).path) } ?? false
+        if !current { try cache.savePointer(keys.latest, to: keys.translation) }
     }
     private func previousTranslation(_ keys: [String]) throws -> PageTranslation? {
         for key in keys { if let value = try cache.load(fingerprint: key) { return value } }
@@ -159,8 +179,10 @@ public final class MangaPageProcessor {
             previousContext: "", bookTitle: bookTitle, status: status)
         let draft = try await preparePage(imageURL: imageURL, configuration: resolved, previousContext: "", bookTitle: bookTitle,
                                            force: false, status: status)
-        return try await ManualRegionTranslation(engine: engine, session: recognitionSession, cache: cache, pipeline: textTranslator).apply(
+        let manual = try await ManualRegionTranslation(engine: engine, session: recognitionSession, cache: cache, pipeline: textTranslator).apply(
             to: draft, box: box, kind: kind, destinationURL: destinationURL, configuration: resolved, typography: typography, status: status)
+        return try await supplementingEffects(of: manual, configuration: resolved, typography: typography,
+                                              previousContext: "", force: false, status: status)
     }
 
     public func applyEdits(to result: ProcessedMangaPage, translation: PageTranslation,

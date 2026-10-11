@@ -8,6 +8,8 @@ package struct JapanesePageKeys {
     package let reusableRecognition: [String]
     package let previousRecognition: [String]
     package let previous: [String]
+    /// Context-independent name of the pointer to this page's newest translation.
+    package let latest: String
     private static let translationVersion = 40
     private static let recognitionVersion = 39
     package init(imageURL: URL, configuration: LocalTranslatorConfiguration, context: String, title: String) throws {
@@ -17,6 +19,7 @@ package struct JapanesePageKeys {
         let newContext = configuration.usesPreviousPageContext ? oldContext : fingerprints.make(for: Data(title.utf8)).prefix(12)
         if configuration.sourceLanguage == .english {
             translation = "\(image)-en-v2-balloons-\(configuration.cacheKey)-\(newContext)"
+            latest = "\(image)-en-v2-balloons-\(configuration.cacheKey)-latest"
             recognitionBeforeCleanupUpdate = "\(image)-en-ocr-v2-balloons-ink-v1"
             recognition = "\(image)-en-ocr-v3-balloons-ink-v3"
             reusableRecognition = []
@@ -45,6 +48,7 @@ package struct JapanesePageKeys {
         let baseTranslation = "\(prefix)v\(Self.translationVersion)-\(suffix)\(newContext)"
         // Cleanup has its own key. Keep committed/pending review fingerprints stable.
         translation = baseTranslation + ocrSuffix
+        latest = "\(prefix)v\(Self.translationVersion)-\(suffix)latest\(ocrSuffix)"
         let baseRecognition = prefix + "ocr-v\(Self.recognitionVersion)-balloons"
         recognitionBeforeCleanupUpdate = baseRecognition + ocrSuffix
         recognition = recognitionBeforeCleanupUpdate + "-ink-v5"

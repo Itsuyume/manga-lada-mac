@@ -42,7 +42,11 @@ struct LetteringControls: View {
     private var percent: Double { (block.fontScale ?? 1) * 100 }
     private var sizeBinding: Binding<Double> { Binding(get: { percent }, set: { setPercent($0) }) }
     private func setPercent(_ value: Double) {
-        state.editReviewBlock(block.id) { $0.fontScale = value / 100 }
+        // Typed values may sit between steps (e.g. 42%); keep every button step inside the valid range.
+        guard value.isFinite else { return }
+        let range = LetteringPreferences.percentRange
+        let clamped = min(max(value, range.lowerBound), range.upperBound)
+        state.editReviewBlock(block.id) { $0.fontScale = clamped / 100 }
         state.scheduleLetteringPreview()
     }
 }

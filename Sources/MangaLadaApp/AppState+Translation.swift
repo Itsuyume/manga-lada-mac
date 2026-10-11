@@ -32,6 +32,7 @@ extension AppState {
             let warnings = results.values.filter { !$0.reviewWarnings.isEmpty || $0.translation.blocks.contains { $0.maskedTextInterpretation != nil } }.count
             statusMessage = failures.isEmpty ? "번역 저장 완료 · \(completed.count)/\(pages.count)페이지" : "처리 완료 · 성공 \(completed.count) · 실패 \(failures.count)"
             if warnings > 0 { statusMessage += " · 검수 안내 \(warnings)페이지" }
+            if isBookComplete { statusMessage += " · ⌘S 전체 저장" }
         } catch is CancellationError { if sessionID == session { statusMessage = "중단됨 · 완성한 \(results.count)페이지는 저장되어 있습니다." } }
         catch { if sessionID == session { statusMessage = "번역을 시작하지 못했습니다."; errorMessage = error.localizedDescription } }
     }
@@ -69,7 +70,10 @@ extension AppState {
         let edited: ProcessedMangaPage
         if let result = currentResult {
             edited = try processor.applyEdits(to: result, translation: translation, typography: typography)
-        } else if let draft = pendingPages[currentIndex], let book = outputBook {
+        } else if let draft = pendingPages[currentIndex] {
+            guard let outputRoot, let sourceURL else { errorMessage = "완성본 저장 폴더를 먼저 지정해주세요."; return }
+            let book = try outputBook ?? bookStore.prepare(sourceURL: sourceURL, title: title, pages: pages, outputRoot: outputRoot)
+            outputBook = book
             edited = try processor.finishReview(of: draft, translation: translation, destinationURL: book.pageURL(at: currentIndex), typography: typography)
         } else { return }
         try finishReview(edited, at: currentIndex)

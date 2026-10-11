@@ -49,6 +49,11 @@ extension AppState {
     func saveReview(_ edited: PageTranslation, comparedTo saved: PageTranslation, at index: Int) throws {
         try reviewStore.save(edited, comparedTo: saved)
         reviewDrafts[index] = edited == saved ? nil : edited
+        // Any edit invalidates a shown preview: refresh it, or drop it when nothing differs from the
+        // saved page or a job is running (the preview task does not render while busy).
+        if index == currentIndex, letteringPreviewURL != nil || letteringPreviewTask != nil {
+            if reviewDrafts[index] == nil || isBusy { clearLetteringPreview() } else { scheduleLetteringPreview() }
+        }
     }
 
     func discardCurrentReview() {
@@ -62,6 +67,7 @@ extension AppState {
     }
 
     func recordResult(_ result: ProcessedMangaPage, at index: Int) {
+        if index == currentIndex { clearLetteringPreview() } // A new saved image supersedes the preview.
         results[index] = result; pendingPages.removeValue(forKey: index)
         restoreReview(for: result.translation, at: index)
     }

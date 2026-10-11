@@ -190,7 +190,10 @@ public struct TranslatedImageRenderer {
             transform.concat()
         }
 
-        let originalTextRect = pixelRect(for: block.textKind == .soundEffect ? LetteringPreferences.layoutBounds(for: block) : block.box, imageSize: imageSize)
+        // Titles keep their source box unless the user placed them explicitly (배치 영역 드래그).
+        let layoutBox = block.textKind == .soundEffect ? LetteringPreferences.layoutBounds(for: block)
+            : block.textKind == .title ? block.textLayoutBounds ?? block.box : block.box
+        let originalTextRect = pixelRect(for: layoutBox, imageSize: imageSize)
         if block.textKind == .soundEffect {
             try SoundEffectRenderer.draw(block, in: originalTextRect, typography: typography, scale: fontScale, source: sourceLettering)
             return

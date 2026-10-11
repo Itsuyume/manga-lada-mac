@@ -2,6 +2,7 @@ import Foundation
 
 public enum TranslationCacheError: Error, Equatable {
     case invalidCacheDirectory(URL)
+    case invalidPointer
 }
 
 public struct TranslationCache {
@@ -46,6 +47,32 @@ public struct TranslationCache {
             return
         }
         try fileManager.removeItem(at: url)
+    }
+
+    /// Records which entry holds a page's newest translation under a context-independent name, so a
+    /// changed neighbouring page (or a different translation order) finds the reviewed page again.
+    public func savePointer(_ name: String, to fingerprint: String) throws {
+        guard Self.isValidName(name), Self.isValidName(fingerprint) else { throw TranslationCacheError.invalidPointer }
+        try ensureDirectory()
+        try Data(fingerprint.utf8).write(to: pointerURL(name), options: .atomic)
+    }
+
+    /// The entry a pointer names, or nil when there is no usable pointer or its entry no longer exists.
+    /// A pointer is only a lookup hint; the entry it names is decoded with the usual error reporting.
+    public func loadPointer(_ name: String) throws -> PageTranslation? {
+        guard let target = pointerTarget(name) else { return nil }
+        return try load(fingerprint: target)
+    }
+
+    public func pointerTarget(_ name: String) -> String? {
+        guard Self.isValidName(name), let data = fileManager.contents(atPath: pointerURL(name).path) else { return nil }
+        let target = String(decoding: data, as: UTF8.self)
+        return Self.isValidName(target) ? target : nil
+    }
+
+    private func pointerURL(_ name: String) -> URL { cacheDirectory.appendingPathComponent("\(name).pointer") }
+    private static func isValidName(_ name: String) -> Bool {
+        !name.isEmpty && name.count <= 512 && !name.contains("/") && !name.hasPrefix(".") && !name.contains(where: \.isNewline)
     }
 
     public func cacheFileURL(fingerprint: String) -> URL {

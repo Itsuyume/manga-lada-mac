@@ -93,6 +93,8 @@ def glyph_mask(image: np.ndarray, regions: list[dict], bounded: bool = False,
         x1, y1 = max(0, int(seed_x - margin_x)), max(0, int(seed_y - margin_y))
         x2, y2 = min(width, int(seed_x + seed_w + margin_x)), min(height, int(seed_y + seed_h + margin_y))
         crop = gray[y1:y2, x1:x2]
+        if crop.size == 0:
+            raise ValueError("Text-mask search area is smaller than one pixel")
         border = np.concatenate((crop[0], crop[-1], crop[:, 0], crop[:, -1]))
         binary = foreground_mask(crop, float(np.median(border)))
         _, labels, stats, _ = cv2.connectedComponentsWithStats(binary, 8)

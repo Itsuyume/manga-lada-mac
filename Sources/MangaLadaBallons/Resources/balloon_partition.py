@@ -40,7 +40,7 @@ def separate_shared_balloons(blocks: list[dict]) -> None:
             top = max(top, (y + oy) / 2) if y >= oy else top
         rows = [{"y": row["y"], "left": max(left, row["left"]), "right": min(right, row["right"])}
                 for row in shape["rows"] if top <= row["y"] <= bottom and min(right, row["right"]) > max(left, row["left"])]
-        if not rows:
+        if len(rows) < 3:
             block["balloonShape"] = None
             continue
         left, right = min(row["left"] for row in rows), max(row["right"] for row in rows)

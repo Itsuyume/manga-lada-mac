@@ -24,6 +24,8 @@ def dotted_contours(source: np.ndarray, text_mask: np.ndarray | None,
         return []
     patch = source[top:bottom, left:right]
     scale = min(1.0, 24 / font_size, 640 / max(patch.shape[:2]))
+    if round(min(patch.shape[:2]) * scale) < 1:
+        return []
     patch = cv2.resize(patch, None, fx=scale, fy=scale, interpolation=cv2.INTER_AREA)
     size = font_size * scale
     ink = (cv2.cvtColor(patch, cv2.COLOR_BGR2GRAY) < 150).astype(np.uint8) * 255

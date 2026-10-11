@@ -34,9 +34,10 @@ struct MangaLadaImportChecks {
         try await checkPDF(root: root, loader: loader)
         let exported = root.appendingPathComponent("export.cbz")
         try await checkCBZExport(book: book, destination: exported, loader: loader)
+        try await BookExportChecks.run(image: source.appendingPathComponent("2.png"), root: root, loader: loader)
         try checkBookOutput(source: source, book: book, root: root)
         if let path = CommandLine.arguments.dropFirst().first { try checkRAR(URL(fileURLWithPath: path), root: root) }
-        print("MangaLadaImportChecks passed: folders, natural order, ZIP/CBZ, 7z/CB7, TAR, PDF, CBZ export, output isolation")
+        print("MangaLadaImportChecks passed: folders, natural order, ZIP/CBZ, 7z/CB7, TAR, PDF, CBZ export, whole-book folder export, output isolation")
     }
     private static func exportBook(source: URL, destination: URL) async throws {
         let cache = FileManager.default.temporaryDirectory.appendingPathComponent("comic-round-trip-" + UUID().uuidString)
@@ -129,4 +130,4 @@ struct MangaLadaImportChecks {
     }
     private static func check(_ condition: Bool, _ message: String) throws { if !condition { throw ImportCheckError.failed(message) } }
 }
-private enum ImportCheckError: Error { case failed(String) }
+enum ImportCheckError: Error { case failed(String) }

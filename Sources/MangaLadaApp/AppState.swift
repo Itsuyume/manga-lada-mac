@@ -79,6 +79,7 @@ final class AppState: ObservableObject {
     func select(_ index: Int) {
         guard pages.indices.contains(index), index != currentIndex else { return }
         clearLetteringPreview()
+        if placementBlockID != nil { isSelectingRegion = false } // Placement belongs to a block on the old page.
         currentIndex = index; selectedRegion = nil; selectedBlockID = nil; placementBlockID = nil
     }
     func next() { select(reading.navigation(count: pages.count).next(from: currentIndex)) }
@@ -128,17 +129,21 @@ final class AppState: ObservableObject {
         isBusy = true
         job = Task {
             defer { isBusy = false; job = nil; processingIndex = nil }
+            var failed: [String] = []
             do {
                 for index in results.keys.sorted() {
                     try Task.checkCancellation()
                     guard let result = results[index] else { continue }
                     processingIndex = index; statusMessage = "\(index + 1)페이지 · 새 글꼴로 저장 중"
-                    recordResult(try processor.applyEdits(to: result, translation: result.translation, typography: typography), at: index)
+                    // One page that no longer fits must not leave the rest of the book in the old font.
+                    do { recordResult(try processor.applyEdits(to: result, translation: result.translation, typography: typography), at: index) }
+                    catch { failed.append("\(index + 1)쪽: \(error.localizedDescription)") }
                     imageRevision += 1; await Task.yield()
                 }
-                statusMessage = "완성한 페이지 전체에 글꼴 설정을 적용했습니다."
-            } catch is CancellationError { statusMessage = "글꼴 적용을 중단했습니다." }
-            catch { errorMessage = error.localizedDescription }
+                statusMessage = failed.isEmpty ? "완성한 페이지 전체에 글꼴 설정을 적용했습니다."
+                    : "글꼴 적용 · \(failed.count)쪽은 이전 이미지를 유지했습니다."
+                if !failed.isEmpty { errorMessage = "새 글꼴로 저장하지 못한 페이지가 있습니다. 글자 크기를 줄이거나 문구를 확인해주세요.\n" + failed.joined(separator: "\n") }
+            } catch { statusMessage = "글꼴 적용을 중단했습니다." }
         }
     }
 }
