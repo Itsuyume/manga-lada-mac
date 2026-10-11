@@ -77,13 +77,15 @@ extension TranslatedImageRenderer {
         let maximumRows = min(50, Int(floor((bounds.height - (hasContour ? size * 0.7 : 0)) / lineHeight)))
         guard maximumRows > 0 else { return nil }
         let centers = hasContour ? DialogueTypesettingRules.centerFractions : [0.5]
+        let renderable = text.split(omittingEmptySubsequences: false, whereSeparator: { $0.isNewline })
+            .map { normalizedRenderableText(String($0)) }.joined(separator: "\n")
         for count in 1...maximumRows {
             for fraction in centers {
                 let rectangles = balloonLineRects(shape: shape, imageSize: imageSize, bounds: bounds,
                                                    count: count, height: lineHeight, centerY: bounds.minY + bounds.height * fraction,
                                                    margin: hasContour ? max(4, size * DialogueTypesettingRules.insetRatio) : 2)
                 guard rectangles.count == count else { continue }
-                let lines = KoreanLineWrapper.balanced(normalizedRenderableText(text), widths: rectangles.map(\.width), allowWordBreaks: allowWordBreaks,
+                let lines = KoreanLineWrapper.balanced(renderable, widths: rectangles.map(\.width), allowWordBreaks: allowWordBreaks,
                                                     measure: { measuredWidth($0, font: font) })
                 guard lines.count == count else { continue }
                 return .shaped(lines: zip(lines, rectangles).map { PositionedTextLine(text: $0.0, rect: $0.1) }, fontSize: size, lineHeight: lineHeight)

@@ -41,6 +41,7 @@ extension AppState {
         guard !isBusy, !isLoading, !selectedIDs.isEmpty, let baseline = currentReviewBaseline else { return }
         guard reviewErrors[currentIndex] == nil else { _ = requireAppliedReviews(at: [currentIndex]); return }
         let page = currentIndex, id = sessionID
+        let previous = translationContext(before: page)
         var requestConfiguration = configuration.fixed(to: translation.sourceLanguage)
         if interpretMasks { requestConfiguration.interpretMaskedText = true }
         let configuration = requestConfiguration
@@ -57,7 +58,7 @@ extension AppState {
                     : "페이지 문맥을 참고해 선택한 문구를 다시 번역하는 중…"
                 var updated = translation
                 updated.blocks = try await processor.textTranslator.forSourceLanguage(translation.sourceLanguage).translateSelected(
-                    selectedIDs, in: translation.blocks, configuration: configuration, refreshMaskedContext: true)
+                    selectedIDs, in: translation.blocks, configuration: configuration, previousContext: previous, refreshMaskedContext: true)
                 try Task.checkCancellation()
                 guard sessionID == id else { return }
                 try saveReview(updated, comparedTo: baseline, at: page)
@@ -77,6 +78,7 @@ extension AppState {
         do { outputBook = try bookStore.prepare(sourceURL: sourceURL, title: title, pages: pages, outputRoot: outputRoot) }
         catch { errorMessage = error.localizedDescription; return }
         let index = currentIndex, id = sessionID
+        let previous = translationContext(before: index)
         let kind = selectedRegionKind
         let knownLanguage = (results[index]?.translation ?? pendingPages[index]?.translation)?.sourceLanguage
         let regionConfiguration = knownLanguage.map { configuration.fixed(to: $0) } ?? configuration
@@ -87,7 +89,8 @@ extension AppState {
                 if configuration.provider == .ollama { try await runtime.ensureReady(model: configuration.ollama.model) }
                 guard let book = outputBook else { return }
                 let result = try await processor.translateRegion(imageURL: pages[index].url, destinationURL: book.pageURL(at: index),
-                    box: box, kind: kind, configuration: regionConfiguration, typography: typography, bookTitle: title) { [weak self] message in
+                    box: box, kind: kind, configuration: regionConfiguration, typography: typography, bookTitle: title,
+                    previousContext: previous) { [weak self] message in
                     await MainActor.run { if self?.sessionID == id { self?.statusMessage = message } }
                 }
                 guard sessionID == id else { return }

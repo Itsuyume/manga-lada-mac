@@ -16,17 +16,17 @@ enum BookTranslationChecks {
         let store = TranslationBookStore()
         var book = try store.prepare(sourceURL: source, title: input.title, pages: input.pages, outputRoot: output)
         let processor = MangaPageProcessor(applicationSupportDirectory: support)
-        var context = "", reports: [PageReport] = []
+        var translatedPages: [Int: PageTranslation] = [:], reports: [PageReport] = []
         for index in input.pages.indices {
             let pageBegan = Date()
             do {
                 let result = try await processor.process(imageURL: input.pages[index].url, destinationURL: book.pageURL(at: index),
                                                          configuration: configuration, typography: MangaTypography(),
-                                                         previousContext: context, bookTitle: input.title)
+                                                         previousContext: MangaTranslationContext.previousPages(translatedPages, before: index), bookTitle: input.title)
                 guard let rendered = NSImage(contentsOf: result.renderedImageURL), let sourceImage = NSImage(contentsOf: input.pages[index].url),
                       rendered.representations[0].pixelsWide == sourceImage.representations[0].pixelsWide,
                       rendered.representations[0].pixelsHigh == sourceImage.representations[0].pixelsHigh else { throw BookCheckError.invalidDimensions }
-                context = result.translation.blocks.map { "\($0.originalText): \($0.translatedText)" }.joined(separator: "\n")
+                translatedPages[index] = result.translation
                 book.manifest.completedPages.append(index); book.manifest.failures.removeValue(forKey: index)
                 reports.append(PageReport(page: index + 1, regions: result.translation.blocks.count,
                                            shaped: result.translation.blocks.filter { $0.balloonShape != nil }.count,

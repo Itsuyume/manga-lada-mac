@@ -153,14 +153,16 @@ public final class MangaPageProcessor {
 
     public func translateRegion(imageURL: URL, destinationURL: URL, box: TextBox, kind: MangaTextKind,
                                 configuration: LocalTranslatorConfiguration, typography: MangaTypography, bookTitle: String = "",
+                                previousContext: String = "",
                                 status: @escaping @Sendable (String) async -> Void = { _ in }) async throws -> ProcessedMangaPage {
         guard ImageRegionSelection.validates(box), box.width >= 0.001, box.height >= 0.001 else { throw ManualRegionError.invalidBounds }
         let resolved = try await PageLanguageResolver(cache: cache).resolve(configuration, imageURL: imageURL,
-            previousContext: "", bookTitle: bookTitle, status: status)
-        let draft = try await preparePage(imageURL: imageURL, configuration: resolved, previousContext: "", bookTitle: bookTitle,
+            previousContext: previousContext, bookTitle: bookTitle, status: status)
+        let draft = try await preparePage(imageURL: imageURL, configuration: resolved, previousContext: previousContext, bookTitle: bookTitle,
                                            force: false, status: status)
         return try await ManualRegionTranslation(engine: engine, session: recognitionSession, cache: cache, pipeline: textTranslator).apply(
-            to: draft, box: box, kind: kind, destinationURL: destinationURL, configuration: resolved, typography: typography, status: status)
+            to: draft, box: box, kind: kind, destinationURL: destinationURL, configuration: resolved, typography: typography,
+            previousContext: previousContext, status: status)
     }
 
     public func applyEdits(to result: ProcessedMangaPage, translation: PageTranslation,

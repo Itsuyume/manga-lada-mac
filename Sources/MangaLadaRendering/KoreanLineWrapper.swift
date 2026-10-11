@@ -3,7 +3,13 @@ import Foundation
 package enum KoreanLineWrapper {
     /// Exact line count, balanced word breaks; punctuation stays with the preceding word.
     package static func balanced(_ text: String, widths: [CGFloat], allowWordBreaks: Bool, measure: (String) -> CGFloat) -> [String] {
-        guard let widest = widths.max(), widest > 0 else { return [] }
+        guard widths.allSatisfy({ $0.isFinite && $0 > 0 }), let widest = widths.max() else { return [] }
+        if text.contains(where: { $0.isNewline }) {
+            let lines = text.split(omittingEmptySubsequences: false, whereSeparator: { $0.isNewline })
+                .map { String($0).trimmingCharacters(in: .whitespaces) }
+            guard lines.count == widths.count, zip(lines, widths).allSatisfy({ measure($0.0) <= $0.1 }) else { return [] }
+            return lines
+        }
         if !allowWordBreaks, text.split(separator: " ").contains(where: { measure(String($0)) > widest }) { return [] }
         let units = text.split(separator: " ").flatMap { word -> [Unit] in
             if !allowWordBreaks { return [Unit(text: String(word), spaceBefore: true)] }

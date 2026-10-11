@@ -16,6 +16,8 @@ struct MangaLadaRenderingChecks {
         try checkCurvedLineWrapping()
         stage("Sound effects")
         try checkSoundEffects(in: root)
+        stage("Source effect colours and explicit dialogue rows")
+        try checkSourceLetteringColors(in: root)
         stage("Dark captions and manual contours")
         try checkDarkCaptionAndManualContour()
         stage("PNG rendering and pixel preservation")

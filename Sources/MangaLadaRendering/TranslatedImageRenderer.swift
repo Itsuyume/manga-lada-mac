@@ -81,9 +81,7 @@ public struct TranslatedImageRenderer {
         var original: NSImage?
         let activeBlocks = drawableBlocks.filter { !$0.preservesOriginalArtwork }
         let keepsOriginal = activeBlocks.count != drawableBlocks.count
-        let needsLettering = activeBlocks.contains {
-            ($0.effectStyleID ?? ($0.textKind == .soundEffect ? typography.effectStyleID : nil)) == "automatic"
-        }
+        let needsLettering = activeBlocks.contains { LetteringStylePolicy.usesSource($0, typography: typography) }
         let needsPunctuation = !originalPunctuationRegions(in: drawableBlocks, imageSize: pixelBackedSize(for: image)).isEmpty
         if let originalImageURL = originalImageURL ?? (keepsOriginal ? translation.imageURL : nil),
            needsLettering || needsPunctuation || keepsOriginal {
@@ -122,6 +120,9 @@ public struct TranslatedImageRenderer {
     ) throws -> NSImage {
         try blocks.filter { !$0.preservesOriginalArtwork }.forEach { try LetteringPreferences.validate($0) }
         let size = pixelBackedSize(for: image)
+        if let originalImage, pixelBackedSize(for: originalImage) != size {
+            throw TranslatedImageRenderError.originalImageSizeMismatch
+        }
         guard let bitmap = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: Int(size.width), pixelsHigh: Int(size.height),
                                             bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
                                             colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0),
@@ -146,7 +147,7 @@ public struct TranslatedImageRenderer {
 
         let lightRegionDetector = LightRegionDetector(image: image, imageSize: size)
         let pageFontSize = DialogueTypesettingRules.pageFontSize(blocks: blocks, imageSize: size)
-        let sourceLettering = originalImage.flatMap { SourceLettering(image: $0) }
+        let sourceLettering = originalImage.flatMap { SourceLettering(image: $0, cleanedImage: image) }
         let containers = backgroundStyle == .none
             ? try balloonContainers(blocks: blocks, imageSize: size, detector: lightRegionDetector) : [:]
         for (index, block) in blocks.enumerated() where !block.preservesOriginalArtwork && !preserved.contains(index) {

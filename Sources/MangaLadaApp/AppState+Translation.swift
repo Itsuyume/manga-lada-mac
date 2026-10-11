@@ -37,7 +37,7 @@ extension AppState {
     }
     private func translatePage(at index: Int, force: Bool, session: UUID) async throws {
         guard let book = outputBook else { return }; processingIndex = index
-        let previous = results[index - 1]?.translation.blocks.map { "\($0.originalText): \($0.translatedText)" }.joined(separator: "\n") ?? ""
+        let previous = translationContext(before: index)
         do {
             let result = try await processor.process(imageURL: pages[index].url, destinationURL: book.pageURL(at: index),
                                                      configuration: configuration, typography: typography, previousContext: previous, bookTitle: title, force: force) { [weak self] message in

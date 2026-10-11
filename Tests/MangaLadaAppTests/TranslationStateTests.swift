@@ -14,6 +14,7 @@ struct TranslationStateTests {
         try await checkEffectReviewChoices()
         try await checkFailedPageReview()
         try await checkBlankPageRecovery()
+        try await checkTranslationContext()
         let fixture = try Fixture()
         defer { try? FileManager.default.removeItem(at: fixture.root) }
         let state = fixture.state

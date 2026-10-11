@@ -4,9 +4,34 @@ import MangaLadaCore
 /// A bounded source-pixel measurement. Text meaning and manual choices belong to the style policy.
 struct SourceLettering {
     private let bitmap: NSBitmapImageRep
-    init?(image: NSImage) {
+    private let cleaned: NSBitmapImageRep?
+    init?(image: NSImage, cleanedImage: NSImage? = nil) {
         guard let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else { return nil }
         bitmap = NSBitmapImageRep(cgImage: cgImage)
+        if let cleanedImage {
+            guard let clean = cleanedImage.cgImage(forProposedRect: nil, context: nil, hints: nil) else { return nil }
+            cleaned = NSBitmapImageRep(cgImage: clean)
+        } else { cleaned = nil }
+    }
+
+    func colors(for block: TextBlock) -> SourceLetteringPalette? {
+        guard let cleaned, cleaned.pixelsWide == bitmap.pixelsWide, cleaned.pixelsHigh == bitmap.pixelsHigh else { return nil }
+        let box = block.userDefinedBounds ?? block.box
+        let left = max(0, Int(floor(box.x * Double(bitmap.pixelsWide))))
+        let top = max(0, Int(floor(box.y * Double(bitmap.pixelsHigh))))
+        let right = min(bitmap.pixelsWide, Int(ceil((box.x + box.width) * Double(bitmap.pixelsWide))))
+        let bottom = min(bitmap.pixelsHigh, Int(ceil((box.y + box.height) * Double(bitmap.pixelsHigh))))
+        guard right - left >= 4, bottom - top >= 4 else { return nil }
+        let step = max(1, (max(right - left, bottom - top) + 255) / 256)
+        var samples = SourceLetteringColorSamples(), count = 0
+        for y in stride(from: top, to: bottom, by: step) {
+            for x in stride(from: left, to: right, by: step) {
+                guard let original = bitmap.colorAt(x: x, y: y)?.usingColorSpace(.deviceRGB),
+                      let clean = cleaned.colorAt(x: x, y: y)?.usingColorSpace(.deviceRGB) else { continue }
+                count += 1; samples.add(source: original, cleaned: clean)
+            }
+        }
+        return samples.palette(sampleCount: count)
     }
 
     func strokeRatio(for block: TextBlock) -> Double? {
@@ -16,18 +41,26 @@ struct SourceLettering {
         let width = min(bitmap.pixelsWide - x, Int(box.width * Double(bitmap.pixelsWide)))
         let height = min(bitmap.pixelsHigh - y, Int(box.height * Double(bitmap.pixelsHigh)))
         guard width >= 4, height >= 4, let fontSize = block.detectedFontSize, fontSize > 0 else { return nil }
-        let step = max(1, max(width, height) / 256)
+        let step = max(1, (max(width, height) + 255) / 256)
         let columns = width / step, rows = height / step
         var ink = [Bool](repeating: false, count: columns * rows)
         for row in 0..<rows {
             for column in 0..<columns {
-                guard let color = bitmap.colorAt(x: x + column * step, y: y + row * step)?.usingColorSpace(.deviceRGB) else { continue }
-                ink[row * columns + column] = max(color.redComponent, color.greenComponent, color.blueComponent) < 0.25
+                ink[row * columns + column] = sourceInk(x: x + column * step, y: y + row * step)
             }
         }
         let measurements = isolatedInk(ink, width: columns, height: rows)
         guard measurements.area >= 12, measurements.perimeter > 0 else { return nil }
         return 2 * Double(measurements.area * step) / Double(measurements.perimeter) / fontSize
+    }
+
+    private func sourceInk(x: Int, y: Int) -> Bool {
+        guard let source = bitmap.colorAt(x: x, y: y)?.usingColorSpace(.deviceRGB) else { return false }
+        if let cleaned, cleaned.pixelsWide == bitmap.pixelsWide, cleaned.pixelsHigh == bitmap.pixelsHigh,
+           let clean = cleaned.colorAt(x: x, y: y)?.usingColorSpace(.deviceRGB) {
+            return SourceLetteringColorSamples.isChanged(source: source, cleaned: clean)
+        }
+        return max(source.redComponent, source.greenComponent, source.blueComponent) < 0.25
     }
 
     private func isolatedInk(_ ink: [Bool], width: Int, height: Int) -> (area: Int, perimeter: Int) {
@@ -57,6 +90,13 @@ struct SourceLettering {
 
 @MainActor
 enum LetteringStylePolicy {
+    static func usesSource(_ block: TextBlock, typography: MangaTypography) -> Bool {
+        (block.effectStyleID ?? (block.textKind == .soundEffect ? typography.effectStyleID : nil)) == "automatic"
+    }
+    static func colors(_ block: TextBlock, typography: MangaTypography, source: SourceLettering?) -> SourceLetteringPalette? {
+        guard usesSource(block, typography: typography) else { return nil }
+        return source?.colors(for: block)
+    }
     static func selected(_ block: TextBlock, typography: MangaTypography, source: SourceLettering?) throws -> SoundEffectStyle? {
         let identifier = block.effectStyleID ?? (block.textKind == .soundEffect ? typography.effectStyleID : nil)
         guard let identifier, identifier != "custom" else { return nil }

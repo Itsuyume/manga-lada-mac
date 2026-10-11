@@ -16,6 +16,7 @@ enum NetworkBoundaryChecks {
         try await checkMaskedRouting(session: session)
         try await checkMaskedContext(session: session)
         try await checkMultipleSelectedRegions(session: session)
+        try await checkHistoryRequests(session: session)
         let blocks = [TextBlock(box: TextBox(x: 0.2, y: 0.3, width: 0.2, height: 0.3), originalText: "ありがとう")]
         let page = #"{"translations":[{"id":0,"text":"고마워","kind":"dialogue"}]}"#
         FixtureProtocol.state.install { request in
