@@ -15,6 +15,7 @@ struct MangaLadaWorkflowChecks {
             try PunctuationReviewChecks.run()
             try await LegacyPunctuationCacheChecks.run()
             try await SupplementalCacheChecks.run()
+            try await ContextKeyChecks.run()
             return
         }
         if arguments.count == 5, arguments[1] == "--review" {

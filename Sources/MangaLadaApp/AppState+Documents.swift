@@ -50,8 +50,10 @@ extension AppState {
         }
     }
     private func applyOutputFolder(_ url: URL) {
-        if outputRoot != url { results = [:]; pendingPages = [:]; reviewDrafts = [:]; reviewErrors = [:]; failures = [:]; imageRevision += 1 }
-        outputRoot = url; outputBook = nil; UserDefaults.standard.set(url.path, forKey: "translator.outputRoot")
+        if outputRoot != url {
+            results = [:]; pendingPages = [:]; reviewDrafts = [:]; reviewErrors = [:]; failures = [:]; imageRevision += 1; outputBook = nil
+        }
+        outputRoot = url; UserDefaults.standard.set(url.path, forKey: "translator.outputRoot")
         statusMessage = "완성본 저장 위치: \(url.lastPathComponent)"
     }
     func revealOutput() {

@@ -92,8 +92,10 @@ extension AppState {
                 }
                 guard sessionID == id else { return }
                 recordResult(result, at: index); failures.removeValue(forKey: index); imageRevision += 1
-                isSelectingRegion = false; selectedRegion = nil; mode = .translated
-                focusBlock(result.translation.blocks.first { ImageRegionSelection.containsCenter(box, of: $0.box) }?.id)
+                if currentIndex == index {
+                    isSelectingRegion = false; selectedRegion = nil; mode = .translated
+                    focusBlock(result.translation.blocks.first { ImageRegionSelection.containsCenter(box, of: $0.box) }?.id)
+                }
                 if var updated = outputBook {
                     updated.manifest.completedPages = completed.sorted(); updated.manifest.failures = failures
                     try bookStore.save(updated); outputBook = updated

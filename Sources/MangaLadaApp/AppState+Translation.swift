@@ -70,7 +70,10 @@ extension AppState {
         let edited: ProcessedMangaPage
         if let result = currentResult {
             edited = try processor.applyEdits(to: result, translation: translation, typography: typography)
-        } else if let draft = pendingPages[currentIndex], let book = outputBook {
+        } else if let draft = pendingPages[currentIndex] {
+            guard let outputRoot, let sourceURL else { errorMessage = "완성본 저장 폴더를 먼저 지정해주세요."; return }
+            let book = try outputBook ?? bookStore.prepare(sourceURL: sourceURL, title: title, pages: pages, outputRoot: outputRoot)
+            outputBook = book
             edited = try processor.finishReview(of: draft, translation: translation, destinationURL: book.pageURL(at: currentIndex), typography: typography)
         } else { return }
         try finishReview(edited, at: currentIndex)
