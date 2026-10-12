@@ -374,6 +374,9 @@ enum NetworkBoundaryChecks {
 
 final class FixtureProtocol: URLProtocol, @unchecked Sendable {
     static let state = FixtureState()
+    static func ollamaReply(_ text: String) throws -> (Int, Data) {
+        (200, try JSONEncoder().encode(NetworkBoundaryChecks.ChatReply(message: .init(role: "assistant", content: text))))
+    }
     override class func canInit(with request: URLRequest) -> Bool { true }
     override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
     override func startLoading() {

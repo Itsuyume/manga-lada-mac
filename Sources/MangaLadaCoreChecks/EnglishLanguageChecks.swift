@@ -105,7 +105,7 @@ enum EnglishLanguageChecks {
             let body = try JSONDecoder().decode(NetworkBoundaryChecks.GemmaProbe.self, from: NetworkBoundaryChecks.body(request))
             try check(body.messages[0].content.contains("English (en)") && body.messages[0].content.contains("[R0] Hello!")
                       && body.messages[0].content.contains("[R1] Let's go."), "English provider lost language or order")
-            return try reply("[R0] 안녕!\n[R1] 가자.")
+            return try FixtureProtocol.ollamaReply("[R0] 안녕!\n[R1] 가자.")
         }
         let selected = try await pipeline.translateSelected([left.id], in: blocks, configuration: settings)
         var expected = blocks; expected[1].translatedText = "안녕!"; expected[1].textKind = .dialogue
@@ -117,7 +117,7 @@ enum EnglishLanguageChecks {
         let empty = try await pipeline.translateSelected([], in: blocks, configuration: settings)
         try check(empty == blocks && FixtureProtocol.state.count == 0, "Empty selection had a side effect")
         let page = #"{"translations":[{"id":0,"text":"안녕!","kind":"dialogue"}]}"#
-        FixtureProtocol.state.install { _ in try reply(page) }
+        FixtureProtocol.state.install { _ in try FixtureProtocol.ollamaReply(page) }
         let qwen = try await OllamaPageTranslator(configuration: OllamaConfiguration(model: "qwen3.5:9b"), session: session, sourceLanguage: .english).translatePage([left])
         try check(qwen[0].translatedText == "안녕!", "English Qwen response failed")
         FixtureProtocol.state.install { _ in
@@ -125,10 +125,6 @@ enum EnglishLanguageChecks {
         }
         let gemini = try await GeminiPageTranslator(configuration: GeminiConfiguration(apiKey: "fixture-key"), session: session, sourceLanguage: .english).translatePage([left])
         try check(gemini[0].translatedText == "안녕!", "English Gemini response failed")
-    }
-
-    private static func reply(_ text: String) throws -> (Int, Data) {
-        (200, try JSONEncoder().encode(NetworkBoundaryChecks.ChatReply(message: .init(role: "assistant", content: text))))
     }
 
     private static func checkNameHints() async throws {
@@ -141,7 +137,7 @@ enum EnglishLanguageChecks {
             let prompt = try JSONDecoder().decode(NetworkBoundaryChecks.GemmaProbe.self, from: NetworkBoundaryChecks.body(request)).messages[0].content
             try check(prompt.contains("'Alice Walker' is a capitalized name") && prompt.contains("'Silver Moon Spring' is a capitalized name")
                       && !prompt.contains("'Did Alice Walker'"), "A sentence-initial word joined a name hint")
-            return try reply("[R0] 앨리스 워커가 왔어? 실버 문 스프링은 멀어.")
+            return try FixtureProtocol.ollamaReply("[R0] 앨리스 워커가 왔어? 실버 문 스프링은 멀어.")
         }
         let translated = try await TranslateGemmaPageTranslator(session: session, sourceLanguage: .english).translatePage([named])
         try check(translated[0].originalText == named.originalText, "Name hints changed the source text")
@@ -157,15 +153,15 @@ enum EnglishLanguageChecks {
             let body = try JSONDecoder().decode(NetworkBoundaryChecks.GemmaProbe.self, from: NetworkBoundaryChecks.body(request))
             try check(body.options.num_predict >= source.count * 2, "A single long region retained the tiny region-count output budget")
             try check(body.messages[0].content.contains("The ruler speaks casually; the attendant is deferential."), "Book context was dropped")
-            if FixtureProtocol.state.count == 1 { return try reply("[R0] 은빛 호수(銀湖)") }
-            return try reply("[R0] 은빛 호수에 관한 긴 나레이션.")
+            if FixtureProtocol.state.count == 1 { return try FixtureProtocol.ollamaReply("[R0] 은빛 호수(銀湖)") }
+            return try FixtureProtocol.ollamaReply("[R0] 은빛 호수에 관한 긴 나레이션.")
         }
         let translator = TranslateGemmaPageTranslator(session: session, sourceLanguage: .english)
         let translated = try await translator.translatePage([block], previousContext: "The ruler speaks casually; the attendant is deferential.")
         try check(FixtureProtocol.state.count == 2 && translated[0].translatedText == "은빛 호수에 관한 긴 나레이션.", "Invalid mixed-script result was not retried and validated")
         try check(translated[0].id == block.id && translated[0].box == block.box && translated[0].originalText == source,
                   "Length/retry policy changed source identity or geometry")
-        FixtureProtocol.state.install { _ in try reply("[R0] unchanged English") }
+        FixtureProtocol.state.install { _ in try FixtureProtocol.ollamaReply("[R0] unchanged English") }
         do { _ = try await translator.translatePage([block]); throw BoundaryCheckError.failed("Repeated invalid translation was silently saved") }
         catch TranslationError.invalidPageResponse { }
         try check(FixtureProtocol.state.count == 2, "Invalid output was retried indefinitely")

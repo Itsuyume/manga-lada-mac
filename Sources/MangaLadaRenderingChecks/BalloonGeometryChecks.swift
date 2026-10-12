@@ -64,6 +64,12 @@ extension MangaLadaRenderingChecks {
         let reduced = try english.render(image: image, blocks: [manual], backgroundStyle: .none)
         let reducedBounds = darkPixelBounds(image: reduced, normalizedArea: CGRect(x: boxes[1].x, y: boxes[1].y, width: boxes[1].width, height: boxes[1].height))!
         try require(reducedBounds.height < pixels[1]!.height, "Adaptive size ignored the user's manual size control")
+        let thin = TextBox(x: 0.1, y: 0.1, width: 0.4, height: 0.012)
+        let caption = TextBlock(box: thin, originalText: "Copyright, 1905, by the publisher", translatedText: "저작권, 1905년, 출판사",
+                                detectedFontSize: 8)
+        let thinRendered = try english.render(image: image, blocks: [caption], backgroundStyle: .none)
+        try require(darkPixelBounds(image: thinRendered, normalizedArea: CGRect(x: thin.x, y: thin.y, width: thin.width, height: thin.height)) != nil,
+                    "A readable one-line caption inherited the full-page minimum size")
     }
 
     private static func ellipse(_ box: TextBox) -> BalloonShape {

@@ -71,6 +71,10 @@ class JapaneseEngine:
             raise ValueError("Cannot decode source image")
         if "letteringOnly" in request:
             return {"lettering": self.read_lettering_only(image, request["letteringOnly"])}
+        if request.get("detectOnly") is True:
+            if language != "en":
+                raise ValueError("Regional native OCR proposals require English")
+            return {"textRegions": self.detect_english_regions(image)}
         if request.get("regions") is not None:
             if language == "en":
                 from english_regions import read_regions
@@ -78,16 +82,23 @@ class JapaneseEngine:
             return {"blocks": self.read_proposed_regions(image, request["regions"], backend)}
         height, width = image.shape[:2]
         mask, detected = self.detector.detect(image)
+        english_paragraphs = None
+        details = []
         if self.detail_detector is not None:
             from detection_refinement import refine_detection
             detail_mask, details = self.detail_detector.detect(image)
             mask, detected = refine_detection(image, mask, detected, detail_mask, details)
+        if language == "en":
+            from detection_refinement import english_detection_regions
+            from balloon_lobes import source_rectangle
+            english_paragraphs = self.inpainting_regions([source_rectangle(box, width, height)
+                for box in english_detection_regions(detected, details, width, height)])
         from balloon_recovery import recover_balloons
         mask, detected = recover_balloons(image, mask, detected, self.detector.detect, request.get("blocks"),
                                          connected_lettering=backend != "manga")
         if language == "en":
             from english_regions import unmatched_detections
-            blocks = self.read_english_page(image, detected, request)
+            blocks = self.read_english_page(image, detected, request, english_paragraphs)
             return {"blocks": blocks, "elapsed": time.monotonic() - began,
                     "unreadableDetections": unmatched_detections(detected, request["opticalCandidates"], width, height)}
         from balloon_lobes import detect_lobes, retain_cached_regions, source_rectangle
@@ -106,6 +117,7 @@ class JapaneseEngine:
             if additions:
                 blocks = blocks + self.read_blocks(image, additions, backend)
         lettering_boxes = []
+        exterior_lettering = set()
         if backend in ("hayai-detected", "hayai-text-strokes"):
             from lettering_recovery import recover_lettering
             segment = self.segment_precise_lettering if backend == "hayai-text-strokes" else self.segment_lettering
@@ -113,6 +125,7 @@ class JapaneseEngine:
                                                        segment=segment, refresh_existing=True)
             mask = self.cv2.bitwise_or(mask, lettering_mask)
             blocks = blocks + extras
+            exterior_lettering = {block['id'] for block in extras if 'balloonShape' in block and block['balloonShape'] is None}
             # Cached recovered regions need paint polygons too when their mask is rebuilt.
             # These bound approved pixels; they never fill the rectangle with erase ink.
             lettering_boxes = [source_rectangle(block["box"], width, height) for block in blocks]
@@ -125,7 +138,9 @@ class JapaneseEngine:
         sound_effect_sources = set(request["soundEffectSources"])
         for block in blocks:
             bounds = source_rectangle(block["box"], width, height)
-            block["balloonShape"] = lobes.shapes[bounds] if bounds in lobes.shapes else geometry.shape(block["box"], block["detectedFontSize"])
+            outside = block['id'] in exterior_lettering or (block.get('textKind') == 'soundEffect' and block.get('balloonShape') is None)
+            block["balloonShape"] = None if outside else (
+                lobes.shapes[bounds] if bounds in lobes.shapes else geometry.shape(block["box"], block["detectedFontSize"]))
             kind = classify_text_kind(block, sound_effect_sources, request["soundEffectPatterns"])
             if kind is not None:
                 block["textKind"] = kind
@@ -136,21 +151,32 @@ class JapaneseEngine:
                              geometry, Path(request["destination"]))
         return {"blocks": blocks, "elapsed": time.monotonic() - began}
 
-    def read_english_page(self, image, detected, request: dict) -> list[dict]:
+    def detect_english_regions(self, image) -> list[dict]:
+        from detection_refinement import english_detection_regions
+        _, base = self.detector.detect(image)
+        _, details = self.detail_detector.detect(image) if self.detail_detector is not None else (None, [])
+        return english_detection_regions(base, details, image.shape[1], image.shape[0])
+
+    def read_english_page(self, image, detected, request: dict, paragraphs=None) -> list[dict]:
         from english_regions import recognize_blocks, observed_ink
         from balloon_geometry import BalloonGeometry
         from balloon_partition import separate_shared_balloons
-        observations = request["opticalCandidates"]
+        observations = [line for line in request["opticalCandidates"] if line.get('recognitionAlternatives') is None]
+        held = [dict(line, sourceIsVertical=False, detectedFontSize=line['box']['height'] * image.shape[0],
+                     rotationDegrees=0, balloonShape=None, translatedText='')
+                for line in request["opticalCandidates"] if line.get('recognitionAlternatives') is not None]
         if not observations:
             self.write_clean_page(image, Path(request["destination"]))
-            return []
-        mask, boxes = observed_ink(image, observations)
+            return held
+        from detection_refinement import rectangle
+        reading_regions = [rectangle(block, image.shape[1], image.shape[0]) for block in paragraphs or []]
+        mask, boxes = observed_ink(image, observations, reading_regions)
         geometry = BalloonGeometry(image, text_mask=mask.copy(), exclude_text_from_contours=True)
-        blocks = recognize_blocks(image, detected, observations, geometry, request.get("blocks"))
+        blocks = recognize_blocks(image, detected if paragraphs is None else paragraphs, observations, geometry, request.get("blocks"))
         separate_shared_balloons(blocks)
         confirmed_balloons = [block for block in blocks if block["balloonShape"] is not None]
         self.save_clean_page(image, mask, confirmed_balloons, detected, boxes, geometry, Path(request["destination"]))
-        return blocks
+        return blocks + held
 
     def save_clean_page(self, image, mask, blocks, detected, extra_boxes, geometry, destination: Path) -> None:
         height, width = image.shape[:2]

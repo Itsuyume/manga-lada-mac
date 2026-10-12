@@ -5,7 +5,7 @@ import sys
 sys.dont_write_bytecode = True
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "Sources/MangaLadaBallons/Resources"))
 import numpy as np
-from detection_refinement import refine_detection, missing_detections
+from detection_refinement import refine_detection, missing_detections, english_detection_regions
 
 
 @dataclass
@@ -49,4 +49,24 @@ for bad in [Proposal([-1, 0, 5, 5], 5), Proposal([10, 10, 10, 20], 5)]:
     else:
         raise AssertionError("Invalid detector coordinates were accepted")
 assert np.array_equal(image, source_before) and np.array_equal(mask, mask_before) and np.array_equal(detail, detail_before)
+
+# English native OCR must see the complete caption, rather than a coarse
+# crop containing only its left half. Nested detailed detections are one ROI.
+partial = Proposal([20, 700, 350, 735], 17)
+caption = Proposal([20, 700, 800, 735], 17)
+nested = Proposal([100, 703, 220, 733], 17)
+missed = Proposal([850, 800, 900, 870], 17)
+regions = english_detection_regions([partial, missed], [nested, caption], 1000, 1000)
+assert len(regions) == 2, 'Caption was duplicated or an uncovered coarse region lost'
+assert regions[0]['x'] < .02 and regions[0]['width'] > .78
+assert regions[1]['x'] < .85 and regions[1]['y'] < .8
+assert not english_detection_regions([], [], 1000, 1000)
+for bad in [Proposal([-1, 0, 5, 5], 5), Proposal([10, 10, 10, 20], 5)]:
+    try:
+        english_detection_regions([bad], [], 1000, 1000)
+    except ValueError:
+        pass
+    else:
+        raise AssertionError('Invalid English proposal accepted')
+assert partial.xyxy == [20, 700, 350, 735] and caption.xyxy == [20, 700, 800, 735], 'Proposal geometry was mutated'
 print("Detection reconciliation passed: main/aside split, stable columns, short lobe, prior/manual identity, empty/invalid inputs, mask and source preservation")

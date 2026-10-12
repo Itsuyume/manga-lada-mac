@@ -18,6 +18,11 @@ extension MangaLadaRenderingChecks {
         }
         let natural = KoreanLineWrapper.balanced(text, widths: [60, 60], allowWordBreaks: true, measure: measure)
         try require(natural == ["고마워,", "할아버지..."], "Unnecessary word breaks replaced natural wrapping.")
+        let tiedMeasure: (String) -> CGFloat = { CGFloat($0.count) }
+        let repeated = (0..<100).map { _ in
+            KoreanLineWrapper.balanced("가가 나나 다다", widths: [8, 8], allowWordBreaks: false, measure: tiedMeasure)
+        }
+        try require(repeated.allSatisfy { $0 == ["가가", "나나 다다"] }, "Equal-cost wrapping changed between saved renders")
         for text in ["고마워,\n할아버지...", "고마워,\r\n할아버지..."] {
             for splitWords in [false, true] {
                 try require(KoreanLineWrapper.balanced(text, widths: [60, 90], allowWordBreaks: splitWords, measure: measure)

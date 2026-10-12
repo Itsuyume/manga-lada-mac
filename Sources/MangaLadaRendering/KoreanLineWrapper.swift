@@ -27,7 +27,8 @@ package enum KoreanLineWrapper {
     private static func advance(_ states: [Int: Breaks], units: [Unit], width: CGFloat, remainingRows: Int,
                                 measure: (String) -> CGFloat) -> [Int: Breaks] {
         var next: [Int: Breaks] = [:]
-        for (start, state) in states {
+        // Equal-cost breaks must not depend on a Dictionary's random iteration.
+        for (start, state) in states.sorted(by: { $0.key < $1.key }) {
             guard start < units.count else { continue }
             if start > 0, isClosingPunctuation(units[start].text), !isEmphasisTail(units[start...]) { continue }
             var line = ""

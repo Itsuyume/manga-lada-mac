@@ -36,6 +36,33 @@ assert len(stroke_points(image,(20,40,210,120))) <= 4
 assert all(mask[y,x] for x,y in stroke_points(image,(20,40,210,120)))
 assert not stroke_points(np.full_like(image,255),(0,0,240,160)), 'Blank background generated prompts'
 
+# Thin observed lettering still needs prompts. Crop-edge illustration lines
+# must not become glyph evidence merely because the proposal clips them.
+thin = np.full((48, 64, 3), 255, np.uint8)
+thin[12:29, 14] = 0
+thin[19, 9:22] = 0
+thin[17:29, 31] = 0
+thin[28, 31:39] = 0
+thin[:, 46] = 0
+thin_before = thin.copy()
+points = stroke_points(thin, (7, 8, 50, 34))
+assert points and len(points) <= 4, 'Thin glyphs did not generate segmentation prompts'
+assert all(x != 46 and 8 <= y < 34 for x, y in points), 'Crop-edge artwork generated a glyph prompt'
+assert np.array_equal(thin, thin_before), 'Prompt extraction modified the source'
+
+# Resampling a tiny printed glyph creates a gray fringe wider than its black
+# core. Accept that observed one-pixel fringe, never a white background blob.
+gray_letters = np.full((50, 70, 3), 255, np.uint8)
+gray_letters[12:30, 15:18] = 130
+gray_letters[18:21, 9:25] = 130
+gray_mask = (cv2.cvtColor(gray_letters, cv2.COLOR_BGR2GRAY) < 160).astype(np.uint8)*255
+gray_mask = cv2.dilate(gray_mask, np.ones((3, 3), np.uint8))
+assert stroke_points(gray_letters, (5, 5, 35, 40)), 'Gray glyphs failed to generate prompts'
+assert confirmed_strokes(gray_letters, 'テスト', [gray_mask], Recognizer(['テスト'])) is not None, 'Gray antialiased lettering was discarded'
+blob = np.zeros_like(gray_mask); blob[5:40, 5:35] = 255
+reader = Recognizer([])
+assert confirmed_strokes(gray_letters, 'テスト', [blob], reader) is None and reader.calls == 0, 'Background silhouette reached OCR approval'
+
 # Bright lettering uses the same bounded masks and source-reading requirement.
 bright_source = 255-image
 bright_before = bright_source.copy()
@@ -128,6 +155,8 @@ def segment(crop,bounds):
 recovered, blocks = recover_lettering(image,[],lambda _: [proposal],Recognizer(['テスト']*3),segment=segment)
 assert len(blocks) == 1 and recovered.any() and len(calls) == 1
 assert blocks[0]['originalText'] == 'テスト' and 'textKind' not in blocks[0], 'Detector class became a semantic label'
+assert 'balloonShape' in blocks[0] and blocks[0]['balloonShape'] is None, 'Source outside a balloon gained an invented reading contour'
+assert blocks[0]['detectedFontSize'] == 50, 'OCR padding inflated the source font measurement'
 assert not recovered[:45].any() and not recovered[130:].any()
 calls.clear()
 empty, uncertain = recover_lettering(image,[],lambda _: [proposal],Recognizer(['テスト','テストト','テス']),segment=segment)

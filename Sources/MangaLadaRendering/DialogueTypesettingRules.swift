@@ -30,7 +30,8 @@ enum DialogueTypesettingRules {
         // line widths and wrapping. Source cap-height cannot shrink a large balloon.
         let estimated = sqrt(area * 0.34 / (Double(characters) * lineSpacing))
         let shortTextLimit = min(shape.bounds.width * imageSize.width, shape.bounds.height * imageSize.height) * 0.24
-        return min(96, max(pageFontSize, min(estimated, shortTextLimit)))
+        let readableStart = max(16, min(pageFontSize, estimated))
+        return min(96, max(readableStart, min(estimated, shortTextLimit)))
     }
 
     static func rectangularShape(box: TextBox) -> BalloonShape {

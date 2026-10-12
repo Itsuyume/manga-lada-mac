@@ -19,6 +19,32 @@ def area(box: dict) -> float:
     return box["width"] * box["height"]
 
 
+def english_detection_regions(base: list["TextBlock"], details: list["TextBlock"], width: int, height: int) -> list[dict]:
+    """Read complete detailed captions; keep coarse proposals only where detail missed.
+
+    These are OCR search windows, never permission to erase their rectangles.
+    Largest-first selection suppresses nested word proposals inside a paragraph.
+    """
+    if width <= 0 or height <= 0:
+        raise ValueError("Text detection requires positive image dimensions")
+    fine = sorted([rectangle(block, width, height) for block in details], key=area, reverse=True)
+    coarse = [rectangle(block, width, height) for block in base]
+    selected = []
+    for box in fine:
+        if not any(intersection_area(box, old) >= min(area(box), area(old)) * .85 for old in selected):
+            selected.append(box)
+    for box in coarse:
+        if not any(intersection_area(box, old) >= min(area(box), area(old)) * .3 for old in selected):
+            selected.append(box)
+    padded = []
+    for box in selected:
+        pad = max(8, min(box['width'] * width, box['height'] * height) * .25)
+        left, top = max(0, box['x'] - pad / width), max(0, box['y'] - pad / height)
+        right, bottom = min(1, box['x'] + box['width'] + pad / width), min(1, box['y'] + box['height'] + pad / height)
+        padded.append(dict(x=left, y=top, width=right-left, height=bottom-top))
+    return padded
+
+
 def missing_detections(detected: list["TextBlock"], prior: list[dict], width: int, height: int) -> list["TextBlock"]:
     boxes = [b["userDefinedBounds"] if b.get("userDefinedBounds") is not None else b["box"] for b in prior]
     for box in boxes:

@@ -107,8 +107,9 @@ def recognize_blocks(image, detected, observations: list[dict], geometry, prior_
     groups = []
     for line in _ordered(observations):
         shape, bounds = _shape(line, detected, geometry, width, height)
-        matching = [group for group in groups if _same_paragraph(group, line, image, geometry.text_mask)
-                    and _same_space(group, shape, bounds, line["box"])]
+        matching = [group for group in groups if _same_space(group, shape, bounds, line["box"])
+                    and ((bounds is not None and bounds == group['bounds'])
+                         or _same_paragraph(group, line, image, geometry.text_mask))]
         if len(matching) == 1:
             matching[0]["lines"].append(line)
             if matching[0]["shape"] is None:
@@ -195,7 +196,7 @@ def read_regions(regions: list[dict], observations: list[dict]) -> list[dict]:
     return recognized
 
 
-def observed_ink(image, observations: list[dict]):
+def observed_ink(image, observations: list[dict], reading_regions: list[dict] | None = None):
     _validate_observations(observations)
     height, width = image.shape[:2]
     regions = []
@@ -203,7 +204,7 @@ def observed_ink(image, observations: list[dict]):
         left, top, right, bottom = source_rectangle(line["box"], width, height)
         # Native OCR boxes touch cap-height glyphs. Give the existing bounded
         # stroke selector background samples without granting a filled rectangle.
-        padding = max(3, int((bottom - top) * .25))
+        padding = max(6, int((bottom - top) * .5))
         left, top = max(0, left - padding), max(0, top - padding)
         right, bottom = min(width, right + padding), min(height, bottom + padding)
         regions.append({"x": left / width, "y": top / height,
@@ -213,5 +214,12 @@ def observed_ink(image, observations: list[dict]):
     mask, boxes = glyph_mask(image, regions, bounded=True, minimum_component_area=1)
     completed = mask.copy()
     for left, top, right, bottom in boxes:
+        completed[top:bottom, left:right] |= complete_confirmed_glyph_mask(image[top:bottom, left:right], mask[top:bottom, left:right])
+    # Cap-height boxes can clip the connected rim of an otherwise read glyph.
+    # Complete it in the paragraph window using existing confirmed pixels as
+    # evidence. Unread, disconnected glyphs and crop-edge artwork stay intact.
+    for region in reading_regions or []:
+        validate_box(region)
+        left, top, right, bottom = source_rectangle(region, width, height)
         completed[top:bottom, left:right] |= complete_confirmed_glyph_mask(image[top:bottom, left:right], mask[top:bottom, left:right])
     return completed, boxes

@@ -23,10 +23,12 @@ public actor JapaneseEngineSession {
                                                soundEffectPatterns: lexicon.recognitionPatterns, opticalCandidates: opticalCandidates,
                                                ocrBackend: ocrBackend, rereadExisting: rereadExisting,
                                                sourceLanguage: sourceLanguage), idleTimeout: idleTimeout)
-        let warnings = response.unreadableDetections > 0
-            ? ["글자로 검출됐지만 영어 OCR이 읽지 못한 \(response.unreadableDetections)곳은 원본을 그대로 두었습니다. 그림 장식일 수도 있으니, 글자가 있다면 영역을 지정해 확인해주세요."] : nil
+        guard let blocks = response.blocks else { throw JapaneseEngineSessionError.invalidResponse }
+        let unresolved = response.unreadableDetections ?? 0
+        let warnings = unresolved > 0
+            ? ["글자로 검출됐지만 영어 OCR이 읽지 못한 \(unresolved)곳은 원본을 그대로 두었습니다. 그림 장식일 수도 있으니, 글자가 있다면 영역을 지정해 확인해주세요."] : nil
         return PageTranslation(imageURL: source, imageFingerprint: runID, sourceLanguage: sourceLanguage, targetLanguage: .korean,
-                               blocks: response.blocks, recognitionWarnings: warnings)
+                               blocks: blocks, recognitionWarnings: warnings)
     }
     public func verifyProposedRegions(source: URL, regions: [TextBlock],
                                       ocrBackend: JapaneseOCRBackend = .manga,
@@ -37,9 +39,18 @@ public actor JapaneseEngineSession {
                                           soundEffectSources: nil, soundEffectPatterns: nil, opticalCandidates: opticalCandidates,
                                           ocrBackend: ocrBackend, rereadExisting: false,
                                           sourceLanguage: sourceLanguage), idleTimeout: idleTimeout)
-        return response.blocks
+        guard let blocks = response.blocks else { throw JapaneseEngineSessionError.invalidResponse }
+        return blocks
     }
-    private func exchange(_ value: Request, idleTimeout: Duration) async throws -> RecognitionResponse {
+    public func detectEnglishRegions(source: URL,
+                                     idleTimeout: Duration = OllamaConfiguration.Retention.balanced.duration) async throws -> [TextBox] {
+        let response = try await exchange(DetectionRequest(source: source.path), idleTimeout: idleTimeout, expectsRegions: true)
+        guard let regions = response.textRegions else {
+            throw JapaneseEngineSessionError.invalidResponse
+        }
+        return regions
+    }
+    private func exchange<Value: Encodable>(_ value: Value, idleTimeout: Duration, expectsRegions: Bool = false) async throws -> Response {
         guard !processing else { throw JapaneseEngineSessionError.busy }
         try Task.checkCancellation()
         let request = try JSONEncoder().encode(value)
@@ -55,12 +66,16 @@ public actor JapaneseEngineSession {
             try Task.checkCancellation()
             let response = try JSONDecoder().decode(Response.self, from: data)
             if let error = response.error { throw JapaneseEngineSessionError.processing(error) }
-            guard let blocks = response.blocks else { throw JapaneseEngineSessionError.invalidResponse }
+            guard (response.blocks != nil) != (response.textRegions != nil) else { throw JapaneseEngineSessionError.invalidResponse }
+            guard (response.textRegions != nil) == expectsRegions,
+                  response.textRegions?.allSatisfy(ImageRegionSelection.validates) != false else {
+                throw JapaneseEngineSessionError.invalidResponse
+            }
             // Older workers did not report detection disagreements. A partly read page may also leave detections unread.
             let unresolved = response.unreadableDetections ?? 0
             guard unresolved >= 0 else { throw JapaneseEngineSessionError.invalidResponse }
             scheduleIdleShutdown(after: idleTimeout)
-            return RecognitionResponse(blocks: blocks, unreadableDetections: unresolved)
+            return response
         } catch {
             worker.terminate(); connection = nil
             if Task.isCancelled { throw CancellationError() }
@@ -95,6 +110,12 @@ public actor JapaneseEngineSession {
         let rereadExisting: Bool
         let sourceLanguage: LanguageCode
     }
-    private struct Response: Decodable { let blocks: [TextBlock]?; let error: String?; let unreadableDetections: Int? }
-    private struct RecognitionResponse: Sendable { let blocks: [TextBlock]; let unreadableDetections: Int }
+    private struct DetectionRequest: Encodable {
+        let source: String
+        let sourceLanguage = LanguageCode.english
+        let detectOnly = true
+    }
+    private struct Response: Decodable {
+        let blocks: [TextBlock]?; let textRegions: [TextBox]?; let error: String?; let unreadableDetections: Int?
+    }
 }

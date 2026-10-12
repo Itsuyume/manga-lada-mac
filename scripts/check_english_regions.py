@@ -96,6 +96,15 @@ class EnglishRegionsChecks(unittest.TestCase):
         self.assertNotEqual(ambiguous[0]["id"], prior[0]["id"], "Ambiguous cache identity was reused")
         self.assertEqual(prior, before)
 
+    def test_detailed_paragraph_window_joins_overlapping_native_cap_heights(self):
+        image = np.full((600, 800, 3), 235, np.uint8)
+        observations = [line('FIRST SENTENCE', .1, .1, .3, .06), line('CONTINUES HERE', .1, .145, .3, .04),
+                        line('OTHER PANEL', .65, .1, .3, .06)]
+        detected = [SimpleNamespace(xyxy=[70, 50, 340, 120]), SimpleNamespace(xyxy=[510, 50, 775, 120])]
+        result = recognize_blocks(image, detected, observations, BalloonGeometry(image))
+        self.assertEqual([b['originalText'] for b in result], ['FIRST SENTENCE CONTINUES HERE', 'OTHER PANEL'])
+        self.assertEqual(len(result), 2, 'Native overlap split a caption or joined neighbouring panels')
+
     def test_small_native_line_includes_its_one_pixel_period_but_keeps_the_frame(self):
         image = np.full((80, 160, 3), 255, np.uint8)
         image[25:34, 20:23] = 0
@@ -105,6 +114,18 @@ class EnglishRegionsChecks(unittest.TestCase):
         mask, _ = observed_ink(image, observations)
         self.assertEqual(mask[33, 28], 255, "A recognized period survived cleanup")
         self.assertFalse(mask[:, 40:42].any(), "Nearby frame became punctuation")
+
+    def test_tight_native_word_box_keeps_complete_connected_glyphs(self):
+        image = np.full((80, 120, 3), 240, np.uint8)
+        # Old scans can connect the letters within a word. The native box is
+        # almost as wide as that component; it still needs background margin.
+        image[28:40, 20:72] = 40
+        image[:, 84:87] = 0
+        before = image.copy()
+        mask, _ = observed_ink(image, [line('DOWN', 20/120, 28/80, 52/120, 12/80)])
+        self.assertTrue(np.all(mask[28:40, 20:72] == 255), 'Complete connected source word survived erasure')
+        self.assertFalse(mask[:, 84:87].any(), 'Caption margin recruited a separate panel edge')
+        self.assertTrue(np.array_equal(image, before))
 
     def test_dark_paragraph_joins_without_crossing_a_frame(self):
         image = np.full((600, 800, 3), 65, np.uint8)
@@ -174,6 +195,21 @@ class EnglishRegionsChecks(unittest.TestCase):
             request["destination"] = str(destination / "invalid.png")
             with self.assertRaises(OSError):
                 boundary.read_english_page(image, [], request)
+
+    def test_disagreeing_native_title_keeps_original_pixels_and_review_candidates(self):
+        boundary = JapaneseEngine.__new__(JapaneseEngine); boundary.cv2 = cv2
+        image = np.full((100, 200, 3), 170, np.uint8)
+        pending = line('NSLUMBERLAND', .1, .01)
+        pending['recognitionAlternatives'] = ['NSLUMBERLAND', '(SLUMBERLAND']
+        original = deepcopy(pending), image.copy()
+        with tempfile.TemporaryDirectory() as directory:
+            destination = Path(directory)/'title.png'
+            blocks = boundary.read_english_page(image, [], dict(opticalCandidates=[pending], destination=str(destination)))
+            self.assertEqual(len(blocks), 1)
+            self.assertEqual(blocks[0]['recognitionAlternatives'], pending['recognitionAlternatives'])
+            self.assertEqual(blocks[0]['id'], pending['id'])
+            self.assertTrue(np.array_equal(cv2.imread(str(destination)), image))
+            self.assertEqual(pending, original[0]); self.assertTrue(np.array_equal(image, original[1]))
 
 
 if __name__ == "__main__":
