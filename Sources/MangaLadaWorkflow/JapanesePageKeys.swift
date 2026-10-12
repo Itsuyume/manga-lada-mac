@@ -16,13 +16,15 @@ package struct JapanesePageKeys {
         let oldContext = fingerprints.make(for: Data((title + context.suffix(3_000)).utf8)).prefix(12)
         let newContext = configuration.usesPreviousPageContext ? oldContext : fingerprints.make(for: Data(title.utf8)).prefix(12)
         if configuration.sourceLanguage == .english {
-            translation = "\(image)-en-v2-balloons-\(configuration.cacheKey)-\(newContext)"
+            translation = "\(image)-en-v5-balloons-\(configuration.cacheKey)-\(newContext)"
             recognitionBeforeCleanupUpdate = "\(image)-en-ocr-v2-balloons-ink-v1"
-            recognition = "\(image)-en-ocr-v3-balloons-ink-v3"
+            recognition = "\(image)-en-ocr-v5-balloons-ink-v3"
             reusableRecognition = []
-            previousRecognition = ["\(image)-en-ocr-v2-balloons-ink-v3", "\(image)-en-ocr-v2-balloons-ink-v2", recognitionBeforeCleanupUpdate]
+            previousRecognition = ["\(image)-en-ocr-v4-balloons-ink-v3", "\(image)-en-ocr-v3-balloons-ink-v3", "\(image)-en-ocr-v2-balloons-ink-v3", "\(image)-en-ocr-v2-balloons-ink-v2", recognitionBeforeCleanupUpdate]
             let titleContext = fingerprints.make(for: Data(title.utf8)).prefix(12)
-            previous = newContext == titleContext ? [] : ["\(image)-en-v2-balloons-\(configuration.cacheKey)-\(titleContext)"]
+            let contexts = Array(Set([newContext, titleContext])).sorted()
+            previous = [3, 2].flatMap { version in contexts.map { "\(image)-en-v\(version)-balloons-\(configuration.cacheKey)-\($0)" } }
+                + contexts.filter { $0 != newContext }.map { "\(image)-en-v5-balloons-\(configuration.cacheKey)-\($0)" }
             return
         }
         let prefix = "\(image)-jp-"
@@ -35,11 +37,11 @@ package struct JapanesePageKeys {
         case .hayai:
             ocrSuffix = "-hayai-v3"; priorOCRSuffixes = ["-hayai-v2", "-hayai-v1", ""]
         case .hayaiDetected:
-            ocrSuffix = "-hayai-detected-v5"
-            priorOCRSuffixes = ["-hayai-detected-v4", "-hayai-detected-v3", "-hayai-detected-v2", "-hayai-detected-v1", "-hayai-v3", "-hayai-v2", "-hayai-v1", ""]
+            ocrSuffix = "-hayai-detected-v6"
+            priorOCRSuffixes = ["-hayai-detected-v5", "-hayai-detected-v4", "-hayai-detected-v3", "-hayai-detected-v2", "-hayai-detected-v1", "-hayai-v3", "-hayai-v2", "-hayai-v1", ""]
         case .hayaiTextStrokes:
-            ocrSuffix = "-hayai-text-strokes-v3"
-            priorOCRSuffixes = ["-hayai-text-strokes-v2", "-hayai-text-strokes-v1", "-hayai-detected-v5", "-hayai-detected-v4", "-hayai-detected-v3", "-hayai-detected-v2", "-hayai-detected-v1",
+            ocrSuffix = "-hayai-text-strokes-v4"
+            priorOCRSuffixes = ["-hayai-text-strokes-v3", "-hayai-text-strokes-v2", "-hayai-text-strokes-v1", "-hayai-detected-v6", "-hayai-detected-v5", "-hayai-detected-v4", "-hayai-detected-v3", "-hayai-detected-v2", "-hayai-detected-v1",
                                "-hayai-v3", "-hayai-v2", "-hayai-v1", ""]
         }
         let baseTranslation = "\(prefix)v\(Self.translationVersion)-\(suffix)\(newContext)"

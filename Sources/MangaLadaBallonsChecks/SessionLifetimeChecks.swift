@@ -16,6 +16,7 @@ enum SessionLifetimeChecks {
         do {
             try await checkReuseAndExpiry(session, root: root)
             try await checkActiveAndFailedRequests(session, root: root)
+            try await checkDetectionRequests(session, root: root)
             try await checkRecognitionWarnings(session, root: root)
             await session.stop()
             try FileManager.default.removeItem(at: root)
@@ -93,6 +94,20 @@ enum SessionLifetimeChecks {
         TextBlock(box: .init(x: 0.1, y: 0.1, width: 0.2, height: 0.2), originalText: text)
     }
 
+    private static func checkDetectionRequests(_ session: JapaneseEngineSession, root: URL) async throws {
+        let regions = try await session.detectEnglishRegions(source: root.appendingPathComponent("detected.png"))
+        try require(regions == [TextBox(x: 0.1, y: 0.1, width: 0.2, height: 0.2)], "Detector search geometry changed in transport")
+        let empty = try await session.detectEnglishRegions(source: root.appendingPathComponent("blank.png"))
+        try require(empty.isEmpty, "A blank page gained detector search regions")
+        do {
+            _ = try await session.detectEnglishRegions(source: root.appendingPathComponent("bad-region.png"))
+            throw CheckError.failed("An out-of-page detection was accepted")
+        } catch let error as CheckError { throw error }
+        catch { } // The invalid external response must fail and terminate its worker below.
+        let invalidPID = try state(root).pid
+        try await waitUntil("Invalid detection response left its worker alive") { !alive(invalidPID) }
+    }
+
     private static func checkRecognitionWarnings(_ session: JapaneseEngineSession, root: URL) async throws {
         let blank = try await session.recognizeAndClean(source: root.appendingPathComponent("blank.png"), runID: "blank", sourceLanguage: .english)
         try require(blank.blocks.isEmpty && blank.recognitionWarnings == nil, "A legacy textless response acquired a warning.")
@@ -152,6 +167,9 @@ enum SessionLifetimeChecks {
         if text in ("wait", "cancel"):
             time.sleep(1.2)
         response = {"blocks": regions or []}
+        if request.get("detectOnly"):
+            response = {"textRegions": [] if text == "blank" else [{"x": .1, "y": .1, "width": .2, "height": .2}]}
+            if text == "bad-region": response["textRegions"][0]["width"] = 2
         if text == "unresolved": response["unreadableDetections"] = 2
         if text == "negative": response["unreadableDetections"] = -1
         if text == "partial": response = {"blocks": request["blocks"], "unreadableDetections": 1}

@@ -19,6 +19,7 @@ enum RealPageRegressionChecks {
         let forbiddenKorean: [String]?
         let kind: MangaTextKind?
         let requiresShape: Bool?
+        let bounds: TextBox?
     }
     private struct Result: Encodable {
         let id: String
@@ -38,7 +39,7 @@ enum RealPageRegressionChecks {
         let fixtures = try JSONDecoder().decode([Fixture].self, from: source)
         guard !fixtures.isEmpty, Set(fixtures.map(\.id)).count == fixtures.count,
               fixtures.allSatisfy({ !$0.id.isEmpty && !$0.id.contains("/") && (!$0.expected.isEmpty || $0.expectsNoText == true)
-                  && $0.expected.allSatisfy({ !$0.original.isEmpty }) }) else { throw Failure.invalidManifest }
+                  && $0.expected.allSatisfy({ !$0.original.isEmpty && ($0.bounds.map(ImageRegionSelection.validates) ?? true) }) }) else { throw Failure.invalidManifest }
         try FileManager.default.createDirectory(at: output, withIntermediateDirectories: true)
         let processor = MangaPageProcessor(applicationSupportDirectory: support)
         let encoder = JSONEncoder(); encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
@@ -77,7 +78,13 @@ enum RealPageRegressionChecks {
             let cachedBytes = try Data(contentsOf: destination)
             reused = cached.wasCached && cached.translation.blocks == blocks && cached.reviewWarnings == warnings && saved == cachedBytes
                 && cached.translation.sourceLanguage == language
-            if !reused { errors.append("Cache reuse changed regions or saved pixels") }
+            if !reused {
+                let difference = CacheDifference(before: blocks, after: cached.translation.blocks, cached: cached.wasCached,
+                    samePNG: saved == cachedBytes, sameWarnings: cached.reviewWarnings == warnings, sameLanguage: cached.translation.sourceLanguage == language)
+                try JSONEncoder().encode(difference).write(to: output.appendingPathComponent(fixture.id + "-cache-difference.json"), options: .atomic)
+                try saved.write(to: output.appendingPathComponent(fixture.id + "-first.png"), options: .atomic)
+                errors.append("Cache reuse changed regions or saved pixels")
+            }
         } catch let failure as MangaPageFailure {
             blocks = failure.draft.translation.blocks
             language = failure.draft.translation.sourceLanguage
@@ -98,7 +105,11 @@ enum RealPageRegressionChecks {
 
     static func mismatches(_ expected: [Expectation], blocks: [TextBlock]) -> [String] {
         expected.flatMap { item -> [String] in
-            let matches = blocks.filter { $0.originalText.filter { !$0.isWhitespace }.contains(item.original.filter { !$0.isWhitespace }) }
+            let needle = item.original.uppercased().filter { !$0.isWhitespace }
+            let matches = blocks.filter { block in
+                let inBounds = item.bounds.map { ImageRegionSelection.containsCenter($0, of: block.box) } ?? true
+                return inBounds && block.originalText.uppercased().filter { !$0.isWhitespace }.contains(needle)
+            }
             guard matches.count == 1, let block = matches.first else { return ["Missing or ambiguous OCR: \(item.original)"] }
             var errors: [String] = []
             if let words = item.koreanContainsAny, !words.contains(where: { block.translatedText.contains($0) }) {
@@ -114,4 +125,7 @@ enum RealPageRegressionChecks {
     }
 
     private enum Failure: Error { case outputExists, invalidManifest, sourceChanged, failedCases }
+    private struct CacheDifference: Encodable {
+        let before: [TextBlock]; let after: [TextBlock]; let cached: Bool; let samePNG: Bool; let sameWarnings: Bool; let sameLanguage: Bool
+    }
 }

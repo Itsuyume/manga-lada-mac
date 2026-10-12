@@ -43,15 +43,29 @@ def stroke_points(image: np.ndarray, bounds: tuple[int, int, int, int]) -> list[
     if not 0 <= left < right <= width or not 0 <= top < bottom <= height:
         raise ValueError("Stroke proposal escapes its source crop")
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    dark = np.zeros_like(gray)
-    dark[top:bottom, left:right] = gray[top:bottom, left:right] < 100
+    _, ink_labels, ink_stats, _ = cv2.connectedComponentsWithStats(stroke_core(gray).astype(np.uint8), 8)
+    supported = np.bincount(ink_labels[top:bottom, left:right].ravel(), minlength=len(ink_stats))
+    selected = [index for index, (x, y, w, h, amount) in enumerate(ink_stats[1:], 1)
+                if amount >= 3 and x > 0 and y > 0 and x+w < width and y+h < height
+                and supported[index] >= amount * .8]
+    dark = np.isin(ink_labels, selected).astype(np.uint8)
     distance = cv2.distanceTransform(dark, cv2.DIST_L2, 5)
-    _, labels, stats, _ = cv2.connectedComponentsWithStats((distance > 2).astype(np.uint8), 8)
+    maximum = float(distance.max())
+    if maximum == 0:
+        return []
+    # A fixed two-pixel interior discarded all one-pixel strokes in small
+    # lettering. Strong glyphs keep that cutoff; thin glyphs use measured depth.
+    _, labels, stats, _ = cv2.connectedComponentsWithStats((distance > min(2, maximum * .5)).astype(np.uint8), 8)
     points = []
     for label in np.argsort(stats[1:, 4])[::-1][:4] + 1:
         row, column = np.unravel_index(np.argmax(np.where(labels == label, distance, 0)), distance.shape)
         points.append([int(column), int(row)])
     return points
+
+
+def stroke_core(gray: np.ndarray) -> np.ndarray:
+    border = np.concatenate((gray[0], gray[-1], gray[:, 0], gray[:, -1]))
+    return gray < min(160, float(np.median(border)) - 32)
 
 
 def confirmed_strokes(image: np.ndarray, source_text: str, masks: list[np.ndarray],
@@ -89,7 +103,11 @@ def eligible_strokes(image: np.ndarray, masks: list[np.ndarray]) -> list[np.ndar
         amount = int(np.count_nonzero(selected))
         if not 16 <= amount <= gray.size * .45:
             continue
-        if np.count_nonzero(selected & (gray < 100)) < amount * .95:
+        core = (selected & stroke_core(gray)).astype(np.uint8)
+        # Tiny JPEG/resampled glyphs can be gray throughout. Their antialiased
+        # fringe must still sit within one pixel of substantial observed ink.
+        fringe = cv2.dilate(core, np.ones((3, 3), np.uint8)) > 0
+        if np.count_nonzero(core) < 16 or np.count_nonzero(selected & fringe) < amount * .95:
             continue  # A balloon/illustration silhouette is not a glyph mask.
         eligible.append(mask)
     return sorted(eligible, key=np.count_nonzero, reverse=True)

@@ -221,7 +221,8 @@ public final class MangaPageProcessor {
         let prior = try previousTranslation(previousKeys)
         if sourceLanguage == .english {
             await status("영어 글자·말풍선 검출 · 원문 제거 중")
-            let observations = try await VisionOCRService().recognizeText(in: imageURL, sourceLanguage: .english)
+            let regions = try await recognitionSession.detectEnglishRegions(source: imageURL, idleTimeout: retention.duration)
+            let observations = try await VisionOCRService().recognizeText(in: imageURL, sourceLanguage: .english, regions: regions)
                 .filter { TextLanguageDetector.containsEnglish($0.originalText) || TextLanguageDetector.isPunctuationOnly($0.originalText) }
             var result = try await recognitionSession.recognizeAndClean(source: imageURL, runID: key,
                 priorBlocks: prior?.blocks, opticalCandidates: observations, sourceLanguage: .english, idleTimeout: retention.duration)

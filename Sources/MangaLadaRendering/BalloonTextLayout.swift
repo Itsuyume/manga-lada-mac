@@ -55,7 +55,8 @@ extension TranslatedImageRenderer {
                             scale: Double, hasContour: Bool, fixedSize: Bool = false) -> TextLayout? {
         let bounds = pixelRect(for: shape.bounds, imageSize: imageSize)
         let preferred = fixedSize ? max(4, fontSize * scale) : min(96, max(16, fontSize * scale))
-        let minimum = max(8, min(preferred * 0.6, DialogueTypesettingRules.referenceWidth(imageSize) * 0.0105))
+        let minimum = max(8, min(preferred * 0.6, DialogueTypesettingRules.referenceWidth(imageSize) * 0.0105,
+                                 bounds.height * 0.8 / DialogueTypesettingRules.lineSpacing))
         let minimumFont = preferredTextFont(ofSize: minimum, backgroundStyle: .none)
         let capacity = bounds.width * CGFloat(min(50, Int(floor(bounds.height / ceil(minimum * DialogueTypesettingRules.lineSpacing)))))
         guard measuredWidth(text.filter { !$0.isWhitespace }, font: minimumFont) <= capacity else { return nil }

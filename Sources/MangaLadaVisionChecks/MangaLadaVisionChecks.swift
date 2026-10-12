@@ -9,7 +9,11 @@ struct MangaLadaVisionChecks {
         let service = VisionOCRService()
         if CommandLine.arguments.count > 1 {
             let language: LanguageCode = CommandLine.arguments.contains("--source=en") ? .english : .japanese
-            let blocks = try await service.recognizeText(in: URL(fileURLWithPath: CommandLine.arguments[1]), sourceLanguage: language)
+            let regions: [TextBox]
+            if let argument = CommandLine.arguments.first(where: { $0.hasPrefix("--regions=") }) {
+                regions = try JSONDecoder().decode([TextBox].self, from: Data(contentsOf: URL(fileURLWithPath: String(argument.dropFirst(10)))))
+            } else { regions = [] }
+            let blocks = try await service.recognizeText(in: URL(fileURLWithPath: CommandLine.arguments[1]), sourceLanguage: language, regions: regions)
             print(String(decoding: try JSONEncoder().encode(blocks), as: UTF8.self))
             return
         }
@@ -29,6 +33,7 @@ struct MangaLadaVisionChecks {
             expectedTokens: ["HELLO", "WORLD"],
             label: "English"
         )
+        try await RegionalOCRChecks.run(image: englishURL)
 
         let japaneseRecognized = japaneseBlocks.map(\.originalText).joined(separator: " ")
         let englishRecognized = englishBlocks.map(\.originalText).joined(separator: " ")

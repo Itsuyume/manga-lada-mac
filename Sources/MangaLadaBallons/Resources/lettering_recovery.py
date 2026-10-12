@@ -64,7 +64,7 @@ def recover_lettering(image: np.ndarray, blocks: list[dict],
             extras.append(dict(id=str(uuid.uuid4()),
                 box=dict(x=left/width, y=top/height, width=(right-left)/width, height=(bottom-top)/height),
                 **reading, translatedText='', sourceIsVertical=bottom-top > right-left,
-                detectedFontSize=float(min(right-left, bottom-top)), rotationDegrees=0))
+                detectedFontSize=float(min(proposal.bounds[2]-proposal.bounds[0], proposal.bounds[3]-proposal.bounds[1])), rotationDegrees=0))
             occupied.append((extras[-1], crop_box))
         mask[top:bottom, left:right] |= ink
     return mask, extras
@@ -111,6 +111,9 @@ def read_candidate_ink(image, candidates, proposal, bounds, recognize, segment) 
     if alternatives is not None:
         return repeated_candidate(crop, alternatives, masks, recognize)
     ink = confirmed_strokes(crop, reading['originalText'], masks, recognize)
+    # This source candidate did not belong to a balloon interior. Do not
+    # reinterpret a nearby white hand/shirt contour as its reading space.
+    reading['balloonShape'] = None
     return None if ink is None else (reading, ink)
 
 
