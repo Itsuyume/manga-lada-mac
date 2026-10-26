@@ -30,7 +30,7 @@ public struct KoreanTranslationRefiner: Sendable {
 
     private static let rules: [TranslationRefinementRule] = [
         TranslationRefinementRule(
-            sourceNeedles: ["まんこ", "マンコ", "おまんこ"],
+            sourceNeedles: JapaneseTermDisambiguation.femaleOrganTerms,
             replacements: [
                 .literal("오만코", "보지"),
                 .literal("만코", "보지"),

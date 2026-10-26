@@ -7,12 +7,8 @@ struct LetteringControls: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Picker("글자 방향", selection: Binding<TextDirection?>(
-                get: { block.textDirection },
-                set: { direction in
-                    state.editReviewBlock(block.id) { $0.textDirection = direction }; state.scheduleLetteringPreview()
-                }
-            )) {
+            Picker("글자 방향", selection: state.reviewBinding(block, value: { $0.textDirection },
+                change: { $0.textDirection = $1 }, previewsLettering: true)) {
                 Text(block.textKind == .soundEffect ? "자동 · 원문 방향" : "자동 · 말풍선 맞춤").tag(TextDirection?.none)
                 Text("가로 줄 쌓기").tag(TextDirection?.some(.horizontal))
                 Text("세로 · 글자 세우기").tag(TextDirection?.some(.vertical))
@@ -39,10 +35,11 @@ struct LetteringControls: View {
         }.font(.system(size: 10)).controlSize(.small)
             .help("자동 기준 크기의 40~240%입니다. 방향·크기·배치를 정한 뒤 수정 적용을 누르세요. 공간이 부족하면 크기를 줄여주세요.")
     }
-    private var percent: Double { (block.fontScale ?? 1) * 100 }
-    private var sizeBinding: Binding<Double> { Binding(get: { percent }, set: { setPercent($0) }) }
+    private var percent: Double { sizeBinding.wrappedValue }
+    var sizeBinding: Binding<Double> {
+        state.reviewBinding(block, value: { ($0.fontScale ?? 1) * 100 }, change: { $0.fontScale = $1 / 100 }, previewsLettering: true)
+    }
     private func setPercent(_ value: Double) {
-        state.editReviewBlock(block.id) { $0.fontScale = value / 100 }
-        state.scheduleLetteringPreview()
+        sizeBinding.wrappedValue = value
     }
 }

@@ -22,6 +22,7 @@ final class AppState: ObservableObject {
     @Published var pendingPages: [Int: MangaPageDraft] = [:]
     @Published var reviewDrafts: [Int: PageTranslation] = [:]
     @Published var reviewErrors: [Int: String] = [:]
+    @Published var reviewSaveErrors: [Int: String] = [:]
     @Published var failures: [Int: String] = [:]
     @Published var processingIndex: Int?
     @Published var imageRevision = 0
@@ -106,7 +107,7 @@ final class AppState: ObservableObject {
             let typographyChanged = self.typography != typography
             self.configuration = configuration; self.typography = typography; showSettings = false
             if translatorChanged {
-                results = [:]; pendingPages = [:]; reviewDrafts = [:]; reviewErrors = [:]; failures = [:]; imageRevision += 1
+                results = [:]; pendingPages = [:]; reviewDrafts = [:]; reviewErrors = [:]; reviewSaveErrors = [:]; failures = [:]; imageRevision += 1
                 statusMessage = "번역 방식이 바뀌었습니다. 전체 번역 시작을 눌러 새 설정으로 번역해주세요."
             } else if renderCompleted && typographyChanged { rerenderCompletedPages() }
             else { statusMessage = "설정을 저장했습니다. 기존 번역과 검수 수정은 유지됩니다." }
@@ -124,6 +125,7 @@ final class AppState: ObservableObject {
         }
     }
     private func rerenderCompletedPages() {
+        guard reviewSaveErrors.isEmpty else { _ = requireAppliedReviews(at: Array(reviewSaveErrors.keys)); return }
         guard !results.isEmpty, !isBusy else { return }
         isBusy = true
         job = Task {

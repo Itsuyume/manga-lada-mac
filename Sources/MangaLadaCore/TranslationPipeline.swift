@@ -161,6 +161,7 @@ public struct TranslationPipeline: Sendable {
                 translatedText: translatedText
             )
             translatedBlock.translatedText = try MaskedTextTranslation.validated(refined, source: block.originalText)
+            if sourceLanguage == .japanese { try JapaneseTermDisambiguation.validate(translatedBlock.translatedText, source: block.originalText) }
             return translatedBlock
         }
     }

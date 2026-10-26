@@ -33,6 +33,7 @@ extension TranslationStateTests {
         try state.updateCurrentTranslation(unwrap(state.currentReview))
         check(!state.hasCurrentReview && binding.wrappedValue == "돈으로 책을 샀어.", "Apply lost the latest editor value.")
         check(try Data(contentsOf: image) != before, "Apply did not update rendered text.")
+        try checkOtherReviewBindings(state)
 
         // A delayed callback from a removed row must not edit a newly selected page/session.
         state.results[1] = state.results[0]
@@ -46,5 +47,20 @@ extension TranslationStateTests {
         check(state.currentReview == reopened && !state.hasCurrentReview, "A stale text binding edited a reopened document.")
         try fixture.checkSources()
         print("PASS review binding immediate reads, rapid/empty edits, persistence, Apply, page/session and source preservation")
+    }
+
+    private static func checkOtherReviewBindings(_ state: AppState) throws {
+        let block = try unwrap(state.currentReview?.blocks.first), inspector = TranslationInspector(state: state)
+        let kind = inspector.kindBinding(block), style = inspector.effectStyleBinding(block)
+        kind.wrappedValue = .caption
+        check(kind.wrappedValue == .caption, "The kind picker returned its old value.")
+        style.wrappedValue = "automatic"
+        check(style.wrappedValue == "automatic", "The style picker returned its old value.")
+        let size = LetteringControls(state: state, block: block).sizeBinding
+        size.wrappedValue = 105; size.wrappedValue += 5
+        check(abs(size.wrappedValue - 110) < 0.000001, "Repeated font size edits accumulated from a stale value.")
+        state.discardCurrentReview()
+        check(!state.hasCurrentReview && size.wrappedValue == 100 && kind.wrappedValue == .dialogue,
+              "Cancelling control edits retained stale values or previews.")
     }
 }

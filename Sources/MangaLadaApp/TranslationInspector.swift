@@ -122,6 +122,9 @@ struct TranslationInspector: View {
         if let error = state.reviewErrors[state.currentIndex] {
             Text(error).font(.system(size: 11)).foregroundStyle(.red)
                 .fixedSize(horizontal: false, vertical: true).textSelection(.enabled)
+        } else if let error = state.reviewSaveErrors[state.currentIndex] {
+            Text(error).font(.system(size: 11)).foregroundStyle(.orange)
+                .fixedSize(horizontal: false, vertical: true).textSelection(.enabled)
         } else if state.hasCurrentReview {
             VStack(alignment: .leading, spacing: 4) {
                 Label { Text("적용하지 않은 수정").fontWeight(.semibold) } icon: {
@@ -188,6 +191,8 @@ struct TranslationInspector: View {
             Label("원본 유지", systemImage: "photo").labelStyle(.titleAndIcon).font(.system(size: 10)).foregroundStyle(.secondary)
         } else if block.recognitionAlternatives != nil {
             Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.orange).help("글자 인식 확인 필요")
+        } else if JapaneseTermDisambiguation.reviewMessage(for: block) != nil {
+            Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.orange).help("용어 뜻 확인 필요")
         } else if block.translatedText.isEmpty {
             Text("번역 없음").font(.system(size: 10)).foregroundStyle(.orange)
         }
@@ -226,17 +231,29 @@ struct TranslationInspector: View {
                 .foregroundStyle(.orange)
             Text("아래 후보를 선택하거나 위의 원문을 직접 수정한 뒤 다시 번역하세요.")
                 .foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-            ForEach(candidates, id: \.self) { candidate in
-                Button(candidate) {
+            ForEach(Array(candidates.enumerated()), id: \.element) { index, candidate in
+                Button {
                     state.editReviewBlock(block.id) {
                         $0.originalText = candidate; $0.recognitionAlternatives = nil
                         $0.userDefinedOriginalText = true
                     }
-                }.disabled(editingDisabled)
+                } label: {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("후보 \(index + 1)").font(.system(size: 10, weight: .semibold)).foregroundStyle(.secondary)
+                        Text(candidate).lineLimit(nil).fixedSize(horizontal: false, vertical: true)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }.padding(7).frame(maxWidth: .infinity, alignment: .leading)
+                        .background(Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: 5))
+                        .contentShape(Rectangle())
+                }.buttonStyle(.plain).disabled(editingDisabled)
+                    .accessibilityLabel("후보 \(index + 1): \(candidate)")
             }
         }.font(.system(size: 11))
     }
     @ViewBuilder private func translationControls(_ block: TextBlock, number: Int) -> some View {
+            if let message = JapaneseTermDisambiguation.reviewMessage(for: block) {
+                Text(message).font(.system(size: 11)).foregroundStyle(.orange).fixedSize(horizontal: false, vertical: true)
+            }
             if let message = MaskedTextTranslation.reviewMessage(for: block) {
                 Text(message).font(.system(size: 10)).foregroundStyle(.orange).fixedSize(horizontal: false, vertical: true)
             }
@@ -295,27 +312,16 @@ struct TranslationInspector: View {
         }.font(.system(size: 11))
     }
     func textBinding(_ block: TextBlock, _ keyPath: WritableKeyPath<TextBlock, String>) -> Binding<String> {
-        let page = state.currentIndex, session = state.sessionID
-        return Binding(get: {
-            guard state.currentIndex == page, state.sessionID == session,
-                  let current = state.currentReview?.blocks.first(where: { $0.id == block.id }) else {
-                // A removed row can still be read while SwiftUI tears down its text editor.
-                return block[keyPath: keyPath]
-            }
-            return current[keyPath: keyPath]
-        }, set: { value in
-            guard state.currentIndex == page, state.sessionID == session else { return }
-            state.editReviewBlock(block.id) { $0[keyPath: keyPath] = value }
+        state.reviewBinding(block, value: { $0[keyPath: keyPath] }, change: { $0[keyPath: keyPath] = $1 })
+    }
+    func kindBinding(_ block: TextBlock) -> Binding<MangaTextKind> {
+        state.reviewBinding(block, value: { $0.textKind ?? .dialogue }, change: { block, value in
+            block.textKind = value; block.userDefinedTextKind = true
         })
     }
-    private func kindBinding(_ block: TextBlock) -> Binding<MangaTextKind> {
-        Binding(get: { block.textKind ?? .dialogue }, set: { value in
-            state.editReviewBlock(block.id) { $0.textKind = value; $0.userDefinedTextKind = true }
-        })
-    }
-    private func effectStyleBinding(_ block: TextBlock) -> Binding<String> {
-        Binding(get: { block.effectStyleID ?? "" }, set: { value in
-            state.editReviewBlock(block.id) { $0.effectStyleID = value.isEmpty ? nil : value }
+    func effectStyleBinding(_ block: TextBlock) -> Binding<String> {
+        state.reviewBinding(block, value: { $0.effectStyleID ?? "" }, change: { block, value in
+            block.effectStyleID = value.isEmpty ? nil : value
         })
     }
     private func apply() {
