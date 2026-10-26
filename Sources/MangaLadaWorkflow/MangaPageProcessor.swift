@@ -12,8 +12,11 @@ public struct ProcessedMangaPage: Sendable {
     public var warnings: [String] = []
     public var reviewWarnings: [String] {
         let uncertain = translation.blocks.filter { $0.recognitionAlternatives != nil && $0.keepsOriginal != true }.count
+        let terminology = translation.sourceLanguage == .japanese
+            ? translation.blocks.filter { JapaneseTermDisambiguation.reviewMessage(for: $0) != nil }.count : 0
         return (translation.recognitionWarnings ?? []) + warnings
             + (uncertain == 0 ? [] : ["글자를 확정하지 못한 \(uncertain)곳은 원본을 유지했습니다. 검수창에서 원문 후보를 확인해주세요."])
+            + (terminology == 0 ? [] : ["원문과 용어 뜻이 다른 번역 \(terminology)곳을 검수해주세요."])
     }
     public var primaryTranslation: PageTranslation?
 }
@@ -166,28 +169,36 @@ public final class MangaPageProcessor {
     }
 
     public func applyEdits(to result: ProcessedMangaPage, translation: PageTranslation,
-                           typography: MangaTypography) throws -> ProcessedMangaPage {
+                           typography: MangaTypography, persistReview: (ProcessedMangaPage) throws -> Void = { _ in }) throws -> ProcessedMangaPage {
         let translation = try reviewedTranslation(translation, comparedTo: result.translation)
-        var edited = try PageImageRendering.render(translation: translation, cleanImageURL: result.cleanImageURL,
-                                                  destinationURL: result.renderedImageURL, typography: typography, wasCached: true)
-        edited.warnings = result.warnings
-        if var primary = result.primaryTranslation {
-            let updates = Dictionary(uniqueKeysWithValues: translation.blocks.map { ($0.id, $0) })
-            primary.blocks = primary.blocks.map { updates[$0.id] ?? $0 }
-            try cache.save(primary)
-            edited.primaryTranslation = primary
+        var targets = [result.renderedImageURL, cache.cacheFileURL(fingerprint: translation.imageFingerprint)]
+        if let primary = result.primaryTranslation { targets.append(cache.cacheFileURL(fingerprint: primary.imageFingerprint)) }
+        return try FileChangeTransaction.withRollback(at: targets) {
+            var edited = try PageImageRendering.render(translation: translation, cleanImageURL: result.cleanImageURL,
+                                                      destinationURL: result.renderedImageURL, typography: typography, wasCached: true)
+            edited.warnings = result.warnings
+            if var primary = result.primaryTranslation {
+                let updates = Dictionary(uniqueKeysWithValues: translation.blocks.map { ($0.id, $0) })
+                primary.blocks = primary.blocks.map { updates[$0.id] ?? $0 }
+                try cache.save(primary)
+                edited.primaryTranslation = primary
+            }
+            try cache.save(translation)
+            try persistReview(edited)
+            return edited
         }
-        try cache.save(translation)
-        return edited
     }
 
     public func finishReview(of draft: MangaPageDraft, translation: PageTranslation, destinationURL: URL,
-                             typography: MangaTypography) throws -> ProcessedMangaPage {
+                             typography: MangaTypography, persistReview: (ProcessedMangaPage) throws -> Void = { _ in }) throws -> ProcessedMangaPage {
         let translation = try reviewedTranslation(translation, comparedTo: draft.translation)
-        let result = try PageImageRendering.render(translation: translation, cleanImageURL: draft.cleanImageURL,
-                                                   destinationURL: destinationURL, typography: typography, wasCached: draft.wasCached)
-        try cache.save(translation)
-        return result
+        return try FileChangeTransaction.withRollback(at: [destinationURL, cache.cacheFileURL(fingerprint: translation.imageFingerprint)]) {
+            let result = try PageImageRendering.render(translation: translation, cleanImageURL: draft.cleanImageURL,
+                                                       destinationURL: destinationURL, typography: typography, wasCached: draft.wasCached)
+            try cache.save(translation)
+            try persistReview(result)
+            return result
+        }
     }
 
     private func reviewedTranslation(_ translation: PageTranslation, comparedTo baseline: PageTranslation) throws -> PageTranslation {
