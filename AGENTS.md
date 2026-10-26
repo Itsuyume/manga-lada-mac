@@ -50,7 +50,7 @@ Python OCR 프로세스의 대기 종료는 Ballons의 `JapaneseEngineSession`�
 
 `TextBlock.userDefinedOriginalText`는 true=원문 수정, false=OCR 원문과 일치 확인, nil=미확인으로 구분합니다. Workflow의 `RecognitionCacheMigration`이 UUID·좌표·원문 대조를 소유하고 캐시 재사용과 첫 저장에 같은 검증을 적용합니다. 이미 기록한 확인 여부와 수동 원본 영역은 이전의 부분 OCR 문구로 덮어쓰지 않습니다. 확인 표시가 없는 구버전만 원문 차이로 수정을 추정합니다. Rendering은 false인 기호만 복구합니다. 원문과 번역을 같은 새 기호로 고쳐도 원본 그림 복구를 건너뜁니다. OCR 기록 없음·이동·중복 영역은 일치 증거로 취급하지 않으며, 필요한 캐시의 해석 오류는 전파합니다. 후보가 없으면 추가 캐시 읽기를 하지 않습니다. 이 구버전 기호 대조는 기존 캐시를 수정하지 않습니다. 원문 수정 표시를 기본·효과음 캐시와 윤곽 갱신에서 보존하며, 이전 데이터는 선택 필드 없이 읽을 수 있어야 합니다. 화면의 임시 편집은 기존 `TranslationReviewStore`를 유지하고 수정 적용 전에 캐시를 바꾸지 않습니다.
 
-검수 임시 수정은 Core의 `TranslationReviewStore`가 기준 문구와 함께 원자적으로 저장하며, AppState가 복원·편집·적용·취소를 소유합니다. 검수창 View의 수명에 수정본을 맡기지 않습니다. 실제 바꾼 원문·번역·종류·스타일만 UUID로 복원하고 최신 좌표·영역 순서·수정하지 않은 문구는 유지합니다. 타이핑은 번역 캐시·완성 이미지를 수정하지 않습니다. 실패 시 임시 파일을 보존하고 오류를 표시하며 적용 성공 후에만 해제합니다.
+검수 임시 수정은 Core의 `TranslationReviewStore`가 기준 문구와 함께 원자적으로 저장하며, AppState가 복원·편집·적용·취소를 소유합니다. 검수창 View의 수명에 수정본을 맡기지 않습니다. 검수 텍스트 Binding은 같은 입력 이벤트 안에서도 최신 AppState 문구를 읽습니다. 이전 렌더링의 TextBlock 값을 getter로 고정하지 않으며 페이지·세션이 바뀐 입력 콜백은 무시합니다. 실제 바꾼 원문·번역·종류·스타일만 UUID로 복원하고 최신 좌표·영역 순서·수정하지 않은 문구는 유지합니다. 타이핑은 번역 캐시·완성 이미지를 수정하지 않습니다. 실패 시 임시 파일을 보존하고 오류를 표시하며 적용 성공 후에만 해제합니다.
 
 일본어 인식 뒤 번역·렌더링 실패는 Workflow의 `MangaPageFailure`가 실제 `MangaPageDraft`와 원래 오류를 전달합니다. AppState의 `pendingPages`는 검수 가능한 인식 결과이며 완료 결과·저장 이미지로 가장하지 않습니다. `currentReviewBaseline`에서 기존 저장본을 우선하고 실패한 재번역으로 덮어쓰지 않습니다. 미번역 UUID 판단은 Core의 `PageTranslation.untranslatedBlockIDs`, 페이지·언어·UUID·빈 번역 검증은 Workflow의 `PageReviewReadiness`가 소유합니다. 빈 문구 재번역은 기존 선택 번역·검수 저장을 공유합니다. 수정 적용은 렌더링·캐시·책 기록 저장 성공 후에만 완료 상태로 전환하며 책 기록 실패 때 임시 수정을 유지합니다. 원본 이미지·OCR 캐시·원문 제거 이미지는 수정하지 않습니다. 앱 상태 검사는 실제 인식 캐시와 잘못된 외부 제공자 설정으로 실패를 만들고 편집·기호 선택 번역·재시작 복원·빈 문구 거부·저장 실패·원본 보존을 확인합니다.
 
@@ -74,7 +74,7 @@ Python OCR 프로세스의 대기 종료는 Ballons의 `JapaneseEngineSession`�
 
 단색 배경 복원의 SSOT는 `flat_background.prepare_flat_backgrounds`입니다. 원본의 글자 마스크 범위와 그 둘레에서 충분한 수의 마스크 밖 픽셀이 균일할 때만 글자 마스크 안을 복원하고, 나머지 마스크만 LaMa에 보냅니다. 멀리 떨어진 말풍선 테두리를 배경 근거에 섞지 않고 마스크에 인접한 다른 색은 그대로 검사합니다. 원본·기존 작업 이미지·마스크는 수정하지 않고 새 결과와 남은 마스크를 반환합니다. 배경을 확인할 수 없는 질감·그라데이션은 단색으로 바꾸지 않습니다. 자동 인식과 수동 영역 제거가 같은 함수를 사용합니다.
 
-복자 대상 판단과 이전 결과 안내는 `MaskedTextTranslation.requiresContextTranslation/reviewMessage`가 공유합니다. `TranslationPipeline`은 복자가 있는 대상만 Qwen의 번호 있는 출력에 넣고 나머지는 문맥으로 전달합니다. 일반 문구는 기본 제공자에 남깁니다. 명시적 재번역은 `refreshMaskedContext`를 전달해 해당 해석 키만 다시 판단하며 다른 캐시를 삭제하지 않습니다. 새 해석 실패 때 예전 가설로 조용히 대체하지 않고 오류 안내·원래 가림표 검증을 유지합니다. `MaskedTextInterpretation.translationModel/usedCachedInterpretation`은 선택 필드로 이전 캐시와 호환되며 OCR 원문 변경 시 기존 불변식에 따라 해제됩니다. 기존 페이지 캐시는 수동 검수 여부를 확정할 수 없으므로 자동 덮어쓰지 않고 재확인 대상으로 표시합니다. 선택 재번역은 임시 검수만 저장하고 이미지 갱신은 수정 적용 경계를 따릅니다.
+복자 대상 판단과 이전 결과 안내는 `MaskedTextTranslation.requiresContextTranslation/reviewMessage`가 공유합니다. `TranslationPipeline`은 가림표 유무와 관계없이 선택한 번역 제공자를 사용합니다. Qwen은 `MaskedPagePreparation`의 일본어 가림표 해석만 맡고 번역 모델을 강제로 바꾸지 않습니다. 같은 페이지의 일반 문구와 해석한 문구를 한 번에 번역하며 선택하지 않은 검수와 배열 순서는 보존합니다. 명시적 재번역은 `refreshMaskedContext`를 전달해 해당 해석 키만 다시 판단하며 다른 캐시를 삭제하지 않습니다. 새 해석 실패 때 예전 가설로 조용히 대체하지 않고 오류 안내·원래 가림표 검증을 유지합니다. `MaskedTextInterpretation.translationModel/usedCachedInterpretation`은 선택 필드로 이전 캐시와 호환되며 OCR 원문 변경 시 기존 불변식에 따라 해제됩니다. 기존 페이지 캐시는 수동 검수 여부를 확정할 수 없으므로 자동 덮어쓰지 않고 재확인 대상으로 표시합니다. 선택 재번역은 임시 검수만 저장하고 이미지 갱신은 수정 적용 경계를 따릅니다.
 
 ## 구현·오류 처리
 

@@ -107,35 +107,28 @@ public struct TranslationPipeline: Sendable {
         }.map(\.id))
         let prepared = try await maskedPreparation.prepare(classified, selectedIDs: selectedIDs, configuration: configuration,
             previousContext: previousContext, refresh: refreshMaskedContext)
-        guard !maskedIDs.isEmpty, translator == nil else {
-            return try await translatePrepared(prepared, configuration: configuration, translator: translator,
-                                               previousContext: previousContext, selectedIDs: selectedIDs)
+        let translated = try await translatePrepared(prepared, configuration: configuration, translator: translator,
+                                                     previousContext: previousContext, selectedIDs: selectedIDs)
+        guard !maskedIDs.isEmpty, translator == nil else { return translated }
+        let model = switch configuration.provider {
+        case .ollama: configuration.ollama.model
+        case .geminiFlashLite: configuration.gemini.model
+        case .googleWeb: configuration.provider.rawValue
         }
-        let masked = prepared.filter { maskedIDs.contains($0.id) }
-        let ordinary = prepared.filter { !maskedIDs.contains($0.id) }
-        let ordinaryIDs = requested.subtracting(maskedIDs)
-        var translated: [TextBlock] = []
-        if !ordinaryIDs.isEmpty {
-            translated = try await translatePrepared(ordinary, configuration: configuration, translator: nil,
-                previousContext: context(masked, previous: previousContext), selectedIDs: ordinaryIDs)
-        }
-        var qwen = configuration
-        qwen.provider = .ollama; qwen.ollama.model = OllamaConfiguration.visionModel
-        // Only masked targets receive numbered output slots; the rest is read-only context.
-        let contextual = try await translatePage(masked, configuration: qwen,
-            previousContext: context(ordinary, previous: previousContext), selectedIDs: maskedIDs)
-        translated += contextual.map { block in
+        // Qwen resolves missing Japanese spelling; the selected provider translates the whole sentence.
+        let contextual = translated.map { block in
+            guard maskedIDs.contains(block.id) else { return block }
             var updated = block
             let interpretation = block.maskedTextInterpretation
             let expanded = MaskedTextTranslation.modelText(block.originalText)
             updated.maskedTextInterpretation = MaskedTextInterpretation(
                 japanese: interpretation?.japanese ?? (interpretation == nil && expanded != block.originalText
                     && !MaskedTextTranslation.hasUnresolvedCircles(expanded) ? expanded : nil),
-                message: interpretation?.message ?? "사전으로 확인한 가림표 · Qwen 번역",
-                translationModel: qwen.ollama.model, usedCachedInterpretation: interpretation?.usedCachedInterpretation)
+                message: interpretation?.message ?? "사전으로 확인한 가림표",
+                translationModel: model, usedCachedInterpretation: interpretation?.usedCachedInterpretation)
             return updated
         }
-        let updates = Dictionary(uniqueKeysWithValues: translated.map { ($0.id, $0) })
+        let updates = Dictionary(uniqueKeysWithValues: contextual.map { ($0.id, $0) })
         return prepared.map { updates[$0.id] ?? $0 }
     }
 

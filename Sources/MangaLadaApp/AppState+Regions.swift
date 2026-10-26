@@ -51,10 +51,10 @@ extension AppState {
         job = Task { [self] in
             defer { if sessionID == id { isBusy = false; job = nil } }
             do {
-                if onlyMasked || configuration.provider == .ollama {
-                    try await runtime.ensureReady(model: onlyMasked ? OllamaConfiguration.visionModel : configuration.ollama.model)
+                if configuration.provider == .ollama {
+                    try await runtime.ensureReady(model: configuration.ollama.model)
                 }
-                statusMessage = onlyMasked ? "이전 해석 캐시를 건너뛰고 Qwen으로 선택 문구를 판단하는 중…"
+                statusMessage = onlyMasked ? "가림표 문맥을 다시 확인하고 선택한 모델로 번역하는 중…"
                     : "페이지 문맥을 참고해 선택한 문구를 다시 번역하는 중…"
                 var updated = translation
                 updated.blocks = try await processor.textTranslator.forSourceLanguage(translation.sourceLanguage).translateSelected(

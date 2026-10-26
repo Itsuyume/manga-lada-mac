@@ -41,7 +41,7 @@ struct TranslationInspector: View {
     @ViewBuilder private var batchActions: some View {
         if let draft, !draft.blocks.isEmpty {
             if !draft.maskedTextReviewIDs.isEmpty {
-                Button("가림표 \(draft.maskedTextReviewIDs.count)개 Qwen 재번역", systemImage: "arrow.clockwise") {
+                Button("가림표 \(draft.maskedTextReviewIDs.count)개 다시 번역", systemImage: "arrow.clockwise") {
                     state.retranslateMaskedWords()
                 }.disabled(editingDisabled).help("표시한 문구의 이전 해석 캐시를 건너뛰고 다시 판단합니다. 나머지 검수 문구는 유지됩니다.")
             }
@@ -253,7 +253,7 @@ struct TranslationInspector: View {
                 .padding(4).background(.background, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
                 .overlay { RoundedRectangle(cornerRadius: 6, style: .continuous).stroke(.quaternary) }
                 .disabled(editingDisabled)
-            Button(MaskedTextTranslation.requiresContextTranslation(block.originalText) ? "Qwen으로 이 문구 다시 번역" : "이 문구 다시 번역",
+            Button(MaskedTextTranslation.requiresContextTranslation(block.originalText) ? "가림표 해석 후 다시 번역" : "이 문구 다시 번역",
                    systemImage: "arrow.clockwise") {
                 if let draft, let index = draft.blocks.firstIndex(where: { $0.id == block.id }) {
                     state.retranslateBlock(in: draft, at: index)
@@ -294,8 +294,17 @@ struct TranslationInspector: View {
             } }.frame(maxHeight: 160)
         }.font(.system(size: 11))
     }
-    private func textBinding(_ block: TextBlock, _ keyPath: WritableKeyPath<TextBlock, String>) -> Binding<String> {
-        Binding(get: { block[keyPath: keyPath] }, set: { value in
+    func textBinding(_ block: TextBlock, _ keyPath: WritableKeyPath<TextBlock, String>) -> Binding<String> {
+        let page = state.currentIndex, session = state.sessionID
+        return Binding(get: {
+            guard state.currentIndex == page, state.sessionID == session,
+                  let current = state.currentReview?.blocks.first(where: { $0.id == block.id }) else {
+                // A removed row can still be read while SwiftUI tears down its text editor.
+                return block[keyPath: keyPath]
+            }
+            return current[keyPath: keyPath]
+        }, set: { value in
+            guard state.currentIndex == page, state.sessionID == session else { return }
             state.editReviewBlock(block.id) { $0[keyPath: keyPath] = value }
         })
     }
