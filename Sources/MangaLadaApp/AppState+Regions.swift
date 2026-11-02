@@ -67,7 +67,10 @@ extension AppState {
             } catch {
                 guard sessionID == id else { return }
                 if Task.isCancelled || error is CancellationError { statusMessage = "문구 번역을 중단했습니다." }
-                else { errorMessage = error.localizedDescription }
+                else {
+                    errorMessage = error.localizedDescription
+                    statusMessage = "문구 처리 실패 · 수정 내용은 앱에 남아 있습니다."
+                }
             }
         }
     }

@@ -70,5 +70,5 @@ PLIST
   echo "$DIST_DIR/$name.app"
 }
 
-bundle_app "Manga translator" "MangaLada" "local.mangalada.mac" "translator" "0.2.53" "62"
+bundle_app "Manga translator" "MangaLada" "local.mangalada.mac" "translator" "0.2.54" "63"
 bundle_app "Manga Reader" "MangaReader" "local.mangareader.mac" "reader" "0.2.48" "57"
