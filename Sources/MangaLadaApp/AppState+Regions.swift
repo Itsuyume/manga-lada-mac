@@ -39,10 +39,11 @@ extension AppState {
     private func retranslateBlocks(_ selectedIDs: Set<UUID>, in translation: PageTranslation, interpretMasks: Bool = false) {
         let selectedIDs = selectedIDs.subtracting(translation.blocks.filter { $0.preservesOriginalArtwork }.map(\.id))
         guard !isBusy, !isLoading, !selectedIDs.isEmpty, let baseline = currentReviewBaseline else { return }
+        guard requireBookTerminology() else { return }
         guard reviewErrors[currentIndex] == nil else { _ = requireAppliedReviews(at: [currentIndex]); return }
         let page = currentIndex, id = sessionID
         let previous = translationContext(before: page)
-        var requestConfiguration = configuration.fixed(to: translation.sourceLanguage)
+        var requestConfiguration = bookConfiguration.fixed(to: translation.sourceLanguage)
         if interpretMasks { requestConfiguration.interpretMaskedText = true }
         let configuration = requestConfiguration
         let onlyMasked = translation.sourceLanguage == .japanese && configuration.interpretMaskedText && translation.blocks.filter { selectedIDs.contains($0.id) }
@@ -72,7 +73,7 @@ extension AppState {
     }
     func translateSelectedRegion() {
         guard placementBlockID == nil, !isBusy, !isLoading, let box = selectedRegion, pages.indices.contains(currentIndex),
-              requireAppliedReviews(at: [currentIndex]) else { return }
+              requireAppliedReviews(at: [currentIndex]), requireBookTerminology() else { return }
         if outputRoot == nil { chooseOutputFolder { [weak self] in self?.translateSelectedRegion() }; return }
         guard let outputRoot, let sourceURL else { return }
         do { outputBook = try bookStore.prepare(sourceURL: sourceURL, title: title, pages: pages, outputRoot: outputRoot) }
@@ -81,7 +82,7 @@ extension AppState {
         let previous = translationContext(before: index)
         let kind = selectedRegionKind
         let knownLanguage = (results[index]?.translation ?? pendingPages[index]?.translation)?.sourceLanguage
-        let regionConfiguration = knownLanguage.map { configuration.fixed(to: $0) } ?? configuration
+        let regionConfiguration = knownLanguage.map { bookConfiguration.fixed(to: $0) } ?? bookConfiguration
         isBusy = true; processingIndex = index
         job = Task { [self] in
             defer { if sessionID == id { isBusy = false; processingIndex = nil; job = nil } }

@@ -9,6 +9,8 @@ import MangaLadaWorkflow
 @MainActor
 struct TranslationStateTests {
     static func main() async throws {
+        try await checkDocumentLoading()
+        try checkBookTerminology()
         try await checkReviewTextBinding()
         try await checkReviewFailurePreservation()
         try await checkOriginalRegions()

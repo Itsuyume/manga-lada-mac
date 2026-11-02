@@ -22,20 +22,29 @@ extension AppState {
     func open(_ input: ComicInput) async {
         guard reviewSaveErrors.isEmpty else { _ = requireAppliedReviews(at: Array(reviewSaveErrors.keys)); return }
         let id = UUID(); sessionID = id
+        documentLoad?.cancel()
         job?.cancel(); await job?.value
         guard sessionID == id else { return }
         isBusy = false; job = nil; processingIndex = nil
         isLoading = true; statusMessage = "페이지를 여는 중…"
+        let loader = self.loader
+        let load = Task { try await loader.load(input) }; documentLoad = load
+        defer { if sessionID == id { documentLoad = nil; isLoading = false } }
         do {
-            let book = try await loader.load(input)
+            let book = try await withTaskCancellationHandler { try await load.value } onCancel: { load.cancel() }
+            try Task.checkCancellation()
+            if load.isCancelled { throw CancellationError() }
             guard sessionID == id else { return }
             pages = book.pages; currentIndex = book.initialIndex; title = book.title; sourceURL = book.sourceURL
+            loadBookTerminology(for: book.sourceURL)
             isSelectingRegion = false; selectedRegion = nil; selectedBlockID = nil; placementBlockID = nil
             clearLetteringPreview()
             results = [:]; pendingPages = [:]; reviewDrafts = [:]; reviewErrors = [:]; reviewSaveErrors = [:]; failures = [:]; outputBook = nil; imageRevision += 1; isLoading = false
             statusMessage = "\(pages.count)페이지를 열었습니다."
             if autoTranslate { startTranslation() }
-        } catch { if sessionID == id { isLoading = false; statusMessage = "열기 실패"; errorMessage = error.localizedDescription } }
+        } catch is CancellationError {
+            if sessionID == id { statusMessage = "파일 열기를 중단했습니다." }
+        } catch { if sessionID == id { statusMessage = "열기 실패"; errorMessage = error.localizedDescription } }
     }
     func chooseOutputFolder(then completion: @escaping @MainActor () -> Void = {}) {
         guard !isBusy, !isShowingFilePanel else { return }; isShowingFilePanel = true
@@ -92,10 +101,20 @@ extension AppState {
         }
     }
     private func beginCBZExport(book: TranslationBook, target: URL) {
+        let exportID = UUID(); activeExportID = exportID
+        let pages = results.keys.sorted().map { book.pageURL(at: $0) }
         isBusy = true; statusMessage = "완성본을 CBZ로 묶는 중…"
-        job = Task {
-            defer { isBusy = false; job = nil }
-            do { try await CBZExporter().export(pages: results.keys.sorted().map { book.pageURL(at: $0) }, to: target); statusMessage = "CBZ 저장 완료" }
+        job = Task { [self] in
+            defer { activeExportID = nil; isBusy = false; job = nil }
+            do {
+                try await CBZExporter().export(pages: pages, to: target) { [weak self] count in
+                    Task { @MainActor in
+                        guard let self, self.activeExportID == exportID else { return }
+                        self.statusMessage = count < pages.count ? "CBZ 준비 · \(count)/\(pages.count)쪽" : "완성본을 CBZ로 묶는 중…"
+                    }
+                }
+                statusMessage = "CBZ 저장 완료"
+            }
             catch is CancellationError { statusMessage = "CBZ 저장을 중단했습니다." }
             catch { errorMessage = error.localizedDescription }
         }

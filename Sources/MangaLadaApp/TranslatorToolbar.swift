@@ -35,7 +35,7 @@ struct TranslatorActions: View {
                     Text(translationButtonTitle).monospacedDigit()
                 }
             }.buttonStyle(.borderedProminent).disabled(state.pages.isEmpty || state.isBusy || state.isLoading || allPagesComplete)
-            if state.isBusy {
+            if state.isBusy || state.isLoading {
                 Button("중단", systemImage: "stop.fill") { state.stop() }.labelStyle(.iconOnly).help("현재 작업 중단")
             }
         }.buttonStyle(.bordered).controlSize(.small).padding(.horizontal, 14).padding(.vertical, 9).background(.bar)

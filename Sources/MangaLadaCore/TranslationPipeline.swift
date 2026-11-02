@@ -95,6 +95,7 @@ public struct TranslationPipeline: Sendable {
 
     private func translateRequest(_ blocks: [TextBlock], selectedIDs: Set<UUID>?, configuration: LocalTranslatorConfiguration,
                                   translator: TextTranslating?, previousContext: String, refreshMaskedContext: Bool) async throws -> [TextBlock] {
+        let previousContext = try configuration.terminology.context(for: blocks, previous: previousContext)
         let requested = selectedIDs ?? Set(blocks.map(\.id))
         guard sourceLanguage == .japanese else {
             let classified = EnglishSoundEffects.inferKinds(blocks, selectedIDs: requested)

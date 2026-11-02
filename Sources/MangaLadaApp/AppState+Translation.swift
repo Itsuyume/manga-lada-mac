@@ -8,6 +8,7 @@ extension AppState {
         let requested = onlyCurrent ? [currentIndex] : Array(pages.indices)
         let indices = requested.filter { force || results[$0] == nil || failures[$0] != nil }
         guard !indices.isEmpty, requireAppliedReviews(at: indices) else { return }
+        guard requireBookTerminology() else { return }
         if outputRoot == nil {
             chooseOutputFolder { [weak self] in self?.startTranslation(onlyCurrent: onlyCurrent, force: force) }
             return
@@ -40,7 +41,7 @@ extension AppState {
         let previous = translationContext(before: index)
         do {
             let result = try await processor.process(imageURL: pages[index].url, destinationURL: book.pageURL(at: index),
-                                                     configuration: configuration, typography: typography, previousContext: previous, bookTitle: title, force: force) { [weak self] message in
+                                                     configuration: bookConfiguration, typography: typography, previousContext: previous, bookTitle: title, force: force) { [weak self] message in
                 await self?.updateStatus(message, page: index, session: session)
             }
             guard sessionID == session else { return }

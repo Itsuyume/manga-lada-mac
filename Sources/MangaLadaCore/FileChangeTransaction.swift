@@ -28,30 +28,16 @@ public enum FileChangeTransaction {
 
         init(_ url: URL) throws {
             self.url = url
-            do {
-                let attributes = try FileManager.default.attributesOfItem(atPath: url.path)
-                guard attributes[.type] as? FileAttributeType == .typeRegular else { throw FileFailure.notRegular(url) }
-                contents = try Data(contentsOf: url, options: .mappedIfSafe)
-            } catch let error as CocoaError where error.code == .fileReadNoSuchFile || error.code == .fileNoSuchFile {
-                contents = nil
-            }
+            contents = try RegularFileTarget.exists(at: url) ? Data(contentsOf: url, options: .mappedIfSafe) : nil
         }
 
         func restore() throws {
             if let contents { try contents.write(to: url, options: .atomic); return }
-            guard FileManager.default.fileExists(atPath: url.path) else { return }
-            let attributes = try FileManager.default.attributesOfItem(atPath: url.path)
-            guard attributes[.type] as? FileAttributeType == .typeRegular else { throw FileFailure.notRegular(url) }
+            guard try RegularFileTarget.exists(at: url) else { return }
             try FileManager.default.removeItem(at: url)
         }
     }
 
-    private enum FileFailure: LocalizedError {
-        case notRegular(URL)
-        var errorDescription: String? {
-            switch self { case .notRegular(let url): "저장 위치가 일반 파일이 아닙니다: \(url.lastPathComponent)" }
-        }
-    }
     private struct RestorationFailure: LocalizedError {
         let original: any Error
         let details: [String]

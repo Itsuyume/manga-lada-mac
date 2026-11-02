@@ -32,6 +32,7 @@ struct TranslationInspector: View {
                 if let failure = state.failures[state.currentIndex] { failureDetails(failure) }
                 batchActions
             }.padding(14)
+            BookTerminologyEditor(state: state).id(state.sourceURL).padding(.horizontal, 14).padding(.bottom, 10)
             Divider()
             pageContent.frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             Divider()
