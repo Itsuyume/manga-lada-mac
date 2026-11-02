@@ -25,7 +25,7 @@ extension NetworkBoundaryChecks {
             let repeated = try await translator.translateSelected([block.id], in: [block, neighbor], configuration: configuration)
             var expected = first
             expected[0].maskedTextInterpretation = MaskedTextInterpretation(japanese: first[0].maskedTextInterpretation?.japanese,
-                message: first[0].maskedTextInterpretation?.message ?? "", translationModel: OllamaConfiguration.visionModel,
+                message: first[0].maskedTextInterpretation?.message ?? "", translationModel: OllamaConfiguration.defaultModel,
                 usedCachedInterpretation: true)
             try check(repeated == expected && FixtureProtocol.state.count == before + 1, "Identical context called Qwen interpretation again or changed output.")
         }
@@ -83,7 +83,7 @@ extension NetworkBoundaryChecks {
             installContextResponse(terms: #"{"terms":[]}"#, translation: "[R0] " + target)
             let result = try await contextPipeline(root.appendingPathComponent("fast"), session: session)
                 .translate([contextBlock(source, y: 0.1)], configuration: configuration)
-            let expectedModel = MaskedTextTranslation.requiresContextTranslation(source) ? OllamaConfiguration.visionModel : nil
+            let expectedModel = MaskedTextTranslation.requiresContextTranslation(source) ? OllamaConfiguration.defaultModel : nil
             try check(FixtureProtocol.state.count == 1 && result[0].translatedText == target
                       && result[0].maskedTextInterpretation?.translationModel == expectedModel,
                       "Known name required interpretation, or a non-mask triggered Qwen.")

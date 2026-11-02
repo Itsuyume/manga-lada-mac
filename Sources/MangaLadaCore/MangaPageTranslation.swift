@@ -56,6 +56,7 @@ public enum MangaPageResponse {
                 throw TranslationError.invalidPageResponse("영역 \(index) 누락")
             }
             let text = try MaskedTextTranslation.validated(entry.text.trimmingCharacters(in: .whitespacesAndNewlines), source: block.originalText)
+            if sourceLanguage == .japanese { try JapaneseTermDisambiguation.validate(text, source: block.originalText) }
             for (opening, closing): (Character, Character) in [("[", "]"), ("{", "}")]
                 where !block.originalText.contains(closing) {
                 guard text.filter({ $0 == closing }).count <= text.filter({ $0 == opening }).count else {
@@ -112,7 +113,8 @@ enum MangaTranslationPrompt {
             guard text.range(of: #"(?:[だたよねのるむくすつぬぶう]|いい|うん|ありがとう|何|いや|ごめん)[っッ。！？!?〜～ー…]*$"#, options: .regularExpression) != nil else { return nil }
             return "R\(index): explicit casual speech. Use Korean 반말 (해/했어/있어/고마워); no -요, -세요, -습니다, -까요."
         }
-        return dialogueRules + "\nPer-region register guide (not output text):\n" + hints.joined(separator: "\n")
+        return dialogueRules + "\n" + JapaneseTermDisambiguation.instruction(for: blocks.map(\.originalText))
+            + "\nPer-region register guide (not output text):\n" + hints.joined(separator: "\n")
     }
     static let system = """
     You are a professional Japanese-to-Korean manga translator. Translate ALL numbered regions together using page context and Japanese right-to-left reading order. Preserve names, relationships, tense, speaker tone, honorifics, jokes and sentence meaning. Use fluent Korean and translate all written content while preserving intentional omissions. Never invent missing plot facts. Previous-page text is context only, not new regions to translate.

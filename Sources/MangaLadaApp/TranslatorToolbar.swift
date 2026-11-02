@@ -35,7 +35,7 @@ struct TranslatorActions: View {
                     Text(translationButtonTitle).monospacedDigit()
                 }
             }.buttonStyle(.borderedProminent).disabled(state.pages.isEmpty || state.isBusy || state.isLoading || allPagesComplete)
-            if state.isBusy {
+            if state.isBusy || state.isLoading {
                 Button("중단", systemImage: "stop.fill") { state.stop() }.labelStyle(.iconOnly).help("현재 작업 중단")
             }
         }.buttonStyle(.bordered).controlSize(.small).padding(.horizontal, 14).padding(.vertical, 9).background(.bar)
@@ -76,7 +76,9 @@ struct TranslatorActions: View {
             guard let page = state.processingIndex else { return "진행 중…" }
             return "진행 중 \(page + 1)/\(state.pages.count)"
         }
-        if allPagesComplete { return "전체 번역 완료" }
+        if allPagesComplete {
+            return state.results.values.contains { !$0.reviewWarnings.isEmpty } ? "저장됨 · 검수 필요" : "전체 번역 완료"
+        }
         return state.results.isEmpty ? "전체 번역 시작" : "이어서 번역"
     }
 }

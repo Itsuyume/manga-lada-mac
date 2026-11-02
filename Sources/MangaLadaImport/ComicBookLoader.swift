@@ -1,8 +1,6 @@
 import CoreGraphics
 import Foundation
-import ImageIO
 import MangaLadaCore
-import UniformTypeIdentifiers
 
 public struct ComicBook: Sendable {
     public let title: String
@@ -19,7 +17,9 @@ public actor ComicBookLoader {
         try Task.checkCancellation()
         let accessed = url.startAccessingSecurityScopedResource()
         defer { if accessed { url.stopAccessingSecurityScopedResource() } }
-        return try loadSynchronously(url)
+        let book = try loadSynchronously(url)
+        try Task.checkCancellation()
+        return book
     }
 
     public func load(_ input: ComicInput) async throws -> ComicBook {
@@ -75,34 +75,7 @@ public actor ComicBookLoader {
     private func renderPDF(_ url: URL) throws -> [ImagePage] {
         guard let document = CGPDFDocument(url as CFURL), !document.isEncrypted || document.isUnlocked else { throw ComicImportError.invalidPDF }
         let root = extractionRoot.appendingPathComponent("pdf-\(try ImageFingerprint().make(for: url))")
-        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
-        var pages: [ImagePage] = []
-        for number in 1...max(1, document.numberOfPages) {
-            let target = root.appendingPathComponent(String(format: "%05d.png", number))
-            if !FileManager.default.fileExists(atPath: target.path) {
-                guard let page = document.page(at: number) else { throw ComicImportError.invalidPDF }
-                try writePDFPage(page, to: target)
-            }
-            pages.append(ImagePage(url: target))
-        }
-        return pages
-    }
-
-    private func writePDFPage(_ page: CGPDFPage, to target: URL) throws {
-        let rect = page.getBoxRect(.cropBox)
-        guard rect.width > 0, rect.height > 0 else { throw ComicImportError.invalidPDF }
-        let scale = min(4, 2400 / max(rect.width, rect.height))
-        let width = max(1, Int(rect.width * scale)), height = max(1, Int(rect.height * scale))
-        guard let context = CGContext(data: nil, width: width, height: height, bitsPerComponent: 8,
-                                      bytesPerRow: width * 4, space: CGColorSpaceCreateDeviceRGB(),
-                                      bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { throw ComicImportError.invalidPDF }
-        context.setFillColor(CGColor(gray: 1, alpha: 1)); context.fill(CGRect(x: 0, y: 0, width: width, height: height))
-        let targetRect = CGRect(x: 0, y: 0, width: width, height: height)
-        context.concatenate(page.getDrawingTransform(.cropBox, rect: targetRect, rotate: 0, preserveAspectRatio: true))
-        context.drawPDFPage(page)
-        guard let image = context.makeImage(), let writer = CGImageDestinationCreateWithURL(target as CFURL, UTType.png.identifier as CFString, 1, nil) else { throw ComicImportError.invalidPDF }
-        CGImageDestinationAddImage(writer, image, nil)
-        guard CGImageDestinationFinalize(writer) else { throw ComicImportError.invalidPDF }
+        return try PDFPageCache(directory: root).load(document)
     }
 }
 

@@ -39,10 +39,11 @@ extension AppState {
     private func retranslateBlocks(_ selectedIDs: Set<UUID>, in translation: PageTranslation, interpretMasks: Bool = false) {
         let selectedIDs = selectedIDs.subtracting(translation.blocks.filter { $0.preservesOriginalArtwork }.map(\.id))
         guard !isBusy, !isLoading, !selectedIDs.isEmpty, let baseline = currentReviewBaseline else { return }
+        guard requireBookTerminology() else { return }
         guard reviewErrors[currentIndex] == nil else { _ = requireAppliedReviews(at: [currentIndex]); return }
         let page = currentIndex, id = sessionID
         let previous = translationContext(before: page)
-        var requestConfiguration = configuration.fixed(to: translation.sourceLanguage)
+        var requestConfiguration = bookConfiguration.fixed(to: translation.sourceLanguage)
         if interpretMasks { requestConfiguration.interpretMaskedText = true }
         let configuration = requestConfiguration
         let onlyMasked = translation.sourceLanguage == .japanese && configuration.interpretMaskedText && translation.blocks.filter { selectedIDs.contains($0.id) }
@@ -51,10 +52,10 @@ extension AppState {
         job = Task { [self] in
             defer { if sessionID == id { isBusy = false; job = nil } }
             do {
-                if onlyMasked || configuration.provider == .ollama {
-                    try await runtime.ensureReady(model: onlyMasked ? OllamaConfiguration.visionModel : configuration.ollama.model)
+                if configuration.provider == .ollama {
+                    try await runtime.ensureReady(model: configuration.ollama.model)
                 }
-                statusMessage = onlyMasked ? "이전 해석 캐시를 건너뛰고 Qwen으로 선택 문구를 판단하는 중…"
+                statusMessage = onlyMasked ? "가림표 문맥을 다시 확인하고 선택한 모델로 번역하는 중…"
                     : "페이지 문맥을 참고해 선택한 문구를 다시 번역하는 중…"
                 var updated = translation
                 updated.blocks = try await processor.textTranslator.forSourceLanguage(translation.sourceLanguage).translateSelected(
@@ -66,13 +67,16 @@ extension AppState {
             } catch {
                 guard sessionID == id else { return }
                 if Task.isCancelled || error is CancellationError { statusMessage = "문구 번역을 중단했습니다." }
-                else { errorMessage = error.localizedDescription }
+                else {
+                    errorMessage = error.localizedDescription
+                    statusMessage = "문구 처리 실패 · 수정 내용은 앱에 남아 있습니다."
+                }
             }
         }
     }
     func translateSelectedRegion() {
         guard placementBlockID == nil, !isBusy, !isLoading, let box = selectedRegion, pages.indices.contains(currentIndex),
-              requireAppliedReviews(at: [currentIndex]) else { return }
+              requireAppliedReviews(at: [currentIndex]), requireBookTerminology() else { return }
         if outputRoot == nil { chooseOutputFolder { [weak self] in self?.translateSelectedRegion() }; return }
         guard let outputRoot, let sourceURL else { return }
         do { outputBook = try bookStore.prepare(sourceURL: sourceURL, title: title, pages: pages, outputRoot: outputRoot) }
@@ -81,7 +85,7 @@ extension AppState {
         let previous = translationContext(before: index)
         let kind = selectedRegionKind
         let knownLanguage = (results[index]?.translation ?? pendingPages[index]?.translation)?.sourceLanguage
-        let regionConfiguration = knownLanguage.map { configuration.fixed(to: $0) } ?? configuration
+        let regionConfiguration = knownLanguage.map { bookConfiguration.fixed(to: $0) } ?? bookConfiguration
         isBusy = true; processingIndex = index
         job = Task { [self] in
             defer { if sessionID == id { isBusy = false; processingIndex = nil; job = nil } }

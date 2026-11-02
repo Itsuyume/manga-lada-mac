@@ -8,6 +8,7 @@ extension AppState {
         let requested = onlyCurrent ? [currentIndex] : Array(pages.indices)
         let indices = requested.filter { force || results[$0] == nil || failures[$0] != nil }
         guard !indices.isEmpty, requireAppliedReviews(at: indices) else { return }
+        guard requireBookTerminology() else { return }
         if outputRoot == nil {
             chooseOutputFolder { [weak self] in self?.startTranslation(onlyCurrent: onlyCurrent, force: force) }
             return
@@ -40,7 +41,7 @@ extension AppState {
         let previous = translationContext(before: index)
         do {
             let result = try await processor.process(imageURL: pages[index].url, destinationURL: book.pageURL(at: index),
-                                                     configuration: configuration, typography: typography, previousContext: previous, bookTitle: title, force: force) { [weak self] message in
+                                                     configuration: bookConfiguration, typography: typography, previousContext: previous, bookTitle: title, force: force) { [weak self] message in
                 await self?.updateStatus(message, page: index, session: session)
             }
             guard sessionID == session else { return }
@@ -66,13 +67,14 @@ extension AppState {
     }
     func updateCurrentTranslation(_ translation: PageTranslation) throws {
         guard !isBusy else { return }
-        let edited: ProcessedMangaPage
+        let page = currentIndex
+        let persist = { (result: ProcessedMangaPage) throws in try self.finishReview(result, at: page) }
         if let result = currentResult {
-            edited = try processor.applyEdits(to: result, translation: translation, typography: typography)
+            _ = try processor.applyEdits(to: result, translation: translation, typography: typography, persistReview: persist)
         } else if let draft = pendingPages[currentIndex], let book = outputBook {
-            edited = try processor.finishReview(of: draft, translation: translation, destinationURL: book.pageURL(at: currentIndex), typography: typography)
+            _ = try processor.finishReview(of: draft, translation: translation, destinationURL: book.pageURL(at: currentIndex),
+                                           typography: typography, persistReview: persist)
         } else { return }
-        try finishReview(edited, at: currentIndex)
         statusMessage = "문구와 글꼴 수정을 이미지에 저장했습니다."
     }
 }

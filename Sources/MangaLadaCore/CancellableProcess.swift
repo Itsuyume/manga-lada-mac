@@ -12,14 +12,18 @@ public final class CancellableProcess: @unchecked Sendable {
         if let active, active.isRunning { active.terminate() }
     }
 
+    public func checkCancellation() throws {
+        if lock.withLock({ cancelled }) { throw CancellationError() }
+    }
+
     public func run(_ candidate: Process) throws {
         let alreadyCancelled = lock.withLock { process = candidate; return cancelled }
+        defer { lock.withLock { process = nil } }
         guard !alreadyCancelled else { throw CancellationError() }
         try candidate.run()
         let mustTerminate = lock.withLock { cancelled }
         if mustTerminate, candidate.isRunning { candidate.terminate() }
         candidate.waitUntilExit()
-        let wasCancelled = lock.withLock { process = nil; return cancelled }
-        if wasCancelled { throw CancellationError() }
+        try checkCancellation()
     }
 }

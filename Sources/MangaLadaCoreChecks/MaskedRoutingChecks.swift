@@ -16,45 +16,54 @@ extension NetworkBoundaryChecks {
         }
         FixtureProtocol.state.install { request in
             let probe = try JSONDecoder().decode(MaskedRouteProbe.self, from: body(request))
-            try check(probe.model == OllamaConfiguration.visionModel, "Masked dialogue was sent to the ordinary translation model.")
-            try check(probe.format?.properties.translations?.maxItems == 1, "Qwen was asked to translate unselected neighbors.")
-            try check(probe.messages.contains { $0.content.contains(neighbor.originalText) }, "Qwen lost neighboring context.")
-            let content = #"{"translations":[{"id":0,"text":"스매시브라더스로 대전하자.","kind":"dialogue"}]}"#
+            try check(probe.model == OllamaConfiguration.defaultModel && probe.format == nil, "Masked dialogue bypassed the selected TranslateGemma model.")
+            try check(probe.messages.contains { $0.content.contains(neighbor.originalText) }, "Selected translation lost neighboring context.")
+            let content = "[R0] 스매시브라더스로 대전하자.\n[R1] discarded context"
             return (200, try JSONEncoder().encode(ChatReply(message: Message(role: "assistant", content: content))))
         }
         let translated = try await contextPipeline(root, session: session).translateSelected([masked.id], in: [masked, neighbor],
             configuration: LocalTranslatorConfiguration(interpretMaskedText: true))
         try check(translated[0].translatedText == "스매시브라더스로 대전하자." && translated[1] == neighbor,
-                  "Targeted Qwen did not repair the selected wording or changed a reviewed neighbor.")
+                  "Targeted translation did not repair the selected wording or changed a reviewed neighbor.")
         try check(translated[0].id == masked.id && translated[0].box == masked.box && translated[0].originalText == masked.originalText,
-                  "Targeted Qwen changed source identity or geometry.")
+                  "Targeted translation changed source identity or geometry.")
         try check(FixtureProtocol.state.count == 1, "A catalogued name required extra interpretation calls.")
         try check(MaskedTextTranslation.reviewMessage(for: translated[0]) == nil
-                  && translated[0].maskedTextInterpretation?.translationModel == OllamaConfiguration.visionModel,
-                  "A fresh Qwen translation retained the stale-cache warning.")
+                  && translated[0].maskedTextInterpretation?.translationModel == OllamaConfiguration.defaultModel,
+                  "A fresh selected-model translation retained the stale-cache warning.")
         try await checkMixedMaskedRouting(root: root, session: session, masked: masked, neighbor: neighbor)
+        try await checkConfiguredMaskedModel(root: root, session: session, masked: masked, neighbor: neighbor)
         try await checkMaskedRefresh(root: root, session: session)
-        print("Masked routing passed: Qwen target-only output, context-only neighbors, old-result notice, mask/Latin/zero boundaries and targeted refresh")
+        print("Masked routing passed: selected model, one mixed-page request, neighbor preservation, old-result notice, mask/Latin/zero boundaries and targeted refresh")
     }
 
     private static func checkMixedMaskedRouting(root: URL, session: URLSession, masked: TextBlock, neighbor: TextBlock) async throws {
         FixtureProtocol.state.install { request in
             let probe = try JSONDecoder().decode(MaskedRouteProbe.self, from: body(request))
-            let content: String
-            if probe.model == OllamaConfiguration.visionModel {
-                try check(probe.format?.properties.translations?.maxItems == 1, "Mixed page sent ordinary targets to Qwen.")
-                content = #"{"translations":[{"id":0,"text":"스매시브라더스로 대전하자.","kind":"dialogue"}]}"#
-            } else {
-                try check(probe.model == OllamaConfiguration.defaultModel && probe.format == nil, "Ordinary provider was changed.")
-                content = "[R0] 컨트롤러를 두 개 가져왔어."
-            }
+            try check(probe.model == OllamaConfiguration.defaultModel && probe.format == nil, "Mixed page bypassed the selected model.")
+            let content = "[R0] 스매시브라더스로 대전하자.\n[R1] 컨트롤러를 두 개 가져왔어."
             return (200, try JSONEncoder().encode(ChatReply(message: Message(role: "assistant", content: content))))
         }
         let result = try await contextPipeline(root, session: session).translate([neighbor, masked],
             configuration: LocalTranslatorConfiguration(interpretMaskedText: true))
-        try check(FixtureProtocol.state.count == 2 && result[0].id == neighbor.id && result[1].id == masked.id
+        try check(FixtureProtocol.state.count == 1 && result[0].id == neighbor.id && result[1].id == masked.id
                   && result[0].translatedText == "컨트롤러를 두 개 가져왔어." && result[1].translatedText.contains("스매시브라더스"),
                   "Mixed routing lost order or model assignment.")
+    }
+
+    private static func checkConfiguredMaskedModel(root: URL, session: URLSession, masked: TextBlock, neighbor: TextBlock) async throws {
+        FixtureProtocol.state.install { request in
+            let probe = try JSONDecoder().decode(MaskedRouteProbe.self, from: body(request))
+            try check(probe.model == OllamaConfiguration.visionModel && probe.format?.properties.translations?.maxItems == 2,
+                      "Explicitly selected Qwen was overridden or lost page context.")
+            let content = #"{"translations":[{"id":0,"text":"스매시브라더스로 대전하자.","kind":"dialogue"},{"id":1,"text":"未選択","kind":"dialogue"}]}"#
+            return (200, try JSONEncoder().encode(ChatReply(message: Message(role: "assistant", content: content))))
+        }
+        let configuration = LocalTranslatorConfiguration(ollama: OllamaConfiguration(model: OllamaConfiguration.visionModel), interpretMaskedText: true)
+        let result = try await contextPipeline(root, session: session).translateSelected([masked.id], in: [masked, neighbor], configuration: configuration)
+        try check(FixtureProtocol.state.count == 1 && result[1] == neighbor
+                  && result[0].maskedTextInterpretation?.translationModel == OllamaConfiguration.visionModel,
+                  "Explicit model selection changed neighboring reviews or recorded incorrect provenance.")
     }
 
     private static func checkMaskedRefresh(root: URL, session: URLSession) async throws {
@@ -70,7 +79,7 @@ extension NetworkBoundaryChecks {
         try check(FixtureProtocol.state.count == 2 && fresh[0].translatedText == "주먹밥을 먹자."
                   && fresh[0].maskedTextInterpretation?.japanese == "おにぎりを食べよう。"
                   && fresh[0].maskedTextInterpretation?.usedCachedInterpretation == false,
-                  "Explicit refresh reused the previous abstention or skipped Qwen translation.")
+                  "Explicit refresh reused the previous abstention or skipped the selected translator.")
         let updated = try Data(contentsOf: cache)
         try check(updated != old, "Refreshed interpretation did not replace its exact cache entry.")
         let again = try await contextPipeline(folder, session: session).translate([block], configuration: configuration)

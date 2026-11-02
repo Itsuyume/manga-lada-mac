@@ -5,9 +5,10 @@ import Foundation
 public struct TranslationReviewStore {
     private let cachePaths: TranslationCache
     public init(directory: URL) { cachePaths = TranslationCache(cacheDirectory: directory) }
+    public func fileURL(fingerprint: String) -> URL { cachePaths.cacheFileURL(fingerprint: fingerprint) }
 
     public func load(for current: PageTranslation) throws -> PageTranslation? {
-        let url = cachePaths.cacheFileURL(fingerprint: current.imageFingerprint)
+        let url = fileURL(fingerprint: current.imageFingerprint)
         guard FileManager.default.fileExists(atPath: url.path) else { return nil }
         let review = try JSONDecoder().decode(Review.self, from: Data(contentsOf: url))
         let restored = try review.applying(to: current)
@@ -18,14 +19,14 @@ public struct TranslationReviewStore {
         let review = Review(baseline: baseline, edited: edited)
         let restored = try review.applying(to: baseline)
         guard restored != baseline else { try discard(fingerprint: baseline.imageFingerprint); return }
-        let url = cachePaths.cacheFileURL(fingerprint: baseline.imageFingerprint)
+        let url = fileURL(fingerprint: baseline.imageFingerprint)
         let data = try JSONEncoder().encode(review)
         try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
         try data.write(to: url, options: .atomic)
     }
 
     public func discard(fingerprint: String) throws {
-        let url = cachePaths.cacheFileURL(fingerprint: fingerprint)
+        let url = fileURL(fingerprint: fingerprint)
         guard FileManager.default.fileExists(atPath: url.path) else { return }
         try FileManager.default.removeItem(at: url)
     }

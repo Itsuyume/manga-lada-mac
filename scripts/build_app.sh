@@ -3,6 +3,7 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BUILD_ROOT="${MANGA_LADA_BUILD_ROOT:-${TMPDIR:-/tmp}/manga-translator-build}"
+DIST_DIR="${MANGA_LADA_DIST_DIR:-$ROOT_DIR/dist}"
 cd "$ROOT_DIR"
 swift build --scratch-path "$BUILD_ROOT" -c release "$@"
 BIN_DIR="$(swift build --scratch-path "$BUILD_ROOT" -c release "$@" --show-bin-path)"
@@ -60,14 +61,14 @@ PLIST
   xattr -cr "$app_dir"
   codesign --force --deep --sign - "$app_dir"
   codesign --verify --deep --strict "$app_dir"
-  mkdir -p "$ROOT_DIR/dist"
-  rm -rf "$ROOT_DIR/dist/$name.app"
-  ditto --noextattr --norsrc "$app_dir" "$ROOT_DIR/dist/$name.app"
+  mkdir -p "$DIST_DIR"
+  rm -rf "$DIST_DIR/$name.app"
+  ditto --noextattr --norsrc "$app_dir" "$DIST_DIR/$name.app"
   # Synced output folders can attach Finder metadata during the final copy.
-  xattr -cr "$ROOT_DIR/dist/$name.app"
-  codesign --verify --deep --strict "$ROOT_DIR/dist/$name.app"
-  echo "$ROOT_DIR/dist/$name.app"
+  xattr -cr "$DIST_DIR/$name.app"
+  codesign --verify --deep --strict "$DIST_DIR/$name.app"
+  echo "$DIST_DIR/$name.app"
 }
 
-bundle_app "Manga translator" "MangaLada" "local.mangalada.mac" "translator" "0.2.50" "58"
-bundle_app "Manga Reader" "MangaReader" "local.mangareader.mac" "reader" "0.2.47" "55"
+bundle_app "Manga translator" "MangaLada" "local.mangalada.mac" "translator" "0.2.54" "63"
+bundle_app "Manga Reader" "MangaReader" "local.mangareader.mac" "reader" "0.2.48" "57"

@@ -22,6 +22,7 @@ final class AppState: ObservableObject {
     @Published var pendingPages: [Int: MangaPageDraft] = [:]
     @Published var reviewDrafts: [Int: PageTranslation] = [:]
     @Published var reviewErrors: [Int: String] = [:]
+    @Published var reviewSaveErrors: [Int: String] = [:]
     @Published var failures: [Int: String] = [:]
     @Published var processingIndex: Int?
     @Published var imageRevision = 0
@@ -41,21 +42,28 @@ final class AppState: ObservableObject {
     @Published var selectedRegionKind: MangaTextKind = .dialogue
     @Published var outputRoot: URL?
     @Published var outputBook: TranslationBook?
+    @Published var bookTerminology = TranslationGlossary()
+    @Published var terminologyReadError: String?
     @Published var autoTranslate: Bool { didSet { UserDefaults.standard.set(autoTranslate, forKey: "translator.auto") } }
     let reading = ReadingSettings(prefix: "translator")
-    let loader = ComicBookLoader(extractionRoot: AppPaths.archives)
+    let loader: ComicBookLoader
     let processor: MangaPageProcessor
     let bookStore = TranslationBookStore()
     let settingsStore = TranslatorSettingsStore()
     let runtime = LocalModelRuntime()
     let reviewStore: TranslationReviewStore
+    let terminologyStore: BookTerminologyStore
     var sourceURL: URL?
     var sessionID = UUID()
     var job: Task<Void, Never>?
+    var documentLoad: Task<ComicBook, Error>?
+    var activeExportID: UUID?
     var isShowingFilePanel = false
     init(processor: MangaPageProcessor = MangaPageProcessor(applicationSupportDirectory: AppPaths.support),
-         reviewStore: TranslationReviewStore = TranslationReviewStore(directory: AppPaths.support.appendingPathComponent("ReviewDrafts"))) {
-        self.processor = processor; self.reviewStore = reviewStore
+         reviewStore: TranslationReviewStore = TranslationReviewStore(directory: AppPaths.support.appendingPathComponent("ReviewDrafts")),
+         loader: ComicBookLoader = ComicBookLoader(extractionRoot: AppPaths.archives),
+         terminologyStore: BookTerminologyStore = BookTerminologyStore(directory: AppPaths.support.appendingPathComponent("BookTerminology"))) {
+        self.processor = processor; self.reviewStore = reviewStore; self.loader = loader; self.terminologyStore = terminologyStore
         autoTranslate = UserDefaults.standard.object(forKey: "translator.auto") as? Bool ?? true
         if let path = UserDefaults.standard.string(forKey: "translator.outputRoot") { outputRoot = URL(fileURLWithPath: path) }
         do {
@@ -67,7 +75,7 @@ final class AppState: ObservableObject {
         catch { errorMessage = error.localizedDescription; statusMessage = "앱 준비 중 문제가 발생했습니다. 오류 안내를 확인해주세요." }
     }
     var currentResult: ProcessedMangaPage? { results[currentIndex] }
-    deinit { letteringPreviewTask?.cancel() }
+    deinit { letteringPreviewTask?.cancel(); documentLoad?.cancel() }
     var displayPages: [URL] {
         pages.enumerated().map { index, page in
             guard !isSelectingRegion, mode == .translated else { return page.url }
@@ -83,7 +91,10 @@ final class AppState: ObservableObject {
     }
     func next() { select(reading.navigation(count: pages.count).next(from: currentIndex)) }
     func previous() { select(reading.navigation(count: pages.count).previous(from: currentIndex)) }
-    func stop() { job?.cancel(); statusMessage = "현재 작업을 중단하는 중…" }
+    func stop() {
+        documentLoad?.cancel(); job?.cancel()
+        statusMessage = isLoading ? "파일 열기를 중단하는 중…" : "현재 작업을 중단하는 중…"
+    }
     func handleKey(_ event: NSEvent) -> Bool {
         switch event.keyCode {
         case 123: reading.direction == .rightToLeft ? next() : previous()
@@ -106,7 +117,7 @@ final class AppState: ObservableObject {
             let typographyChanged = self.typography != typography
             self.configuration = configuration; self.typography = typography; showSettings = false
             if translatorChanged {
-                results = [:]; pendingPages = [:]; reviewDrafts = [:]; reviewErrors = [:]; failures = [:]; imageRevision += 1
+                results = [:]; pendingPages = [:]; reviewDrafts = [:]; reviewErrors = [:]; reviewSaveErrors = [:]; failures = [:]; imageRevision += 1
                 statusMessage = "번역 방식이 바뀌었습니다. 전체 번역 시작을 눌러 새 설정으로 번역해주세요."
             } else if renderCompleted && typographyChanged { rerenderCompletedPages() }
             else { statusMessage = "설정을 저장했습니다. 기존 번역과 검수 수정은 유지됩니다." }
@@ -124,6 +135,7 @@ final class AppState: ObservableObject {
         }
     }
     private func rerenderCompletedPages() {
+        guard reviewSaveErrors.isEmpty else { _ = requireAppliedReviews(at: Array(reviewSaveErrors.keys)); return }
         guard !results.isEmpty, !isBusy else { return }
         isBusy = true
         job = Task {

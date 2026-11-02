@@ -5,6 +5,7 @@ public struct TranslationBook: Sendable {
     public let directory: URL
     public let pageCount: Int
     public var manifest: TranslationBookManifest
+    public var manifestURL: URL { directory.appendingPathComponent(ImageFileScanner.generatedBookMarker) }
     public func pageURL(at index: Int) -> URL { directory.appendingPathComponent(String(format: "%05d.png", index + 1)) }
 }
 
@@ -39,7 +40,7 @@ public struct TranslationBookStore: Sendable {
     }
     public func save(_ book: TranslationBook) throws {
         let encoder = JSONEncoder(); encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-        try encoder.encode(book.manifest).write(to: book.directory.appendingPathComponent(ImageFileScanner.generatedBookMarker), options: .atomic)
+        try encoder.encode(book.manifest).write(to: book.manifestURL, options: .atomic)
     }
     private func create(directory: URL, title: String, inputKey: String, pageCount: Int) throws -> TranslationBook {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)

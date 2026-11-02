@@ -17,12 +17,12 @@ public enum MaskedTextTranslation {
     public static func reviewMessage(for block: TextBlock) -> String? {
         guard requiresContextTranslation(block.originalText), !block.translatedText.isEmpty else { return nil }
         do { try validateKnownNames(block.translatedText, source: block.originalText) }
-        catch { return "가린 이름과 번역이 맞지 않습니다. Qwen으로 이 문구를 다시 확인하세요." }
-        if block.maskedTextInterpretation?.translationModel == OllamaConfiguration.visionModel {
+        catch { return "가린 이름과 번역이 맞지 않습니다. 이 문구를 다시 번역하세요." }
+        if block.maskedTextInterpretation?.translationModel != nil {
             return block.maskedTextInterpretation?.japanese == nil
                 ? "가린 단어의 뜻이 아직 확인되지 않았습니다. 원문·문맥을 확인하거나 다시 번역하세요." : nil
         }
-        return "이전 번역 결과입니다. Qwen으로 이 문구만 다시 확인할 수 있습니다."
+        return "이전 번역 결과입니다. 선택한 번역 모델로 이 문구만 다시 확인할 수 있습니다."
     }
 
     static func instruction(for texts: [String]) -> String {

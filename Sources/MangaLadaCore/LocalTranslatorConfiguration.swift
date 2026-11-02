@@ -12,6 +12,8 @@ public struct LocalTranslatorConfiguration: Equatable, Sendable {
     /// resolves it per page; elsewhere it equals the fixed mode.
     public var sourceLanguage: LanguageCode
     public var sourceLanguageMode: SourceLanguageMode
+    /// Per-book request context. Persisted by BookTerminologyStore, never in global settings.
+    public var terminology = TranslationGlossary()
 
     /// `sourceLanguageMode` nil keeps a programmatic caller's explicit `sourceLanguage` fixed.
     public init(provider: TranslationProvider = .ollama, maxConcurrentRequests: Int = 1,
@@ -81,6 +83,7 @@ public struct LocalTranslatorConfiguration: Equatable, Sendable {
         comparable.ollama.retention = previous.ollama.retention
         comparable.interpretMaskedText = previous.interpretMaskedText
         comparable.japaneseOCR = previous.japaneseOCR
+        comparable.terminology = previous.terminology
         // The concrete language is resolved per page; only the chosen mode is a setting. Entering or
         // leaving automatic mode keeps each processed page in the language it was cached with, so
         // only a switch between two fixed languages discards the current results.

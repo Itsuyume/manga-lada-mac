@@ -47,6 +47,8 @@ extension TranslationStateTests {
         state.translatePendingWords()
         await state.job?.value
         check(state.errorMessage != nil && state.currentReview == sourceEdit, "Translation failure discarded edited OCR or hid its error.")
+        check(!state.isBusy && state.job == nil && state.statusMessage == "문구 처리 실패 · 수정 내용은 앱에 남아 있습니다.",
+              "Failed word translation still reported an ongoing job.")
         state.errorMessage = nil
         state.translatePendingWords()
         state.stop()

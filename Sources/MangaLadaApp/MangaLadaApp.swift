@@ -16,7 +16,7 @@ struct MangaLadaMacApp: App {
                 CommandMenu("번역") {
                     Button("전체 번역 시작") { state.startTranslation() }.keyboardShortcut("t", modifiers: .command)
                     Button("현재 페이지 다시 번역") { state.startTranslation(onlyCurrent: true, force: true) }.disabled(state.isBusy)
-                    Button("중단") { state.stop() }.disabled(!state.isBusy)
+                    Button("중단") { state.stop() }.disabled(!state.isBusy && !state.isLoading)
                     Divider()
                     Button("현재 PNG 저장…") { state.exportCurrentPNG() }.keyboardShortcut("s", modifiers: [.command, .shift])
                     Button("완성본 CBZ 저장…") { state.exportCBZ() }

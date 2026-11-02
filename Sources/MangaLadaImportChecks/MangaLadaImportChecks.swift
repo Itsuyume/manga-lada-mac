@@ -31,7 +31,8 @@ struct MangaLadaImportChecks {
         try ReadingGestureChecks.run()
         try await checkArchives(source: source, root: root, loader: loader)
         try await checkConcurrentArchive(source: source, root: root)
-        try await checkPDF(root: root, loader: loader)
+        try await PDFImportChecks.run(root: root, sampleImage: book.pages[0].url)
+        try await CBZCancellationChecks.run(root: root, source: book.pages[0].url)
         let exported = root.appendingPathComponent("export.cbz")
         try await checkCBZExport(book: book, destination: exported, loader: loader)
         try checkBookOutput(source: source, book: book, root: root)
@@ -72,13 +73,6 @@ struct MangaLadaImportChecks {
         let empty = root.appendingPathComponent("empty"); try FileManager.default.createDirectory(at: empty, withIntermediateDirectories: true)
         do { _ = try await loader.load(empty); throw ImportCheckError.failed("Empty folder was accepted.") }
         catch ComicImportError.emptyBook { }
-    }
-    private static func checkPDF(root: URL, loader: ComicBookLoader) async throws {
-        let pdf = root.appendingPathComponent("pages.pdf")
-        guard let consumer = CGDataConsumer(url: pdf as CFURL), let context = CGContext(consumer: consumer, mediaBox: nil, nil) else { throw ImportCheckError.failed("Cannot make PDF fixture.") }
-        for _ in 0..<2 { context.beginPDFPage(nil); context.endPDFPage() }; context.closePDF()
-        let book = try await loader.load(pdf)
-        try check(book.pages.count == 2 && book.pages.allSatisfy { CGImageSourceCreateWithURL($0.url as CFURL, nil) != nil }, "PDF pages did not render.")
     }
     private static func checkConcurrentArchive(source: URL, root: URL) async throws {
         let archive = root.appendingPathComponent("concurrent.cbz")

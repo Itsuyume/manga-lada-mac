@@ -5,7 +5,7 @@ import MangaLadaWorkflow
 extension AppState {
     var currentReviewBaseline: PageTranslation? { currentResult?.translation ?? pendingPages[currentIndex]?.translation }
     var currentReview: PageTranslation? { reviewDrafts[currentIndex] ?? currentReviewBaseline }
-    var hasCurrentReview: Bool { reviewDrafts[currentIndex] != nil || reviewErrors[currentIndex] != nil }
+    var hasCurrentReview: Bool { reviewDrafts[currentIndex] != nil || reviewErrors[currentIndex] != nil || reviewSaveErrors[currentIndex] != nil }
 
     func setKeepsOriginal(_ id: UUID, _ value: Bool) {
         guard !isBusy, !isLoading, reviewErrors[currentIndex] == nil,
@@ -47,8 +47,14 @@ extension AppState {
     }
 
     func saveReview(_ edited: PageTranslation, comparedTo saved: PageTranslation, at index: Int) throws {
-        try reviewStore.save(edited, comparedTo: saved)
         reviewDrafts[index] = edited == saved ? nil : edited
+        do {
+            try reviewStore.save(edited, comparedTo: saved)
+            reviewSaveErrors.removeValue(forKey: index)
+        } catch {
+            reviewSaveErrors[index] = "임시 저장 실패 · 입력은 앱에 남아 있습니다. 앱을 닫기 전에 ‘수정 적용’을 다시 눌러주세요. \(error.localizedDescription)"
+            throw error
+        }
     }
 
     func discardCurrentReview() {
@@ -56,6 +62,7 @@ extension AppState {
         do {
             try reviewStore.discard(fingerprint: saved.imageFingerprint)
             reviewDrafts.removeValue(forKey: currentIndex); reviewErrors.removeValue(forKey: currentIndex)
+            reviewSaveErrors.removeValue(forKey: currentIndex)
             clearLetteringPreview()
             statusMessage = "이 페이지의 임시 수정을 취소했습니다. 저장된 이미지와 번역은 유지됩니다."
         } catch { errorMessage = error.localizedDescription }
@@ -77,6 +84,7 @@ extension AppState {
         do {
             reviewDrafts[index] = try reviewStore.load(for: translation)
             reviewErrors.removeValue(forKey: index)
+            reviewSaveErrors.removeValue(forKey: index)
         } catch {
             reviewDrafts.removeValue(forKey: index)
             reviewErrors[index] = "임시 수정을 읽지 못했습니다. 파일은 보존했습니다. \(error.localizedDescription)"
@@ -86,20 +94,27 @@ extension AppState {
     func finishReview(_ result: ProcessedMangaPage, at index: Int) throws {
         var remainingFailures = failures
         remainingFailures.removeValue(forKey: index)
-        if var updated = outputBook {
+        var updatedBook = outputBook
+        if var updated = updatedBook {
             updated.manifest.completedPages = Set(results.keys).union([index]).subtracting(remainingFailures.keys).sorted()
             updated.manifest.failures = remainingFailures
-            try bookStore.save(updated); outputBook = updated
+            updatedBook = updated
         }
+        let targets = [reviewStore.fileURL(fingerprint: result.translation.imageFingerprint)] + (updatedBook.map { [$0.manifestURL] } ?? [])
+        try FileChangeTransaction.withRollback(at: targets) {
+            if let updatedBook { try bookStore.save(updatedBook) }
+            try reviewStore.discard(fingerprint: result.translation.imageFingerprint)
+        }
+        outputBook = updatedBook
         results[index] = result; failures = remainingFailures; imageRevision += 1
         pendingPages.removeValue(forKey: index)
-        try reviewStore.discard(fingerprint: result.translation.imageFingerprint)
         reviewDrafts.removeValue(forKey: index); reviewErrors.removeValue(forKey: index)
+        reviewSaveErrors.removeValue(forKey: index)
         if index == currentIndex { clearLetteringPreview() }
     }
 
     func requireAppliedReviews(at indices: [Int]? = nil) -> Bool {
-        let pending = Set(reviewDrafts.keys).union(reviewErrors.keys)
+        let pending = Set(reviewDrafts.keys).union(reviewErrors.keys).union(reviewSaveErrors.keys)
         let relevant = indices.map { pending.intersection($0) } ?? pending
         guard let first = relevant.min() else { return true }
         showInspector = true; select(first)

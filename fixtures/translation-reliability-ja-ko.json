@@ -1,0 +1,26 @@
+[
+  {
+    "id": "money-and-material",
+    "texts": ["貯めた金で新しい本を買った。", "この指輪は金でできている。"],
+    "kinds": ["dialogue", "dialogue"],
+    "reviewPoints": ["돈과 금속인 금을 구별하는가", "원문에 없는 내용을 덧붙이지 않는가"]
+  },
+  {
+    "id": "idiom-and-command",
+    "texts": ["俺に勝とうなんて百年早いんだよ。もっと練習してこい！"],
+    "kinds": ["dialogue"],
+    "reviewPoints": ["아직 상대가 안 된다는 뜻과 연습하라는 명령을 보존하는가", "싫다는 감정이나 원문에 없는 자기소개를 추가하지 않는가"]
+  },
+  {
+    "id": "causative-and-register",
+    "texts": ["大丈夫。君を一人前の料理人にしてあげる。", "本当に？ありがとう！"],
+    "kinds": ["dialogue", "dialogue"],
+    "reviewPoints": ["어엿한 요리사로 만들어 준다는 뜻인가", "최고라는 평가를 추가하지 않는가", "평어를 자동으로 존댓말로 바꾸지 않는가"]
+  },
+  {
+    "id": "dictionary-anatomy-distinction",
+    "texts": ["辞書では、マンコは女性器を指す俗語です。", "陰毛は生殖器ではなく、毛を表す言葉です。"],
+    "kinds": ["caption", "caption"],
+    "reviewPoints": ["사전 설명의 신체 부위와 체모를 구별하는가", "서로 다른 용어를 같은 단어로 번역하지 않는가"]
+  }
+]

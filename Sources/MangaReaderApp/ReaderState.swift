@@ -18,6 +18,7 @@ final class ReaderState: ObservableObject {
     private var bookKey = ""
     private var sourceURL: URL?
     private var loadID = UUID()
+    private var loadTask: Task<ComicBook, Error>?
     private var isShowingFilePanel = false
     init() {
         let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
@@ -39,12 +40,18 @@ final class ReaderState: ObservableObject {
     }
     func open(_ input: ComicInput) async {
         let id = UUID(); loadID = id; isLoading = true
+        loadTask?.cancel()
+        let loader = self.loader
+        let load = Task { try await loader.load(input) }; loadTask = load
+        defer { if loadID == id { loadTask = nil; isLoading = false } }
         do {
-            let book = try await loader.load(input)
+            let book = try await withTaskCancellationHandler { try await load.value } onCancel: { load.cancel() }
+            try Task.checkCancellation()
+            if load.isCancelled { throw CancellationError() }
             guard loadID == id else { return }
             pages = book.pages; title = book.title; sourceURL = book.sourceURL
             imageRevision += 1
-            bookKey = "reader." + ImageFingerprint().make(for: Data(book.sourceURL.standardizedFileURL.path.utf8))
+            bookKey = "reader." + ComicSourceIdentity.fingerprint(for: book.sourceURL)
             let saved = UserDefaults.standard.object(forKey: bookKey + ".page") as? Int
             let requested: Int
             switch input {
@@ -55,7 +62,9 @@ final class ReaderState: ObservableObject {
             index = min(pages.count - 1, max(0, requested))
             bookmarks = Set(UserDefaults.standard.array(forKey: bookKey + ".bookmarks") as? [Int] ?? [])
             isLoading = false
-        } catch { if loadID == id { isLoading = false; errorMessage = error.localizedDescription } }
+        } catch is CancellationError {
+            // A newer load or the caller owns cancellation; retain the previous book.
+        } catch { if loadID == id { errorMessage = error.localizedDescription } }
     }
     func select(_ index: Int) {
         guard pages.indices.contains(index) else { return }
